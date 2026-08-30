@@ -1,4 +1,4 @@
-const WebSocket = require('ws');
+﻿const WebSocket = require('ws');
 const fs = require('fs');
 const path = require('path');
 
@@ -2232,6 +2232,57 @@ KukeChat（库科聊天）是一个即时通讯社交平台，官网 kuke.ink，
         return;
       }
 
+      // 播放音乐
+      const musicMatch = content.match(/^\/播放音乐\s*\[(.+)\]$/);
+      if (musicMatch) {
+        const keyword = musicMatch[1].trim();
+        sendMsg(cid, `🎵 正在搜索「${keyword}」...`);
+        (async () => {
+          try {
+            const searchRes = await fetch(`https://api.injahow.cn/search?keywords=${encodeURIComponent(keyword)}&limit=5`);
+            if (!searchRes.ok) throw new Error(`搜索API ${searchRes.status}`);
+            const searchData = await searchRes.json();
+            const songs = searchData.result?.songs || [];
+            if (songs.length === 0) { sendMsg(cid, `❌ 未找到「${keyword}」相关歌曲`); return; }
+            const song = songs[0];
+            const songId = song.id;
+            const songName = song.name;
+            const artist = (song.ar || song.artists || []).map(a => a.name).join('、');
+            const album = song.al?.name || song.album?.name || '未知专辑';
+            const cover = song.al?.picUrl || song.album?.picUrl || '';
+            const urlRes = await fetch(`https://api.injahow.cn/song/url?id=${songId}`);
+            if (!urlRes.ok) throw new Error(`播放链接API ${urlRes.status}`);
+            const urlData = await urlRes.json();
+            const playUrl = urlData.data?.[0]?.url || '';
+            if (!playUrl) { sendMsg(cid, `<markdown>🎵 **${songName}** - ${artist}\n\n专辑：${album}\n\n⚠️ 该歌曲暂无可用播放链接（可能需要会员）</markdown>`); return; }
+            let musicMsg = `<markdown># 🎵 音乐播放\n\n**${songName}**\n歌手：${artist}\n专辑：${album}\n\n`;
+            if (cover) musicMsg += `<img src="${cover}" />\n\n`;
+            musicMsg += `🔗 <link href="${playUrl}">点击播放完整音乐</link>\n\n`;
+            musicMsg += `> 搜索结果第1首，共找到 ${songs.length} 首相关歌曲</markdown>`;
+            sendMsg(cid, musicMsg);
+            try {
+              const audioRes = await fetch(playUrl);
+              if (audioRes.ok) {
+                const audioBuffer = Buffer.from(await audioRes.arrayBuffer());
+                if (audioBuffer.length < 10 * 1024 * 1024) {
+                  const formData = new FormData();
+                  formData.append('file', new Blob([audioBuffer], { type: 'audio/mpeg' }), 'music.mp3');
+                  const uploadRes = await fetch(`${BASE_URL}/bot-api/uploads/voice`, { method: 'POST', headers: { 'Authorization': `Bot ${BOT_KEY}` }, body: formData });
+                  if (uploadRes.ok) {
+                    const uploadData = await uploadRes.json();
+                    const voiceKey = uploadData.key || uploadData.url || uploadData.data?.key;
+                    if (voiceKey) sendMsg(cid, `<voice file_key="${voiceKey}" />`);
+                  }
+                }
+              }
+            } catch (e) { console.log('发送语音失败:', e.message); }
+          } catch (e) {
+            console.error('音乐搜索失败:', e.message);
+            sendMsg(cid, `❌ 音乐搜索失败：${e.message}\n\n可能是音乐API暂时不可用，请稍后重试`);
+          }
+        })();
+        return;
+      }
       if (content === '/help') {
         const isClassGroup = String(msg.conversation_id) === '4307';
         const adminLabel = isClassGroup ? '班干部及老师' : '管理员';
