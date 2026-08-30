@@ -3327,7 +3327,7 @@ ${isClassGroup ? '' : '<link action="callback" action_id="help_diy">自制指令
           detail = `<markdown>## 常用指令分类
 <link action="callback" action_id="help_query">基础查询</link>：帮助菜单、在线人数、群活跃
 <link action="callback" action_id="help_checkin">签到运势</link>：每日签到查看专属运势
-<link action="callback" action_id="help_life">生活工具</link>：天气查询、AI绘图
+<link action="callback" action_id="help_life">生活工具</link>：天气查询、AI绘图、音乐播放
 ${werewolfLink}<link action="callback" action_id="help_list">列表查看</link>：黑名单、违禁词列表
 ${diyLink}> 点击分类查看详细指令</markdown>`;
         } else if (actionId === 'help_query') {
@@ -3344,6 +3344,7 @@ ${diyLink}> 点击分类查看详细指令</markdown>`;
           detail = `<markdown>## 生活工具
 \`/天气[城市]\`：查询指定城市的天气预报
 \`/绘图[内容，风格]\`：AI绘图，内容为描述，风格可选（如赛博朋克、水彩、油画等）
+\`/播放音乐[音乐名]\`：搜索并播放音乐（网易云音乐）
 > 所有人可用</markdown>`;
         } else if (actionId === 'help_game') {
           detail = `<markdown>## 游戏娱乐
