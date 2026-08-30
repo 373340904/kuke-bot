@@ -6,3 +6,11 @@ error_screenshot.png
 push_temp.js
 .DS_Store
 *.tmp
+node.exe
+*.png
+deploy/
+netlify/
+index.html
+server.js
+start_bot.bat
+checkin_screenshot.png
