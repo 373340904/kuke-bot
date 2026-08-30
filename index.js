@@ -2233,7 +2233,8 @@ KukeChat（库科聊天）是一个即时通讯社交平台，官网 kuke.ink，
       }
 
       // 播放音乐
-      const musicMatch = content.match(/^\/播放音乐\s*\[(.+)\]$/);
+      console.log('[音乐调试] content=', JSON.stringify(content));
+      const musicMatch = content.match(/^\/播放音乐\s*[\[\[【](.+)[\]\]】]$/);
       if (musicMatch) {
         const keyword = musicMatch[1].trim();
         sendMsg(cid, `🎵 正在搜索「${keyword}」...`);
