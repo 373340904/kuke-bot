@@ -2240,21 +2240,19 @@ KukeChat（库科聊天）是一个即时通讯社交平台，官网 kuke.ink，
         sendMsg(cid, `🎵 正在搜索「${keyword}」...`);
         (async () => {
           try {
-            const searchRes = await fetch(`https://api.injahow.cn/search?keywords=${encodeURIComponent(keyword)}&limit=5`);
+            const searchRes = await fetch(`https://music.163.com/api/search/get?s=${encodeURIComponent(keyword)}&type=1&limit=5`, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' } });
             if (!searchRes.ok) throw new Error(`搜索API ${searchRes.status}`);
             const searchData = await searchRes.json();
-            const songs = searchData.result?.songs || [];
+            const songs = searchData.result?.songs || searchData.songs || [];
             if (songs.length === 0) { sendMsg(cid, `❌ 未找到「${keyword}」相关歌曲`); return; }
             const song = songs[0];
-            const songId = song.id;
+            const songId = song.id || song.songId;
             const songName = song.name;
-            const artist = (song.ar || song.artists || []).map(a => a.name).join('、');
-            const album = song.al?.name || song.album?.name || '未知专辑';
-            const cover = song.al?.picUrl || song.album?.picUrl || '';
-            const urlRes = await fetch(`https://api.injahow.cn/song/url?id=${songId}`);
-            if (!urlRes.ok) throw new Error(`播放链接API ${urlRes.status}`);
-            const urlData = await urlRes.json();
-            const playUrl = urlData.data?.[0]?.url || '';
+            const artist = (song.ar || song.artists || song.album?.artists || []).map(a => a.name).join('、');
+            const album = song.al?.name || song.album?.name || song.albumName || '未知专辑';
+            const cover = song.al?.picUrl || song.album?.picUrl || song.album?.blurPicUrl || '';
+            // 用网易云外链播放地址
+            const playUrl = `https://music.163.com/song/media/outer/url?id=${songId}.mp3`;
             if (!playUrl) { sendMsg(cid, `<markdown>🎵 **${songName}** - ${artist}\n\n专辑：${album}\n\n⚠️ 该歌曲暂无可用播放链接（可能需要会员）</markdown>`); return; }
             let musicMsg = `<markdown># 🎵 音乐播放\n\n**${songName}**\n歌手：${artist}\n专辑：${album}\n\n`;
             if (cover) musicMsg += `<img src="${cover}" />\n\n`;
