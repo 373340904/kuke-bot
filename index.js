@@ -1697,7 +1697,7 @@ function connect() {
 
     // 连接就绪
     if (event.type === 'bot.connection.ready') {
-      console.log(`🤖 机器人就绪！bot_id=${event.data.bot_id}, user_id=${event.data.user_id}`);
+      console.log(`🤖 机器人就绪 v2.2-music！bot_id=${event.data.bot_id}, user_id=${event.data.user_id}`);
       botUserId = event.data.user_id;
       botInfo.userId = event.data.user_id;
       botInfo.botId = event.data.bot_id;
@@ -2233,7 +2233,7 @@ KukeChat（库科聊天）是一个即时通讯社交平台，官网 kuke.ink，
       }
 
       // 播放音乐
-      console.log('[音乐调试] content=', JSON.stringify(content));
+      console.log('[音乐调试-到达] content=', JSON.stringify(content), 'isCmd=', content.startsWith('/'));
       const musicMatch = content.match(/^\/播放音乐\s*[\[\[【](.+)[\]\]】]$/);
       if (musicMatch) {
         const keyword = musicMatch[1].trim();
