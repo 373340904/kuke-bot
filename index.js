@@ -2293,26 +2293,41 @@ KukeChat（库科聊天）是一个即时通讯社交平台，官网 kuke.ink，
 
             if (audioBuffer.length < 1000) throw new Error('音频文件为空');
 
-            // 5. 上传到 KukeChat 语音接口
-            console.log('[音乐] 上传语音到 KukeChat...');
-            const formData = new FormData();
-            formData.append('file', new Blob([audioBuffer], { type: 'audio/mpeg' }), `${songName}.mp3`);
-            const uploadRes = await fetch(`${BASE_URL}/bot-api/uploads/voice`, {
-              method: 'POST',
-              headers: { 'Authorization': `Bot ${BOT_KEY}` },
-              body: formData
-            });
-            if (!uploadRes.ok) {
-              const errText = await uploadRes.text();
-              console.error('[音乐] 语音上传失败:', uploadRes.status, errText.substring(0, 200));
-              throw new Error(`语音上传失败 ${uploadRes.status}`);
+            // 5. 检查文件大小，KukeChat 语音上传限制约 8MB
+            const MAX_VOICE_SIZE = 8 * 1024 * 1024; // 8MB
+            if (audioBuffer.length > MAX_VOICE_SIZE) {
+              console.log('[音乐] 文件过大', (audioBuffer.length/1024/1024).toFixed(2), 'MB，降级发送链接');
+              sendMsg(cid, `<markdown>🎵 **${songName}** - ${artist}\n\n文件较大，无法直接发送语音\n\n🔗 <link href="${playUrl}">点击播放完整音乐</link></markdown>`);
+              return;
             }
-            const uploadData = await uploadRes.json();
-            console.log('[音乐] 上传返回:', JSON.stringify(uploadData).substring(0, 300));
 
-            // 6. 获取语音 URL 或 key
-            const voiceUrl = uploadData.url || uploadData.data?.url || uploadData.file_url || uploadData.data?.file_url;
-            const voiceKey = uploadData.key || uploadData.data?.key || uploadData.file_key || uploadData.data?.file_key;
+            // 6. 上传到 KukeChat 语音接口
+            console.log('[音乐] 上传语音到 KukeChat，大小:', (audioBuffer.length/1024/1024).toFixed(2), 'MB');
+            let voiceUrl = '';
+            let voiceKey = '';
+            try {
+              const formData = new FormData();
+              formData.append('file', new Blob([audioBuffer], { type: 'audio/mpeg' }), `${songName}.mp3`);
+              const uploadRes = await fetch(`${BASE_URL}/bot-api/uploads/voice`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bot ${BOT_KEY}` },
+                body: formData
+              });
+              if (!uploadRes.ok) {
+                const errText = await uploadRes.text();
+                console.error('[音乐] 语音上传失败:', uploadRes.status, errText.substring(0, 200));
+                throw new Error(`上传失败 ${uploadRes.status}`);
+              }
+              const uploadData = await uploadRes.json();
+              console.log('[音乐] 上传返回:', JSON.stringify(uploadData).substring(0, 300));
+              voiceUrl = uploadData.url || uploadData.data?.url || uploadData.file_url || uploadData.data?.file_url;
+              voiceKey = uploadData.key || uploadData.data?.key || uploadData.file_key || uploadData.data?.file_key;
+            } catch (uploadErr) {
+              // 上传失败，降级发送播放链接
+              console.log('[音乐] 语音上传失败，降级发送链接:', uploadErr.message);
+              sendMsg(cid, `<markdown>🎵 **${songName}** - ${artist}\n\n语音发送失败，已为你提供播放链接\n\n🔗 <link href="${playUrl}">点击播放完整音乐</link></markdown>`);
+              return;
+            }
 
             // 7. 发送语音消息
             if (voiceUrl) {
@@ -2322,7 +2337,8 @@ KukeChat（库科聊天）是一个即时通讯社交平台，官网 kuke.ink，
               console.log('[音乐] 发送语音 key:', voiceKey);
               sendMsg(cid, `<voice file_key="${voiceKey}" />`);
             } else {
-              throw new Error('上传返回无语音URL或key');
+              console.log('[音乐] 无语音URL或key，降级发送链接');
+              sendMsg(cid, `<markdown>🎵 **${songName}** - ${artist}\n\n🔗 <link href="${playUrl}">点击播放完整音乐</link></markdown>`);
             }
 
             console.log('[音乐] 播放完成');
