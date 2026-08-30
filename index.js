@@ -2233,28 +2233,50 @@ KukeChat（库科聊天）是一个即时通讯社交平台，官网 kuke.ink，
       }
 
       // 播放音乐
-      console.log('[音乐调试-到达] content=', JSON.stringify(content), 'isCmd=', content.startsWith('/'));
+      console.log('[音乐调试-到达] content=', JSON.stringify(content));
       const musicMatch = content.match(/^\/播放音乐\s*[\[【](.+)[\]】]$/);
       if (musicMatch) {
         const keyword = musicMatch[1].trim();
         sendMsg(cid, `🎵 正在搜索「${keyword}」...`);
         (async () => {
           try {
-            // 1. 搜索歌曲
-            const searchRes = await fetch(`https://music.163.com/api/search/get?s=${encodeURIComponent(keyword)}&type=1&limit=5`, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' } });
+            // 1. 用 SE云音解析 API 搜索歌曲
+            console.log('[音乐] 搜索:', keyword);
+            const searchRes = await fetch(`https://music.sedet.top/api.php?action=search&keyword=${encodeURIComponent(keyword)}`);
             if (!searchRes.ok) throw new Error(`搜索API ${searchRes.status}`);
             const searchData = await searchRes.json();
-            const songs = searchData.result?.songs || searchData.songs || [];
+            const songs = searchData.result?.songs || [];
             if (songs.length === 0) { sendMsg(cid, `❌ 未找到「${keyword}」相关歌曲`); return; }
-            const song = songs[0];
-            const songId = song.id || song.songId;
-            const songName = song.name;
-            const artist = (song.ar || song.artists || song.album?.artists || []).map(a => a.name).join('、');
-            const album = song.al?.name || song.album?.name || song.albumName || '未知专辑';
-            const cover = song.al?.picUrl || song.album?.picUrl || song.album?.blurPicUrl || '';
 
-            // 2. 获取播放链接（网易云外链）
-            const playUrl = `https://music.163.com/song/media/outer/url?id=${songId}.mp3`;
+            // 2. 找一首有播放权限的歌（遍历前5首）
+            let song = null;
+            let playUrl = '';
+            for (let i = 0; i < Math.min(5, songs.length); i++) {
+              const s = songs[i];
+              console.log('[音乐] 尝试第', i+1, '首:', s.name, 'ID:', s.id);
+              const urlRes = await fetch(`https://music.sedet.top/api.php?action=url&id=${s.id}`);
+              if (urlRes.ok) {
+                const urlData = await urlRes.json();
+                const url = urlData.data?.[0]?.url;
+                if (url && url.length > 10) {
+                  song = s;
+                  playUrl = url;
+                  console.log('[音乐] 找到可用播放链接');
+                  break;
+                }
+              }
+            }
+
+            if (!song || !playUrl) {
+              sendMsg(cid, `❌ 「${keyword}」暂无可用播放链接（可能是VIP歌曲）`);
+              return;
+            }
+
+            const songId = song.id;
+            const songName = song.name;
+            const artist = (song.ar || song.artists || []).map(a => a.name).join('、');
+            const album = song.al?.name || song.album?.name || '未知专辑';
+            const cover = song.al?.picUrl || song.album?.picUrl || '';
 
             // 3. 发送歌曲信息
             let infoMsg = `<markdown># 🎵 ${songName}\n\n歌手：${artist}\n专辑：${album}\n`;
@@ -2262,14 +2284,14 @@ KukeChat（库科聊天）是一个即时通讯社交平台，官网 kuke.ink，
             infoMsg += `\n> 正在为你准备音频...</markdown>`;
             sendMsg(cid, infoMsg);
 
-            // 4. 下载音频
-            console.log('[音乐] 下载音频:', playUrl);
-            const audioRes = await fetch(playUrl, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Referer': 'https://music.163.com/' } });
+            // 4. 下载音频（用 fetch，支持 HTTP）
+            console.log('[音乐] 下载音频:', playUrl.substring(0, 80));
+            const audioRes = await fetch(playUrl);
             if (!audioRes.ok) throw new Error(`音频下载失败 ${audioRes.status}`);
             const audioBuffer = Buffer.from(await audioRes.arrayBuffer());
             console.log('[音乐] 音频大小:', (audioBuffer.length / 1024 / 1024).toFixed(2), 'MB');
 
-            if (audioBuffer.length < 1) throw new Error('音频文件为空');
+            if (audioBuffer.length < 1000) throw new Error('音频文件为空');
 
             // 5. 上传到 KukeChat 语音接口
             console.log('[音乐] 上传语音到 KukeChat...');
@@ -2294,7 +2316,7 @@ KukeChat（库科聊天）是一个即时通讯社交平台，官网 kuke.ink，
 
             // 7. 发送语音消息
             if (voiceUrl) {
-              console.log('[音乐] 发送语音 URL:', voiceUrl);
+              console.log('[音乐] 发送语音 URL:', voiceUrl.substring(0, 80));
               sendMsg(cid, `<voice src="${voiceUrl}" />`);
             } else if (voiceKey) {
               console.log('[音乐] 发送语音 key:', voiceKey);
@@ -2306,7 +2328,7 @@ KukeChat（库科聊天）是一个即时通讯社交平台，官网 kuke.ink，
             console.log('[音乐] 播放完成');
           } catch (e) {
             console.error('音乐播放失败:', e.message);
-            sendMsg(cid, `❌ 音乐播放失败：${e.message}\n\n可能是网络问题或歌曲需要会员，请稍后重试`);
+            sendMsg(cid, `❌ 音乐播放失败：${e.message}\n\n可能是网络问题，请稍后重试`);
           }
         })();
         return;
