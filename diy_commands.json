@@ -1,0 +1,141 @@
+{
+  "1357": {
+    "无语": {
+      "type": "text",
+      "content": "妈呀！{用户名}！！！！！无语死本大爷了，我直接飞升好吧！！！",
+      "creator": "君衔(新号)",
+      "creatorId": 3038,
+      "createdAt": "2026-08-24T10:15:18.735Z",
+      "description": "妈呀！{用户名}！！！！！无语死本大爷了，我直接飞升好吧！！"
+    }
+  },
+  "3900": {
+    "欢迎": {
+      "type": "text",
+      "content": "欢迎！{用户名}",
+      "creator": "一瓶Orange Juice",
+      "creatorId": 2755,
+      "createdAt": "2026-08-20T01:41:00.922Z",
+      "description": "欢迎！{用户名}"
+    }
+  },
+  "4720": {
+    "1": {
+      "type": "combo",
+      "content": null,
+      "creator": "猫薄荷茶",
+      "creatorId": 1552,
+      "createdAt": "2026-08-20T01:22:58.071Z",
+      "description": "https://kukechat.cn-nb1.rains3.com/stickers/45da2af0af9c44fcbd5f2e6df22caf17.jpg（在线列表+入群申请）",
+      "title": "https://kukechat.cn-nb1.rains3.com/stickers/45da2af0af9c44fcbd5f2e6df22caf17.jpg",
+      "selectedModules": [
+        "online",
+        "join"
+      ]
+    },
+    "1552": {
+      "type": "text",
+      "content": "这是一张表情包：[图片链接](https://kukechat.cn-nb1.rains3.com/stickers/45da2af0af9c44fcbd5f2e6df22caf17.jpg)",
+      "creator": "猫薄荷茶",
+      "creatorId": 1552,
+      "createdAt": "2026-08-20T01:20:51.533Z",
+      "description": "分享表情包"
+    },
+    "搜索歌曲": {
+      "type": "text",
+      "content": "很抱歉，目前我无法直接播放音乐。但是，您可以尝试使用以下链接搜索您想要的歌曲：[https://music.163.com/search?keywords={参数名}]",
+      "creator": "君衔",
+      "creatorId": 3038,
+      "createdAt": "2026-08-20T00:59:46.831Z",
+      "description": "很抱歉，目前我无法直接播放音乐。但是，您可以尝试使用以下链接",
+      "params": [
+        "歌名"
+      ]
+    }
+  },
+  "5500": {
+    "666": {
+      "type": "combo",
+      "content": null,
+      "creator": "小宇",
+      "creatorId": 25,
+      "createdAt": "2026-08-20T09:36:55.756Z",
+      "description": "666（群信息）",
+      "title": "666",
+      "selectedModules": [
+        "group"
+      ]
+    },
+    "1552": {
+      "type": "combo",
+      "content": null,
+      "creator": "猫薄荷茶",
+      "creatorId": 1552,
+      "createdAt": "2026-08-20T09:36:56.160Z",
+      "description": "@君灵bot（入群申请+机器人信息+机器人群列表）",
+      "title": "@君灵bot",
+      "selectedModules": [
+        "join",
+        "bot",
+        "convs"
+      ]
+    },
+    "机器人信息": {
+      "type": "combo",
+      "content": "机器人信息",
+      "creator": "君衔",
+      "creatorId": 3038,
+      "createdAt": "2026-08-20T10:30:32.942Z",
+      "description": "机器人信息（机器人信息）",
+      "params": [
+        "机器人昵称",
+        "机器人ID",
+        "机器人BotID",
+        "机器人群数",
+        "机器人群列表"
+      ],
+      "title": "机器人信息",
+      "selectedModules": [
+        "bot"
+      ]
+    },
+    "嘲讽": {
+      "type": "text",
+      "content": "{用户名}，妈呀大姐！！！！！！！！你这是什么审美啊啊啊~~~人家都都被你er到了~~~",
+      "creator": "君衔",
+      "creatorId": 3038,
+      "createdAt": "2026-08-20T10:34:29.515Z",
+      "description": "{用户名}，妈呀大姐！！！！！！！！你这是什么审美啊啊啊~~"
+    },
+    "指令名": {
+      "type": "text",
+      "content": "你好，我是你的AI助手，有什么可以帮助你的吗？",
+      "creator": "君衔(新号)",
+      "creatorId": 3038,
+      "createdAt": "2026-08-24T10:25:36.913Z",
+      "description": "你好，我是你的AI助手，有什么可以帮助你的吗？"
+    },
+    "AI": {
+      "type": "text",
+      "content": "您好，我是一款基于人工智能的机器人，您可以向我提问，我会尽力回答您的问题。",
+      "creator": "君衔(新号)",
+      "creatorId": 3038,
+      "createdAt": "2026-08-24T10:27:13.815Z",
+      "description": "智能问答",
+      "params": [
+        "输入内容"
+      ]
+    },
+    "是AI": {
+      "type": "text",
+      "content": "您好，我可以帮您进行对话。请告诉我您的问题。",
+      "creator": "君衔(新号)",
+      "creatorId": 3038,
+      "createdAt": "2026-08-24T10:28:22.129Z",
+      "description": "您好，我可以帮您进行对话。请告诉我您的问题。",
+      "params": [
+        "输入内容"
+      ]
+    }
+  }
+}

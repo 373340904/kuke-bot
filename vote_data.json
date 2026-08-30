@@ -1,0 +1,228 @@
+{
+  "1837": {
+    "voteId": "1837",
+    "title": "君灵AI2/help排版",
+    "options": [
+      "超链接排版",
+      "按钮排版"
+    ],
+    "votes": {
+      "2121": 0,
+      "2266": 0,
+      "2875": 0,
+      "3038": 0
+    },
+    "creator": "君衔",
+    "isGlobal": true,
+    "conversationIds": [
+      4940,
+      4720,
+      3900,
+      1357,
+      4307,
+      4600,
+      3888
+    ],
+    "messageIds": {
+      "1357": 566070,
+      "3888": 566073,
+      "3900": 566069,
+      "4307": 566071,
+      "4600": 566072,
+      "4720": 566068,
+      "4940": 566067
+    },
+    "created_at": "2026-08-18T12:36:39.918Z"
+  },
+  "4720": {
+    "voteId": "vmsyc4nr69bha",
+    "title": "君衔是gay吗",
+    "options": [
+      "是",
+      "嗯对",
+      "必须的"
+    ],
+    "votes": {
+      "640": 2
+    },
+    "creator": "默语-TF-Stone（椰椰集团）",
+    "messageId": 557070,
+    "conversationId": 4720,
+    "created_at": "2026-08-18T07:22:18.396Z"
+  },
+  "4721": {
+    "voteId": "4721",
+    "title": "君灵AI2/help排版",
+    "options": [
+      "超链接排版",
+      "按钮排版"
+    ],
+    "votes": {
+      "60": 1,
+      "3038": 1
+    },
+    "creator": "君衔",
+    "isGlobal": true,
+    "conversationIds": [
+      4940,
+      4720,
+      3900,
+      1357,
+      4307,
+      4600
+    ],
+    "messageIds": {
+      "1357": 559037,
+      "3900": 559036,
+      "4307": 559038,
+      "4600": 559039,
+      "4720": 559035,
+      "4940": 559034
+    },
+    "created_at": "2026-08-18T08:19:15.852Z"
+  },
+  "6462": {
+    "voteId": "6462",
+    "title": "6913",
+    "options": [
+      "酷可是不是给",
+      "是",
+      "yes",
+      "当然",
+      "我是给"
+    ],
+    "votes": {
+      "1552": 0,
+      "2534": 0,
+      "2875": 3,
+      "3038": 4,
+      "3151": 0
+    },
+    "creator": "Maingift34",
+    "messageId": 655638,
+    "conversationId": 6913,
+    "created_at": "2026-08-24T02:53:39.076Z"
+  },
+  "7223": {
+    "voteId": "7223",
+    "title": "标题",
+    "options": [
+      "选项1",
+      "选项2"
+    ],
+    "votes": {
+      "3038": 0
+    },
+    "creator": "老师",
+    "messageId": 593937,
+    "conversationId": 5516,
+    "created_at": "2026-08-20T06:26:16.112Z"
+  },
+  "9034": {
+    "voteId": "9034",
+    "title": "投票",
+    "options": [
+      "选项1",
+      "选项2"
+    ],
+    "votes": {
+      "3038": 0
+    },
+    "creator": "老师",
+    "messageId": 593395,
+    "conversationId": 5508,
+    "created_at": "2026-08-20T05:36:25.162Z"
+  },
+  "vmsycg0sc7ivx": {
+    "voteId": "vmsycg0sc7ivx",
+    "title": "测试1",
+    "options": [
+      "A",
+      "B"
+    ],
+    "votes": {
+      "3038": 1
+    },
+    "creator": "君衔爱编程",
+    "messageId": 557461,
+    "conversationId": 3900,
+    "created_at": "2026-08-18T07:31:08.686Z"
+  },
+  "vmsycsw57oxtx": {
+    "voteId": "vmsycsw57oxtx",
+    "title": "君灵AI2/help排版",
+    "options": [
+      "超链接排版",
+      "按钮类排版"
+    ],
+    "votes": {
+      "1627": 0,
+      "2514": 1
+    },
+    "creator": "君衔爱编程",
+    "messageId": 557974,
+    "conversationId": 4940,
+    "created_at": "2026-08-18T07:41:09.153Z"
+  },
+  "vmsycswbmlnls": {
+    "voteId": "vmsycswbmlnls",
+    "title": "君灵AI2/help排版",
+    "options": [
+      "超链接排版",
+      "按钮类排版"
+    ],
+    "votes": {
+      "56": 1
+    },
+    "creator": "君衔爱编程",
+    "messageId": 557975,
+    "conversationId": 4720,
+    "created_at": "2026-08-18T07:41:10.569Z"
+  },
+  "vmsycsxh9sdal": {
+    "voteId": "vmsycsxh9sdal",
+    "title": "君灵AI2/help排版",
+    "options": [
+      "超链接排版",
+      "按钮类排版"
+    ],
+    "votes": {
+      "5": 0,
+      "838": 1,
+      "1627": 0,
+      "2875": 0
+    },
+    "creator": "君衔爱编程",
+    "messageId": 557978,
+    "conversationId": 1357,
+    "created_at": "2026-08-18T07:41:10.743Z"
+  },
+  "vmsycsxln4uzy": {
+    "voteId": "vmsycsxln4uzy",
+    "title": "君灵AI2/help排版",
+    "options": [
+      "超链接排版",
+      "按钮类排版"
+    ],
+    "votes": {
+      "3038": 0
+    },
+    "creator": "君衔爱编程",
+    "messageId": 557979,
+    "conversationId": 4307,
+    "created_at": "2026-08-18T07:41:10.901Z"
+  },
+  "vmsycsxo66bhj": {
+    "voteId": "vmsycsxo66bhj",
+    "title": "君灵AI2/help排版",
+    "options": [
+      "超链接排版",
+      "按钮类排版"
+    ],
+    "votes": {},
+    "creator": "君衔爱编程",
+    "messageId": 557980,
+    "conversationId": 4600,
+    "created_at": "2026-08-18T07:41:11.024Z"
+  }
+}

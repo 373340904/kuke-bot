@@ -1,0 +1,1319 @@
+{
+  "wrmsypa8ft": {
+    "roomId": "wrmsypa8ft",
+    "conversationId": "3900",
+    "status": "ended",
+    "creator": 3038,
+    "players": [
+      {
+        "userId": 3038,
+        "nickname": "君衔爱编程",
+        "role": "villager",
+        "alive": true,
+        "hasActed": false
+      },
+      {
+        "userId": 2699,
+        "nickname": "火烧云",
+        "role": "wolf",
+        "alive": true,
+        "hasActed": false
+      },
+      {
+        "userId": 863,
+        "nickname": "核桃撒了一地",
+        "role": "seer",
+        "alive": true,
+        "hasActed": false
+      },
+      {
+        "userId": 987,
+        "nickname": "灵域lyn",
+        "role": "witch",
+        "alive": true,
+        "hasActed": false
+      },
+      {
+        "userId": 1552,
+        "nickname": "猫薄荷茶",
+        "role": "villager",
+        "alive": true,
+        "hasActed": false
+      }
+    ],
+    "nightActions": {
+      "wolfVotes": {},
+      "wolfTarget": null,
+      "seerCheck": null,
+      "witchSave": false,
+      "witchPoison": null
+    },
+    "day": 1,
+    "speakerIndex": 0,
+    "votes": {},
+    "lastActionTime": 1787060997726,
+    "deadInfo": [],
+    "witchUsed": {
+      "save": false,
+      "poison": false
+    },
+    "winner": "manual"
+  },
+  "wrmszh68fy": {
+    "roomId": "wrmszh68fy",
+    "conversationId": "3900",
+    "status": "ended",
+    "creator": 3038,
+    "players": [
+      {
+        "userId": 3038,
+        "nickname": "君衔爱编程",
+        "role": "witch",
+        "alive": true,
+        "hasActed": true
+      },
+      {
+        "userId": 1552,
+        "nickname": "猫薄荷茶",
+        "role": "wolf",
+        "alive": true,
+        "hasActed": true
+      },
+      {
+        "userId": 1491,
+        "nickname": "dream_fen",
+        "role": "villager",
+        "alive": true,
+        "hasActed": false
+      },
+      {
+        "userId": 3002,
+        "nickname": "实在太美",
+        "role": "seer",
+        "alive": false,
+        "hasActed": true
+      },
+      {
+        "userId": 2977,
+        "nickname": "༺ཌༀཉི 无名 ༃ༀད༻",
+        "role": "villager",
+        "alive": true,
+        "hasActed": false
+      }
+    ],
+    "nightActions": {
+      "wolfVotes": {
+        "1552": 3038
+      },
+      "wolfTarget": null,
+      "seerCheck": 3038,
+      "witchSave": false,
+      "witchPoison": 3002
+    },
+    "day": 1,
+    "speakerIndex": 0,
+    "votes": {},
+    "lastActionTime": 1787107128634,
+    "deadInfo": [
+      {
+        "userId": 3002,
+        "reason": "被女巫毒死",
+        "day": 1
+      }
+    ],
+    "witchUsed": {
+      "save": false,
+      "poison": true
+    },
+    "winner": "manual"
+  },
+  "wrmszhoizl": {
+    "roomId": "wrmszhoizl",
+    "conversationId": "1357",
+    "status": "ended",
+    "creator": 3038,
+    "players": [
+      {
+        "userId": 3038,
+        "nickname": "君衔",
+        "role": null,
+        "alive": true,
+        "hasActed": false
+      },
+      {
+        "userId": 555,
+        "nickname": "HB GAME-工作室室长兼程序员",
+        "role": null,
+        "alive": true,
+        "hasActed": false
+      }
+    ],
+    "nightActions": {},
+    "day": 0,
+    "speakerIndex": 0,
+    "votes": {},
+    "lastActionTime": 1787107922725,
+    "deadInfo": [],
+    "witchUsed": {
+      "save": false,
+      "poison": false
+    },
+    "winner": "timeout"
+  },
+  "wrmszhrfju": {
+    "roomId": "wrmszhrfju",
+    "conversationId": "3900",
+    "status": "ended",
+    "creator": 640,
+    "players": [
+      {
+        "userId": 640,
+        "nickname": "默语-TF-Stone（椰椰集团）",
+        "role": null,
+        "alive": true,
+        "hasActed": false
+      },
+      {
+        "userId": 1552,
+        "nickname": "猫薄荷茶",
+        "role": null,
+        "alive": true,
+        "hasActed": false
+      }
+    ],
+    "nightActions": {},
+    "day": 0,
+    "speakerIndex": 0,
+    "votes": {},
+    "lastActionTime": 1787107673416,
+    "deadInfo": [],
+    "witchUsed": {
+      "save": false,
+      "poison": false
+    },
+    "winner": "manual"
+  },
+  "wrmszhua93": {
+    "roomId": "wrmszhua93",
+    "conversationId": "3900",
+    "status": "ended",
+    "creator": 3038,
+    "players": [
+      {
+        "userId": 3038,
+        "nickname": "君衔爱编程",
+        "role": "villager",
+        "alive": true,
+        "hasActed": false
+      },
+      {
+        "userId": 1552,
+        "nickname": "猫薄荷茶",
+        "role": "witch",
+        "alive": true,
+        "hasActed": true
+      },
+      {
+        "userId": 1491,
+        "nickname": "dream_fen",
+        "role": "wolf",
+        "alive": true,
+        "hasActed": false
+      },
+      {
+        "userId": 56,
+        "nickname": "星火夜芒",
+        "role": "seer",
+        "alive": true,
+        "hasActed": true
+      }
+    ],
+    "nightActions": {
+      "wolfVotes": {},
+      "wolfTarget": null,
+      "seerCheck": 3038,
+      "witchSave": true,
+      "witchPoison": 56
+    },
+    "day": 1,
+    "speakerIndex": 0,
+    "votes": {},
+    "lastActionTime": 1787108137656,
+    "deadInfo": [],
+    "witchUsed": {
+      "save": true,
+      "poison": true
+    },
+    "winner": "manual"
+  },
+  "wrmszifzx0": {
+    "roomId": "wrmszifzx0",
+    "conversationId": "3900",
+    "status": "ended",
+    "creator": 3038,
+    "players": [
+      {
+        "userId": 3038,
+        "nickname": "君衔爱编程",
+        "role": "witch",
+        "alive": true,
+        "hasActed": true
+      },
+      {
+        "userId": 608,
+        "nickname": "安澜",
+        "role": "seer",
+        "alive": true,
+        "hasActed": true
+      },
+      {
+        "userId": 5,
+        "nickname": "一只野生的星之卡比",
+        "role": "villager",
+        "alive": true,
+        "hasActed": false
+      },
+      {
+        "userId": 2863,
+        "nickname": "666",
+        "role": "wolf",
+        "alive": true,
+        "hasActed": false
+      }
+    ],
+    "nightActions": {
+      "wolfVotes": {},
+      "wolfTarget": null,
+      "seerCheck": 5,
+      "witchSave": false,
+      "witchPoison": 5
+    },
+    "day": 1,
+    "speakerIndex": 0,
+    "votes": {},
+    "lastActionTime": 1787109006701,
+    "deadInfo": [],
+    "witchUsed": {
+      "save": false,
+      "poison": true
+    },
+    "winner": "manual"
+  },
+  "wrmszikygg": {
+    "roomId": "wrmszikygg",
+    "conversationId": "3900",
+    "status": "ended",
+    "creator": 640,
+    "players": [
+      {
+        "userId": 640,
+        "nickname": "默语-TF-Stone（椰椰集团）",
+        "role": "villager",
+        "alive": true,
+        "hasActed": false
+      },
+      {
+        "userId": 5,
+        "nickname": "一只野生的星之卡比",
+        "role": "witch",
+        "alive": true,
+        "hasActed": true
+      },
+      {
+        "userId": 3038,
+        "nickname": "君衔",
+        "role": "seer",
+        "alive": true,
+        "hasActed": true
+      },
+      {
+        "userId": 608,
+        "nickname": "安澜",
+        "role": "wolf",
+        "alive": true,
+        "hasActed": true
+      }
+    ],
+    "nightActions": {
+      "wolfVotes": {
+        "608": 3038
+      },
+      "wolfTarget": null,
+      "seerCheck": 5,
+      "witchSave": false,
+      "witchPoison": null
+    },
+    "day": 1,
+    "speakerIndex": 0,
+    "votes": {},
+    "lastActionTime": 1787109193729,
+    "deadInfo": [],
+    "witchUsed": {
+      "save": false,
+      "poison": false
+    },
+    "winner": "timeout"
+  },
+  "wrmszoccye": {
+    "roomId": "wrmszoccye",
+    "conversationId": "3900",
+    "status": "ended",
+    "creator": 3038,
+    "players": [
+      {
+        "userId": 3038,
+        "nickname": "君衔爱编程",
+        "role": null,
+        "alive": true,
+        "hasActed": false
+      },
+      {
+        "userId": 56,
+        "nickname": "星火夜芒",
+        "role": null,
+        "alive": true,
+        "hasActed": false
+      }
+    ],
+    "nightActions": {},
+    "day": 0,
+    "speakerIndex": 0,
+    "votes": {},
+    "lastActionTime": 1787118924759,
+    "deadInfo": [],
+    "witchUsed": {
+      "save": false,
+      "poison": false
+    },
+    "winner": "timeout"
+  },
+  "wrmszovyhj": {
+    "roomId": "wrmszovyhj",
+    "conversationId": "1357",
+    "status": "ended",
+    "creator": 987,
+    "players": [
+      {
+        "userId": 987,
+        "nickname": "灵域lyn",
+        "role": null,
+        "alive": true,
+        "hasActed": false
+      }
+    ],
+    "nightActions": {},
+    "day": 0,
+    "speakerIndex": 0,
+    "votes": {},
+    "lastActionTime": 1787119633495,
+    "deadInfo": [],
+    "witchUsed": {
+      "save": false,
+      "poison": false
+    },
+    "winner": "timeout"
+  },
+  "wrmszw1wdz": {
+    "roomId": "wrmszw1wdz",
+    "conversationId": "3900",
+    "status": "ended",
+    "creator": 3038,
+    "players": [
+      {
+        "userId": 3038,
+        "nickname": "君衔爱编程",
+        "role": null,
+        "alive": true,
+        "hasActed": false
+      },
+      {
+        "userId": 2699,
+        "nickname": "火烧云",
+        "role": null,
+        "alive": true,
+        "hasActed": false
+      }
+    ],
+    "nightActions": {},
+    "day": 0,
+    "speakerIndex": 0,
+    "votes": {},
+    "lastActionTime": 1787131709539,
+    "deadInfo": [],
+    "witchUsed": {
+      "save": false,
+      "poison": false
+    },
+    "winner": "timeout"
+  },
+  "wrmt0v7xz1": {
+    "roomId": "wrmt0v7xz1",
+    "conversationId": "3900",
+    "status": "ended",
+    "creator": 2755,
+    "players": [
+      {
+        "userId": 2755,
+        "nickname": "一瓶Orange Juice",
+        "role": null,
+        "alive": true,
+        "hasActed": false
+      },
+      {
+        "userId": 3038,
+        "nickname": "君衔",
+        "role": null,
+        "alive": true,
+        "hasActed": false
+      },
+      {
+        "userId": 5,
+        "nickname": "一只野生的星之卡比",
+        "role": null,
+        "alive": true,
+        "hasActed": false
+      }
+    ],
+    "nightActions": {},
+    "day": 0,
+    "speakerIndex": 0,
+    "votes": {},
+    "lastActionTime": 1787190861011,
+    "deadInfo": [],
+    "witchUsed": {
+      "save": false,
+      "poison": false
+    },
+    "winner": "timeout"
+  },
+  "wrmt0vkx0r": {
+    "roomId": "wrmt0vkx0r",
+    "conversationId": "3900",
+    "status": "ended",
+    "creator": 3038,
+    "players": [
+      {
+        "userId": 3038,
+        "nickname": "君衔爱编程",
+        "role": null,
+        "alive": true,
+        "hasActed": false
+      },
+      {
+        "userId": 5,
+        "nickname": "一只野生的星之卡比",
+        "role": null,
+        "alive": true,
+        "hasActed": false
+      }
+    ],
+    "nightActions": {},
+    "day": 0,
+    "speakerIndex": 0,
+    "votes": {},
+    "lastActionTime": 1787191426756,
+    "deadInfo": [],
+    "witchUsed": {
+      "save": false,
+      "poison": false
+    },
+    "winner": "manual"
+  },
+  "wrmt0vq2o0": {
+    "roomId": "wrmt0vq2o0",
+    "conversationId": "3900",
+    "status": "ended",
+    "creator": 3038,
+    "players": [
+      {
+        "userId": 3038,
+        "nickname": "君衔爱编程",
+        "role": null,
+        "alive": true,
+        "hasActed": false
+      },
+      {
+        "userId": 2755,
+        "nickname": "一瓶Orange Juice",
+        "role": null,
+        "alive": true,
+        "hasActed": false
+      }
+    ],
+    "nightActions": {},
+    "day": 0,
+    "speakerIndex": 0,
+    "votes": {},
+    "lastActionTime": 1787191586476,
+    "deadInfo": [],
+    "witchUsed": {
+      "save": false,
+      "poison": false
+    },
+    "winner": "timeout"
+  },
+  "wrmt1aj10z": {
+    "roomId": "wrmt1aj10z",
+    "conversationId": "1474",
+    "status": "ended",
+    "creator": 3038,
+    "players": [
+      {
+        "userId": 3038,
+        "nickname": "君衔",
+        "role": null,
+        "alive": true,
+        "hasActed": false
+      },
+      {
+        "userId": 987,
+        "nickname": "灵域lyn",
+        "role": null,
+        "alive": true,
+        "hasActed": false
+      },
+      {
+        "userId": 25,
+        "nickname": "小宇",
+        "role": null,
+        "alive": true,
+        "hasActed": false
+      },
+      {
+        "userId": 1627,
+        "nickname": "wemmbu",
+        "role": null,
+        "alive": true,
+        "hasActed": false
+      }
+    ],
+    "nightActions": {},
+    "day": 0,
+    "speakerIndex": 0,
+    "votes": {},
+    "lastActionTime": 1787216811290,
+    "deadInfo": [],
+    "witchUsed": {
+      "save": false,
+      "poison": false
+    },
+    "winner": "timeout"
+  },
+  "wrmt1as6ez": {
+    "roomId": "wrmt1as6ez",
+    "conversationId": "1474",
+    "status": "ended",
+    "creator": 987,
+    "players": [
+      {
+        "userId": 987,
+        "nickname": "灵域lyn",
+        "role": null,
+        "alive": true,
+        "hasActed": false
+      },
+      {
+        "userId": 25,
+        "nickname": "小宇",
+        "role": null,
+        "alive": true,
+        "hasActed": false
+      },
+      {
+        "userId": 1627,
+        "nickname": "wemmbu",
+        "role": null,
+        "alive": true,
+        "hasActed": false
+      }
+    ],
+    "nightActions": {},
+    "day": 0,
+    "speakerIndex": 0,
+    "votes": {},
+    "lastActionTime": 1787216959113,
+    "deadInfo": [],
+    "witchUsed": {
+      "save": false,
+      "poison": false
+    },
+    "winner": "timeout"
+  },
+  "wrmt1auw90": {
+    "roomId": "wrmt1auw90",
+    "conversationId": "1474",
+    "status": "ended",
+    "creator": 987,
+    "players": [
+      {
+        "userId": 987,
+        "nickname": "灵域lyn",
+        "role": null,
+        "alive": true,
+        "hasActed": false
+      }
+    ],
+    "nightActions": {},
+    "day": 0,
+    "speakerIndex": 0,
+    "votes": {},
+    "lastActionTime": 1787217001668,
+    "deadInfo": [],
+    "witchUsed": {
+      "save": false,
+      "poison": false
+    },
+    "winner": "timeout"
+  },
+  "wrmt1axfbj": {
+    "roomId": "wrmt1axfbj",
+    "conversationId": "5460",
+    "status": "ended",
+    "creator": 3010,
+    "players": [
+      {
+        "userId": 3010,
+        "nickname": "牛奶方盒",
+        "role": null,
+        "alive": true,
+        "hasActed": false
+      }
+    ],
+    "nightActions": {},
+    "day": 0,
+    "speakerIndex": 0,
+    "votes": {},
+    "lastActionTime": 1787217119695,
+    "deadInfo": [],
+    "witchUsed": {
+      "save": false,
+      "poison": false
+    },
+    "winner": "timeout"
+  },
+  "wrmt1azvxl": {
+    "roomId": "wrmt1azvxl",
+    "conversationId": "1474",
+    "status": "ended",
+    "creator": 987,
+    "players": [
+      {
+        "userId": 987,
+        "nickname": "灵域lyn",
+        "role": null,
+        "alive": true,
+        "hasActed": false
+      },
+      {
+        "userId": 3038,
+        "nickname": "君衔",
+        "role": null,
+        "alive": true,
+        "hasActed": false
+      },
+      {
+        "userId": 1627,
+        "nickname": "wemmbu",
+        "role": null,
+        "alive": true,
+        "hasActed": false
+      }
+    ],
+    "nightActions": {},
+    "day": 0,
+    "speakerIndex": 0,
+    "votes": {},
+    "lastActionTime": 1787217538422,
+    "deadInfo": [],
+    "witchUsed": {
+      "save": false,
+      "poison": false
+    },
+    "winner": "timeout"
+  },
+  "wrmt1b07bc": {
+    "roomId": "wrmt1b07bc",
+    "conversationId": "1474",
+    "status": "ended",
+    "creator": 987,
+    "players": [
+      {
+        "userId": 987,
+        "nickname": "灵域lyn",
+        "role": null,
+        "alive": true,
+        "hasActed": false
+      }
+    ],
+    "nightActions": {},
+    "day": 0,
+    "speakerIndex": 0,
+    "votes": {},
+    "lastActionTime": 1787217249288,
+    "deadInfo": [],
+    "witchUsed": {
+      "save": false,
+      "poison": false
+    },
+    "winner": "timeout"
+  },
+  "wrmt1c13wb": {
+    "roomId": "wrmt1c13wb",
+    "conversationId": "5500",
+    "status": "ended",
+    "creator": 3038,
+    "players": [
+      {
+        "userId": 3038,
+        "nickname": "君衔",
+        "role": null,
+        "alive": true,
+        "hasActed": false
+      },
+      {
+        "userId": 1627,
+        "nickname": "wemmbu",
+        "role": null,
+        "alive": true,
+        "hasActed": false
+      }
+    ],
+    "nightActions": {},
+    "day": 0,
+    "speakerIndex": 0,
+    "votes": {},
+    "lastActionTime": 1787218983774,
+    "deadInfo": [],
+    "witchUsed": {
+      "save": false,
+      "poison": false
+    },
+    "winner": "timeout"
+  },
+  "wrmt1c42mt": {
+    "roomId": "wrmt1c42mt",
+    "conversationId": "5500",
+    "status": "ended",
+    "creator": 3038,
+    "players": [
+      {
+        "userId": 3038,
+        "nickname": "君衔",
+        "role": null,
+        "alive": true,
+        "hasActed": false
+      }
+    ],
+    "nightActions": {},
+    "day": 0,
+    "speakerIndex": 0,
+    "votes": {},
+    "lastActionTime": 1787219109461,
+    "deadInfo": [],
+    "witchUsed": {
+      "save": false,
+      "poison": false
+    },
+    "winner": "timeout"
+  },
+  "wrmt1c5ne9": {
+    "roomId": "wrmt1c5ne9",
+    "conversationId": "5500",
+    "status": "ended",
+    "creator": 3038,
+    "players": [
+      {
+        "userId": 3038,
+        "nickname": "君衔",
+        "role": "villager",
+        "alive": true,
+        "hasActed": false
+      },
+      {
+        "userId": 1627,
+        "nickname": "wemmbu",
+        "role": "villager",
+        "alive": false,
+        "hasActed": false
+      },
+      {
+        "userId": 2755,
+        "nickname": "一瓶Orange Juice",
+        "role": "seer",
+        "alive": true,
+        "hasActed": true
+      },
+      {
+        "userId": 2875,
+        "nickname": "Maingift34",
+        "role": "wolf",
+        "alive": true,
+        "hasActed": true
+      },
+      {
+        "userId": 3014,
+        "nickname": "极夜QwQ",
+        "role": "witch",
+        "alive": true,
+        "hasActed": true
+      }
+    ],
+    "nightActions": {
+      "wolfVotes": {
+        "2875": 3038
+      },
+      "wolfTarget": null,
+      "seerCheck": 3038,
+      "witchSave": false,
+      "witchPoison": 1627
+    },
+    "day": 1,
+    "speakerIndex": 0,
+    "votes": {},
+    "lastActionTime": 1787220443844,
+    "deadInfo": [
+      {
+        "userId": 1627,
+        "reason": "被女巫毒死",
+        "day": 1
+      }
+    ],
+    "witchUsed": {
+      "save": false,
+      "poison": true
+    },
+    "dayStartTime": 1787219546575,
+    "winner": "timeout"
+  },
+  "wrmt1d7j3d": {
+    "roomId": "wrmt1d7j3d",
+    "conversationId": "1474",
+    "status": "ended",
+    "creator": 3038,
+    "players": [
+      {
+        "userId": 3038,
+        "nickname": "君衔",
+        "role": null,
+        "alive": true,
+        "hasActed": false
+      }
+    ],
+    "nightActions": {},
+    "day": 0,
+    "speakerIndex": 0,
+    "votes": {},
+    "lastActionTime": 1787220950377,
+    "deadInfo": [],
+    "witchUsed": {
+      "save": false,
+      "poison": false
+    },
+    "winner": "timeout"
+  },
+  "wrmt1e1y90": {
+    "roomId": "wrmt1e1y90",
+    "conversationId": "1474",
+    "status": "ended",
+    "creator": 987,
+    "players": [
+      {
+        "userId": 987,
+        "nickname": "灵域lyn",
+        "role": null,
+        "alive": true,
+        "hasActed": false
+      }
+    ],
+    "nightActions": {},
+    "day": 0,
+    "speakerIndex": 0,
+    "votes": {},
+    "lastActionTime": 1787222369700,
+    "deadInfo": [],
+    "witchUsed": {
+      "save": false,
+      "poison": false
+    },
+    "winner": "timeout"
+  },
+  "wrmt6n8w67": {
+    "roomId": "wrmt6n8w67",
+    "conversationId": "6913",
+    "status": "ended",
+    "creator": 3038,
+    "players": [
+      {
+        "userId": 3038,
+        "nickname": "君衔(新号)",
+        "role": "villager",
+        "alive": true,
+        "hasActed": false
+      },
+      {
+        "userId": 3151,
+        "nickname": "酷可mc",
+        "role": "seer",
+        "alive": true,
+        "hasActed": false
+      },
+      {
+        "userId": 2534,
+        "nickname": "代码卫星",
+        "role": "witch",
+        "alive": true,
+        "hasActed": true
+      },
+      {
+        "userId": 2875,
+        "nickname": "Maingift34",
+        "role": "wolf",
+        "alive": true,
+        "hasActed": true
+      }
+    ],
+    "nightActions": {
+      "wolfVotes": {
+        "2875": 3151
+      },
+      "wolfTarget": null,
+      "seerCheck": null,
+      "witchSave": false,
+      "witchPoison": 2875
+    },
+    "day": 1,
+    "speakerIndex": 0,
+    "votes": {},
+    "lastActionTime": 1787540186940,
+    "deadInfo": [],
+    "witchUsed": {
+      "save": false,
+      "poison": true
+    },
+    "winner": "timeout"
+  },
+  "wrmt6ss7br": {
+    "roomId": "wrmt6ss7br",
+    "conversationId": "5500",
+    "status": "ended",
+    "creator": 3038,
+    "players": [
+      {
+        "userId": 3038,
+        "nickname": "君衔(新号)",
+        "role": "wolf",
+        "alive": true,
+        "hasActed": true
+      },
+      {
+        "userId": 2514,
+        "nickname": "COMAC",
+        "role": "seer",
+        "alive": true,
+        "hasActed": false
+      },
+      {
+        "userId": 1491,
+        "nickname": "dream_fen",
+        "role": "witch",
+        "alive": true,
+        "hasActed": true
+      },
+      {
+        "userId": 60,
+        "nickname": "awa awa awa",
+        "role": "villager",
+        "alive": true,
+        "hasActed": false
+      }
+    ],
+    "nightActions": {
+      "wolfVotes": {
+        "3038": 1491
+      },
+      "wolfTarget": null,
+      "seerCheck": null,
+      "witchSave": true,
+      "witchPoison": null
+    },
+    "day": 1,
+    "speakerIndex": 0,
+    "votes": {},
+    "lastActionTime": 1787549597346,
+    "deadInfo": [],
+    "witchUsed": {
+      "save": true,
+      "poison": false
+    },
+    "winner": "timeout"
+  },
+  "wrmt6syec5": {
+    "roomId": "wrmt6syec5",
+    "conversationId": "5500",
+    "status": "ended",
+    "creator": 3038,
+    "players": [
+      {
+        "userId": 3038,
+        "nickname": "君衔(新号)",
+        "role": null,
+        "alive": true,
+        "hasActed": false
+      }
+    ],
+    "nightActions": {},
+    "day": 0,
+    "speakerIndex": 0,
+    "votes": {},
+    "lastActionTime": 1787549729045,
+    "deadInfo": [],
+    "witchUsed": {
+      "save": false,
+      "poison": false
+    },
+    "winner": "timeout"
+  },
+  "wrmt6syj7b": {
+    "roomId": "wrmt6syj7b",
+    "conversationId": "5500",
+    "status": "ended",
+    "creator": 3038,
+    "players": [
+      {
+        "userId": 3038,
+        "nickname": "君衔(新号)",
+        "role": null,
+        "alive": true,
+        "hasActed": false
+      }
+    ],
+    "nightActions": {},
+    "day": 0,
+    "speakerIndex": 0,
+    "votes": {},
+    "lastActionTime": 1787549735351,
+    "deadInfo": [],
+    "witchUsed": {
+      "save": false,
+      "poison": false
+    },
+    "winner": "timeout"
+  },
+  "wrmt6syjrd": {
+    "roomId": "wrmt6syjrd",
+    "conversationId": "5500",
+    "status": "ended",
+    "creator": 3038,
+    "players": [
+      {
+        "userId": 3038,
+        "nickname": "君衔(新号)",
+        "role": null,
+        "alive": true,
+        "hasActed": false
+      }
+    ],
+    "nightActions": {},
+    "day": 0,
+    "speakerIndex": 0,
+    "votes": {},
+    "lastActionTime": 1787549736073,
+    "deadInfo": [],
+    "witchUsed": {
+      "save": false,
+      "poison": false
+    },
+    "winner": "timeout"
+  },
+  "wrmt6sykdl": {
+    "roomId": "wrmt6sykdl",
+    "conversationId": "5500",
+    "status": "ended",
+    "creator": 3038,
+    "players": [
+      {
+        "userId": 3038,
+        "nickname": "君衔(新号)",
+        "role": null,
+        "alive": true,
+        "hasActed": false
+      }
+    ],
+    "nightActions": {},
+    "day": 0,
+    "speakerIndex": 0,
+    "votes": {},
+    "lastActionTime": 1787549736873,
+    "deadInfo": [],
+    "witchUsed": {
+      "save": false,
+      "poison": false
+    },
+    "winner": "timeout"
+  },
+  "wrmt6syks5": {
+    "roomId": "wrmt6syks5",
+    "conversationId": "5500",
+    "status": "ended",
+    "creator": 3038,
+    "players": [
+      {
+        "userId": 3038,
+        "nickname": "君衔(新号)",
+        "role": null,
+        "alive": true,
+        "hasActed": false
+      }
+    ],
+    "nightActions": {},
+    "day": 0,
+    "speakerIndex": 0,
+    "votes": {},
+    "lastActionTime": 1787549737397,
+    "deadInfo": [],
+    "witchUsed": {
+      "save": false,
+      "poison": false
+    },
+    "winner": "timeout"
+  },
+  "wrmt6sym6m": {
+    "roomId": "wrmt6sym6m",
+    "conversationId": "5500",
+    "status": "ended",
+    "creator": 3038,
+    "players": [
+      {
+        "userId": 3038,
+        "nickname": "君衔(新号)",
+        "role": null,
+        "alive": true,
+        "hasActed": false
+      },
+      {
+        "userId": 2875,
+        "nickname": "Maingift34",
+        "role": null,
+        "alive": true,
+        "hasActed": false
+      },
+      {
+        "userId": 1491,
+        "nickname": "dream_fen",
+        "role": null,
+        "alive": true,
+        "hasActed": false
+      }
+    ],
+    "nightActions": {},
+    "day": 0,
+    "speakerIndex": 0,
+    "votes": {},
+    "lastActionTime": 1787550187521,
+    "deadInfo": [],
+    "witchUsed": {
+      "save": false,
+      "poison": false
+    },
+    "winner": "timeout"
+  },
+  "wrmt9yi95n": {
+    "roomId": "wrmt9yi95n",
+    "conversationId": "4940",
+    "status": "ended",
+    "creator": 1128,
+    "players": [
+      {
+        "userId": 1128,
+        "nickname": "创作者_林mu轩",
+        "role": null,
+        "alive": true,
+        "hasActed": false
+      },
+      {
+        "userId": 3180,
+        "nickname": "CSZ是gay114514_9178",
+        "role": null,
+        "alive": true,
+        "hasActed": false
+      },
+      {
+        "userId": 267,
+        "nickname": "jie",
+        "role": null,
+        "alive": true,
+        "hasActed": false
+      }
+    ],
+    "nightActions": {},
+    "day": 0,
+    "speakerIndex": 0,
+    "votes": {},
+    "lastActionTime": 1787740463326,
+    "deadInfo": [],
+    "witchUsed": {
+      "save": false,
+      "poison": false
+    },
+    "winner": "timeout"
+  },
+  "wrmta3sgtd": {
+    "roomId": "wrmta3sgtd",
+    "conversationId": "4940",
+    "status": "ended",
+    "creator": 3222,
+    "players": [
+      {
+        "userId": 3222,
+        "nickname": "Cheers茄子",
+        "role": null,
+        "alive": true,
+        "hasActed": false
+      }
+    ],
+    "nightActions": {},
+    "day": 0,
+    "speakerIndex": 0,
+    "votes": {},
+    "lastActionTime": 1787749326625,
+    "deadInfo": [],
+    "witchUsed": {
+      "save": false,
+      "poison": false
+    },
+    "winner": "timeout"
+  },
+  "wrmtbl5xlj": {
+    "roomId": "wrmtbl5xlj",
+    "conversationId": "5500",
+    "status": "ended",
+    "creator": 3038,
+    "players": [
+      {
+        "userId": 3038,
+        "nickname": "君衔(新号)",
+        "role": null,
+        "alive": true,
+        "hasActed": false
+      },
+      {
+        "userId": 3222,
+        "nickname": "Cheers茄子",
+        "role": null,
+        "alive": true,
+        "hasActed": false
+      }
+    ],
+    "nightActions": {},
+    "day": 0,
+    "speakerIndex": 0,
+    "votes": {},
+    "lastActionTime": 1787839048399,
+    "deadInfo": [],
+    "witchUsed": {
+      "save": false,
+      "poison": false
+    },
+    "winner": "timeout"
+  }
+}

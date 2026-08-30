@@ -1,0 +1,8 @@
+node_modules/
+*.log
+bot_debug.log
+guard_log.txt
+error_screenshot.png
+push_temp.js
+.DS_Store
+*.tmp

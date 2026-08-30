@@ -1,0 +1,30 @@
+{
+  "date": "2026-08-30",
+  "conversations": {
+    "5500": {
+      "records": {
+        "1552": {
+          "time": "2026-08-30T04:01:26.093Z",
+          "rank": 2,
+          "fortuneLevel": "凶",
+          "fortuneDesc": "容易烦烦，少做决定（现实为准）。",
+          "star": 15,
+          "luckyNum": 27,
+          "color": "青色",
+          "yi": "宜早睡早起😴"
+        },
+        "3038": {
+          "time": "2026-08-30T03:02:38.816Z",
+          "rank": 1,
+          "fortuneLevel": "小吉",
+          "fortuneDesc": "小有收获，积少成多，继续努力。",
+          "star": 49,
+          "luckyNum": 33,
+          "color": "红色",
+          "yi": "宜出门散步🚶"
+        }
+      },
+      "count": 2
+    }
+  }
+}

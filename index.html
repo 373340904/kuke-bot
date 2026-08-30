@@ -1,0 +1,1637 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KukeChat 机器人控制面板</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #1a1a2e;
+  color: #eee;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+header {
+  background: #16213e;
+  padding: 16px 24px;
+  border-bottom: 1px solid #0f3460;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+header h1 { font-size: 18px; color: #e94560; }
+.status-dot {
+  width: 12px; height: 12px; border-radius: 50%;
+  background: #666; display: inline-block;
+  box-shadow: 0 0 8px currentColor;
+}
+.status-dot.connected { background: #4caf50; color: #4caf50; }
+.status-dot.connecting { background: #ff9800; color: #ff9800; animation: pulse 1s infinite; }
+.status-dot.disconnected { background: #f44336; color: #f44336; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+.status-text { font-size: 13px; color: #aaa; }
+.controls {
+  display: flex; gap: 8px; align-items: center; margin-left: auto; flex-wrap: wrap;
+}
+.controls input {
+  background: #0f3460; border: 1px solid #16213e; color: #eee;
+  padding: 8px 12px; border-radius: 6px; font-size: 13px; width: 280px;
+}
+.controls button {
+  background: #e94560; color: #fff; border: none; padding: 8px 16px;
+  border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600;
+}
+.controls button:hover { background: #c73650; }
+.controls button.disconnect { background: #666; }
+.controls button.disconnect:hover { background: #555; }
+.main { flex: 1; display: flex; flex-direction: column; padding: 16px 24px; gap: 12px; }
+.log-container {
+  flex: 1; background: #0d1117; border-radius: 8px; padding: 10px;
+  overflow-y: auto; font-family: 'Consolas', 'Monaco', monospace; font-size: 11px;
+  line-height: 1.4; border: 1px solid #21262d; max-height: calc(100vh - 180px);
+}
+.log-line { padding: 1px 0; word-break: break-all; }
+.log-time { color: #6e7681; }
+.log-recv { color: #58a6ff; }
+.log-send { color: #3fb950; }
+.log-error { color: #f85149; }
+.log-system { color: #d29922; }
+footer {
+  background: #16213e; padding: 8px 24px; font-size: 12px; color: #888;
+  border-top: 1px solid #0f3460; display: flex; gap: 24px; flex-wrap: wrap;
+}
+footer span { color: #aaa; }
+.modal-overlay {
+  display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.6); z-index: 1000; justify-content: center; align-items: center;
+}
+.modal-overlay.show { display: flex; }
+.modal {
+  background: #16213e; border-radius: 12px; padding: 24px; width: 420px; max-width: 90%;
+  border: 1px solid #0f3460; box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+.modal h3 { color: #e94560; margin-bottom: 16px; font-size: 16px; }
+.modal input, .modal textarea {
+  width: 100%; background: #0f3460; border: 1px solid #16213e; color: #eee;
+  padding: 10px 12px; border-radius: 6px; font-size: 13px; margin-bottom: 12px;
+  font-family: inherit;
+}
+.modal textarea { min-height: 120px; resize: vertical; }
+.modal button {
+  background: #e94560; color: #fff; border: none; padding: 10px 20px;
+  border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; width: 100%;
+}
+.modal button:hover { background: #c73650; }
+.modal .cancel-btn { background: #555; margin-top: 8px; }
+.modal .cancel-btn:hover { background: #444; }
+.modal .hint { font-size: 11px; color: #888; margin-bottom: 12px; }
+.send-bar {
+  display: flex; gap: 8px; padding: 12px 24px; background: #16213e;
+  border-top: 1px solid #0f3460; align-items: center;
+}
+.send-bar select {
+  background: #0f3460; border: 1px solid #16213e; color: #eee;
+  padding: 8px 12px; border-radius: 6px; font-size: 13px; min-width: 120px;
+}
+.send-bar input {
+  flex: 1; background: #0f3460; border: 1px solid #16213e; color: #eee;
+  padding: 8px 12px; border-radius: 6px; font-size: 13px;
+}
+.send-bar button {
+  background: #e94560; color: #fff; border: none; padding: 8px 20px;
+  border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600;
+}
+.send-bar button:hover { background: #c73650; }
+.send-bar button:disabled { background: #555; cursor: not-allowed; }
+.user-bar {
+  display: flex; gap: 8px; padding: 8px 24px; background: #1a1a2e;
+  border-top: 1px solid #0f3460; align-items: center; font-size: 12px;
+}
+.user-bar input {
+  background: #0f3460; border: 1px solid #16213e; color: #eee;
+  padding: 6px 10px; border-radius: 4px; font-size: 12px; width: 120px;
+}
+.user-bar button {
+  background: #4caf50; color: #fff; border: none; padding: 6px 14px;
+  border-radius: 4px; cursor: pointer; font-size: 12px;
+}
+.user-bar button:hover { background: #3d8b40; }
+.user-bar .status { color: #aaa; }
+.user-bar .logged-in { color: #4caf50; }
+.send-identity {
+  background: #0f3460; border: 1px solid #16213e; color: #eee;
+  padding: 8px 12px; border-radius: 6px; font-size: 13px;
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>KukeChat 机器人控制面板</h1>
+  <span class="status-dot disconnected" id="statusDot"></span>
+  <span class="status-text" id="statusText">未连接</span>
+  <div class="controls">
+    <input type="password" id="botKey" placeholder="输入 Bot Key" />
+    <button id="pushBtn" style="background:#555">全局推送</button>
+    <button id="connectBtn">连接</button>
+  </div>
+</header>
+<div class="main">
+  <div class="log-container" id="logContainer"></div>
+</div>
+<div class="send-bar">
+  <select id="sendGroupSelect">
+    <option value="">选择群...</option>
+  </select>
+  <select class="send-identity" id="sendIdentity">
+    <option value="bot">Bot身份</option>
+    <option value="user" disabled>用户身份（未登录）</option>
+  </select>
+  <input type="text" id="sendMessageInput" placeholder="输入消息，回车发送（支持Markdown）" />
+  <button id="sendMessageBtn">发送</button>
+</div>
+<div class="user-bar">
+  <span class="status" id="userStatus">未登录用户账号</span>
+  <input type="text" id="userAccount" placeholder="用户名/邮箱" />
+  <input type="password" id="userPassword" placeholder="密码" />
+  <button id="userLoginBtn">登录</button>
+  <button id="userLogoutBtn" style="display:none;background:#f44336">退出</button>
+</div>
+<footer>
+  <span>Bot ID: <span id="botId">-</span></span>
+  <span>User ID: <span id="userId">-</span></span>
+  <span style="margin-left:auto">数据存储于浏览器本地</span>
+</footer>
+
+<div class="modal-overlay" id="pushModal">
+  <div class="modal">
+    <h3 id="pushModalTitle">全局推送 - 密码验证</h3>
+    <div id="pushPasswordStep">
+      <input type="password" id="pushPassword" placeholder="请输入密码" />
+      <button id="pushPasswordBtn">确认</button>
+      <button class="cancel-btn" onclick="closePushModal()">取消</button>
+    </div>
+    <div id="pushFormStep" style="display:none">
+      <input type="text" id="pushTitle" placeholder="推送标题" />
+      <textarea id="pushContent" placeholder="推送内容，用 /n 换行"></textarea>
+      <div class="hint">将推送给机器人所在的所有群</div>
+      <button id="pushSendBtn">发送推送</button>
+      <button class="cancel-btn" onclick="closePushModal()">取消</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const BASE_URL = '/.netlify/functions/api';
+let ws = null;
+let botKey = '';
+let botUserId = null;
+let reconnectTimer = null;
+const seenIds = new Set();
+// 智谱AI免费Key（glm-4-flash模型完全免费），申请地址：https://open.bigmodel.cn/usercenter/apikeys
+const ZHIPU_API_KEY = 'd9cd0300341d4ac1aed9260c715c1a8a.2aChFKD7pTs3j7Y4';
+const seenInteractions = new Set();
+
+const $ = id => document.getElementById(id);
+const logContainer = $('logContainer');
+
+function log(type, msg) {
+  const time = new Date().toLocaleTimeString();
+  const line = document.createElement('div');
+  line.className = 'log-line log-' + type;
+  line.innerHTML = `<span class="log-time">[${time}]</span> ${msg}`;
+  logContainer.appendChild(line);
+  logContainer.scrollTop = logContainer.scrollHeight;
+}
+
+function setStatus(state, text) {
+  const dot = $('statusDot');
+  dot.className = 'status-dot ' + state;
+  $('statusText').textContent = text;
+}
+
+function getTodayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+// localStorage helpers
+function getCheckinData() {
+  try { return JSON.parse(localStorage.getItem('kuke_checkin_data')) || { date: '', conversations: {} }; }
+  catch { return { date: '', conversations: {} }; }
+}
+function saveCheckinData(d) { localStorage.setItem('kuke_checkin_data', JSON.stringify(d)); }
+function getWelcomeData() {
+  try { return JSON.parse(localStorage.getItem('kuke_welcome_data')) || {}; }
+  catch { return {}; }
+}
+function saveWelcomeData(d) { localStorage.setItem('kuke_welcome_data', JSON.stringify(d)); }
+function getGroups() {
+  try { return JSON.parse(localStorage.getItem('kuke_groups')) || []; }
+  catch { return []; }
+}
+function saveGroups(d) { localStorage.setItem('kuke_groups', JSON.stringify(d)); }
+function addGroup(convId) {
+  const groups = new Set(getGroups());
+  if (!groups.has(convId)) { groups.add(convId); saveGroups([...groups]); refreshGroupSelect(); }
+}
+
+// ========== 投票功能（按钮版）==========
+function getVoteData() {
+  try { return JSON.parse(localStorage.getItem('kuke_vote_data')) || {}; }
+  catch { return {}; }
+}
+function saveVoteData(d) { localStorage.setItem('kuke_vote_data', JSON.stringify(d)); }
+function genVoteId() { return 'v' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+function getVoteCounts(vote) {
+  const counts = vote.options.map(() => 0);
+  Object.values(vote.votes).forEach(idx => { if (idx >= 0 && idx < counts.length) counts[idx]++; });
+  return counts;
+}
+function buildVoteButtonMessage(vote) {
+  const counts = getVoteCounts(vote);
+  const total = counts.reduce((a, b) => a + b, 0);
+  let msg = `<markdown># 📊 ${vote.title}\n\n`;
+  msg += `> 总投票：\`${total}\` 人`;
+  if (vote.creator) msg += `\n> 发起人：${vote.creator}`;
+  msg += `\n\n`;
+  vote.options.forEach((opt, i) => {
+    const count = counts[i];
+    const pct = total > 0 ? Math.round(count / total * 100) : 0;
+    const cid = `${vote.voteId}_${i}`;
+    msg += `<button action="callback" action_id="${cid}" id="${cid}">${i + 1}. ${opt} · ${count}票(${pct}%)</button>\n`;
+  });
+  msg += `</markdown>`;
+  return msg;
+}
+function buildVoteResultCard(vote) {
+  const counts = getVoteCounts(vote);
+  const total = counts.reduce((a, b) => a + b, 0);
+  let reply = `<markdown># 🏁 ${vote.title} - 投票结果\n\n`;
+  reply += `> 总投票：\`${total}\` 人`;
+  if (vote.creator) reply += `\n> 发起人：${vote.creator}`;
+  reply += `\n\n`;
+  vote.options.forEach((opt, i) => {
+    const count = counts[i];
+    const pct = total > 0 ? Math.round(count / total * 100) : 0;
+    const bar = '█'.repeat(Math.round(pct / 5)) + '░'.repeat(20 - Math.round(pct / 5));
+    reply += `**${i + 1}. ${opt}**\n\`${bar}\` ${count}票 (${pct}%)\n\n`;
+  });
+  reply += `</markdown>`;
+  return reply;
+}
+async function refreshVoteButtons(vote) {
+  const counts = getVoteCounts(vote);
+  const total = counts.reduce((a, b) => a + b, 0);
+  for (let i = 0; i < vote.options.length; i++) {
+    const cid = `${vote.voteId}_${i}`;
+    const pct = total > 0 ? Math.round(counts[i] / total * 100) : 0;
+    const label = `${i + 1}. ${vote.options[i]} · ${counts[i]}票(${pct}%)`;
+    await updateButton(vote.conversationId, vote.messageId, cid, label, 'primary', false);
+  }
+}
+
+// ========== 违禁词 & 黑名单 ==========
+function getForbiddenWords() {
+  try { return JSON.parse(localStorage.getItem('kuke_forbidden_words')) || {}; }
+  catch { return {}; }
+}
+function saveForbiddenWords(d) { localStorage.setItem('kuke_forbidden_words', JSON.stringify(d)); }
+function getBlacklistData() {
+  try { return JSON.parse(localStorage.getItem('kuke_blacklist')) || {}; }
+  catch { return {}; }
+}
+function saveBlacklistData(d) { localStorage.setItem('kuke_blacklist', JSON.stringify(d)); }
+
+const forbiddenCount = {};
+const spamTrack = {};
+
+function getForbiddenList(cid) {
+  const data = getForbiddenWords();
+  return data[String(cid)] || [];
+}
+function buildForbiddenTable(cid, tip) {
+  const words = getForbiddenList(cid);
+  let msg = `<markdown>${tip}\n\n**当前违禁词列表（共 ${words.length} 个）**\n\n`;
+  if (words.length === 0) { msg += `> 暂无违禁词`; }
+  else {
+    msg += `| 序号 | 违禁词 |\n|------|--------|\n`;
+    words.forEach((w, i) => { msg += `| ${i + 1} | ${w} |\n`; });
+  }
+  msg += `</markdown>`;
+  return msg;
+}
+function buildBlacklistCard(cid) {
+  const data = getBlacklistData();
+  const list = data[String(cid)] || {};
+  const entries = Object.entries(list);
+  let msg = `<markdown># 🚫 本群黑名单\n\n`;
+  msg += `> 共 \`${entries.length}\` 人被封禁\n\n`;
+  if (entries.length === 0) { msg += `> 暂无黑名单人员`; }
+  else {
+    msg += `| 用户 | 原因 | 封禁时间 |\n|------|------|----------|\n`;
+    entries.forEach(([uid, info]) => {
+      const name = info.userName || `用户${uid}`;
+      const time = info.time ? new Date(info.time).toLocaleString('zh-CN') : '未知';
+      msg += `| ${name}（ID：\`${uid}\`） | ${info.reason || '违规'} | ${time} |\n`;
+    });
+  }
+  msg += `</markdown>`;
+  return msg;
+}
+function isBlacklisted(cid, userId) {
+  const data = getBlacklistData();
+  return !!(data[String(cid)] && data[String(cid)][String(userId)]);
+}
+function addToBlacklist(cid, userId, userName, reason) {
+  const data = getBlacklistData();
+  if (!data[String(cid)]) data[String(cid)] = {};
+  data[String(cid)][String(userId)] = { userName, reason, time: new Date().toISOString() };
+  saveBlacklistData(data);
+}
+function removeFromBlacklist(cid, userId) {
+  const data = getBlacklistData();
+  if (data[String(cid)] && data[String(cid)][String(userId)]) {
+    const info = data[String(cid)][String(userId)];
+    delete data[String(cid)][String(userId)];
+    saveBlacklistData(data);
+    return info;
+  }
+  return null;
+}
+function checkForbidden(cid, text) {
+  const words = getForbiddenList(cid);
+  for (const w of words) { if (text.includes(w)) return w; }
+  return null;
+}
+async function recordForbidden(cid, userId, userName, word) {
+  const key = `${cid}_${userId}`;
+  if (!forbiddenCount[key]) forbiddenCount[key] = 0;
+  forbiddenCount[key]++;
+  if (forbiddenCount[key] >= 4) {
+    forbiddenCount[key] = 0;
+    const result = await addMute(cid, userId, userName, `多次发送违禁词"${word}"`);
+    if (result.failed) return { muted: false, failed: true };
+    if (!isBlacklisted(cid, userId)) {
+      addToBlacklist(cid, userId, userName, `多次发送违禁词"${word}"`);
+    }
+    const mins = Math.round(result.duration / 60000);
+    return { muted: true, count: result.count, mins };
+  }
+  return { muted: false, count: forbiddenCount[key] };
+}
+async function checkSpam(cid, userId, userName) {
+  const key = `${cid}_${userId}`;
+  const now = Date.now();
+  if (!spamTrack[key]) spamTrack[key] = { times: [] };
+  const t = spamTrack[key];
+  t.times.push(now);
+  t.times = t.times.filter(ts => now - ts < 10000);
+  if (t.times.length >= 15) {
+    t.times = [];
+    const result = await addMute(cid, userId, userName, '刷屏');
+    if (result.failed) return { muted: false, failed: true };
+    if (!isBlacklisted(cid, userId)) {
+      addToBlacklist(cid, userId, userName, '刷屏');
+    }
+    const mins = Math.round(result.duration / 60000);
+    return { muted: true, count: result.count, mins };
+  }
+  return { muted: false, count: t.times.length };
+}
+async function canManage(convId, userId, sender) {
+  if (userId === 3038) return true;
+  return await isAdminOrOwner(convId, userId, sender);
+}
+
+// ========== 功能开关 ==========
+const ALL_FEATURES = ['签到', '天气', '投票', '违禁词检测', '进群欢迎', '群在线人数'];
+function getSwitches() {
+  try { return JSON.parse(localStorage.getItem('kuke_switches')) || {}; }
+  catch { return {}; }
+}
+function saveSwitches(d) { localStorage.setItem('kuke_switches', JSON.stringify(d)); }
+function isFeatureEnabled(cid, feature) {
+  const data = getSwitches();
+  const disabled = data[String(cid)] || [];
+  return !disabled.includes(feature);
+}
+function setFeature(cid, feature, enable) {
+  const data = getSwitches();
+  const key = String(cid);
+  if (!data[key]) data[key] = [];
+  if (enable) { data[key] = data[key].filter(f => f !== feature); }
+  else { if (!data[key].includes(feature)) data[key].push(feature); }
+  saveSwitches(data);
+}
+function buildSwitchTable(cid, tip) {
+  const data = getSwitches();
+  const disabled = data[String(cid)] || [];
+  let msg = `<markdown>${tip}\n\n| 功能 | 状态 |\n|------|------|\n`;
+  ALL_FEATURES.forEach(f => {
+    const status = disabled.includes(f) ? '`已关闭`' : '`已开启`';
+    msg += `| ${f} | ${status} |\n`;
+  });
+  msg += `</markdown>`;
+  return msg;
+}
+
+// ========== 临时禁言 ==========
+const botAdminCache = {};
+
+function getMuteData() {
+  try { return JSON.parse(localStorage.getItem('kuke_mute_data')) || {}; }
+  catch { return {}; }
+}
+function saveMuteData(d) { localStorage.setItem('kuke_mute_data', JSON.stringify(d)); }
+function getMuteDuration(count) {
+  const durations = [60, 120, 300, 600, 1800];
+  return durations[Math.min(count - 1, durations.length - 1)] * 1000;
+}
+function isMuted(cid, userId) {
+  const data = getMuteData();
+  const info = data[String(cid)]?.[String(userId)];
+  if (!info) return false;
+  return Date.now() < info.until;
+}
+function getMuteRemain(cid, userId) {
+  const data = getMuteData();
+  const info = data[String(cid)]?.[String(userId)];
+  if (!info) return 0;
+  return Math.max(0, info.until - Date.now());
+}
+
+async function isBotAdmin(cid) {
+  const key = String(cid);
+  if (botAdminCache[key] !== undefined) return botAdminCache[key];
+  try {
+    const data = await apiRequest('GET', `/bot-api/conversations/${cid}/members`);
+    const bot = (data.items || []).find(m => m.user_id === botUserId);
+    const isAdmin = bot?.role === 'admin' || bot?.role === 'owner';
+    botAdminCache[key] = isAdmin;
+    return isAdmin;
+  } catch {
+    botAdminCache[key] = false;
+    return false;
+  }
+}
+
+async function realMuteUser(cid, userId) {
+  try {
+    await apiRequest('PATCH', `/bot-api/conversations/${cid}/members/${userId}/mute`, { muted: true });
+    return true;
+  } catch (e) {
+    console.error('真禁言API失败:', e);
+    return false;
+  }
+}
+
+async function realUnmuteUser(cid, userId) {
+  try {
+    await apiRequest('PATCH', `/bot-api/conversations/${cid}/members/${userId}/mute`, { muted: false });
+    return true;
+  } catch (e) {
+    console.error('解除禁言API失败:', e);
+    return false;
+  }
+}
+
+async function getUserName(userId) {
+  try {
+    const data = await apiRequest('GET', `/bot-api/users/${userId}`);
+    return data.user?.nickname || data.user?.username || `用户${userId}`;
+  } catch (e) {
+    console.error('获取用户信息失败:', e);
+    return `用户${userId}`;
+  }
+}
+
+const muteTimers = {};
+function scheduleUnmute(cid, userId, untilTs) {
+  const key = `${cid}_${userId}`;
+  if (muteTimers[key]) clearTimeout(muteTimers[key]);
+  const delay = untilTs - Date.now();
+  if (delay <= 0) { realUnmuteUser(cid, userId); return; }
+  muteTimers[key] = setTimeout(async () => {
+    await realUnmuteUser(cid, userId);
+    console.log(`自动解除禁言: 群${cid} 用户${userId}`);
+    delete muteTimers[key];
+  }, delay);
+}
+
+function restoreMuteTimers() {
+  const data = getMuteData();
+  let count = 0;
+  for (const cid of Object.keys(data)) {
+    for (const userId of Object.keys(data[cid])) {
+      const info = data[cid][userId];
+      if (info.realMuted && info.until > Date.now()) {
+        scheduleUnmute(cid, userId, info.until);
+        count++;
+      } else if (info.realMuted && info.until <= Date.now()) {
+        realUnmuteUser(cid, userId);
+      }
+    }
+  }
+  if (count > 0) console.log(`恢复 ${count} 个禁言定时器`);
+}
+
+async function addMute(cid, userId, userName, reason) {
+  const data = getMuteData();
+  const key = String(cid);
+  const uid = String(userId);
+  if (!data[key]) data[key] = {};
+  const prev = data[key][uid];
+  const count = (prev?.count || 0) + 1;
+  const duration = getMuteDuration(count);
+  const untilTs = Date.now() + duration;
+
+  let realMuted = await realMuteUser(cid, userId);
+  if (!realMuted) {
+    console.log(`真禁言失败: 群${cid} 用户${userId}，机器人可能不是管理员`);
+    return { count, duration, realMuted: false, failed: true };
+  }
+  scheduleUnmute(cid, userId, untilTs);
+  console.log(`真禁言成功: 群${cid} 用户${userId}`);
+
+  data[key][uid] = { userName, reason, count, until: untilTs, duration, realMuted: true };
+  saveMuteData(data);
+  return { count, duration, realMuted: true, failed: false };
+}
+
+// API helpers
+async function apiRequest(method, path, body) {
+  const headers = { 'Authorization': `Bot ${botKey}` };
+  if (body) headers['Content-Type'] = 'application/json';
+  const res = await fetch(BASE_URL + path, {
+    method, headers, body: body ? JSON.stringify(body) : undefined
+  });
+  if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
+}
+
+async function sendMsg(conversationId, text) {
+  try {
+    await apiRequest('POST', `/bot-api/conversations/${conversationId}/messages`, { message: text });
+    log('send', `→ [群${conversationId}] ${text.slice(0,80)}${text.length>80?'...':''}`);
+    return true;
+  } catch(e) { log('error', `发送失败: ${e.message}`); return false; }
+}
+
+async function sendMsgReturnId(conversationId, text) {
+  try {
+    const data = await apiRequest('POST', `/bot-api/conversations/${conversationId}/messages`, { message: text });
+    log('send', `→ [群${conversationId}] ${text.slice(0,80)}${text.length>80?'...':''}`);
+    return data;
+  } catch(e) { log('error', `发送失败: ${e.message}`); return null; }
+}
+
+async function updateButton(conversationId, messageId, componentId, label, variant, disabled, scope, userId) {
+  try {
+    const body = { label, variant, disabled };
+    if (scope === 'user') { body.scope = 'user'; body.user_id = userId; }
+    await apiRequest('PATCH', `/bot-api/conversations/${conversationId}/messages/${messageId}/components/${componentId}`, body);
+    return true;
+  } catch(e) { log('error', `更新按钮失败: ${e.message}`); return false; }
+}
+
+// Member helpers
+function extractMembers(data) {
+  if (Array.isArray(data)) return data;
+  if (data && Array.isArray(data.members)) return data.members;
+  if (data && Array.isArray(data.data)) return data.data;
+  if (data && Array.isArray(data.items)) return data.items;
+  if (data && Array.isArray(data.users)) return data.users;
+  return [];
+}
+function getUserId(m) { return m.user_id ?? m.id ?? m.uid ?? m.userId; }
+function getUserName(m) {
+  const d = m.nickname ?? m.display_name ?? m.name ?? m.username ?? m.user_display_name ?? m.member_nickname ?? m.group_nickname;
+  if (d) return d;
+  if (m.user) { const n = m.user.nickname ?? m.user.display_name ?? m.user.name ?? m.user.username; if (n) return n; }
+  if (m.profile) { const n = m.profile.nickname ?? m.profile.display_name ?? m.profile.name; if (n) return n; }
+  return '未知用户';
+}
+function isMemberOnline(m) {
+  if (m.is_online === true || m.online === true || m.status === 'online') return true;
+  if (m.is_online === false || m.online === false) return false;
+  return null;
+}
+
+// Fortune
+function generateFortune() {
+  const fortunes = [
+    { level: '大吉', desc: '万事顺意，心想事成，适合搞大事！' },
+    { level: '吉', desc: '运势不错，稳步前行必有收获。' },
+    { level: '中吉', desc: '平稳度日，不宜冒进，稳中求胜。' },
+    { level: '小吉', desc: '小有收获，积少成多，继续努力。' },
+    { level: '中平', desc: '平平淡淡才是真，好好休息吧。' },
+    { level: '凶', desc: '容易烦烦，少做决定（现实为准）。' },
+    { level: '大凶', desc: '诸事不宜，躺平一天，别给自己找事。' },
+  ];
+  const colors = ['红色','蓝色','绿色','黄色','紫色','橙色','粉色','黑色','白色','青色','金色','银色'];
+  const yiList = ['宜暴躁怼人！😆','宜摸鱼划水🐟','宜好好学习📚','宜早睡早起😴','宜喝杯奶茶🧋','宜打把游戏🎮','宜出门散步🚶','宜写代码💻','宜发呆放空😶','宜请人吃饭🍜','宜听首音乐🎵','宜运动健身💪'];
+  return {
+    fortune: fortunes[Math.floor(Math.random()*fortunes.length)],
+    star: Math.floor(Math.random()*100)+1,
+    luckyNum: Math.floor(Math.random()*99)+1,
+    color: colors[Math.floor(Math.random()*colors.length)],
+    yi: yiList[Math.floor(Math.random()*yiList.length)],
+  };
+}
+
+function buildCheckinCard(userName, today, rank, fl, fd, star, luckyNum, color, yi, title) {
+  const t = title || '✅签到完成！';
+  return `<markdown># ${t}
+
+**用户：**${userName}
+**日期：**\`${today}\`
+**排名：**你是今日第 \`${rank}\` 签到的人
+
+## 🎲今日运势
+
+🔮${fl}
+> ${fd}
+- **幸运星星：**\`${star}/100\`
+- **幸运数字：**\`${luckyNum}\`
+- **幸运色：**${color}
+- **宜：**${yi}
+
+❤️今日签到已完成，明日再来吧~</markdown>`;
+}
+
+async function isAdminOrOwner(convId, userId, sender) {
+  if (sender) {
+    const r = sender.role || sender.user_role || sender.permission;
+    if (r === 'owner' || r === 'admin') return true;
+    if (sender.is_owner === true || sender.is_admin === true) return true;
+  }
+  try {
+    const data = await apiRequest('GET', `/bot-api/conversations/${convId}/members`);
+    const members = extractMembers(data);
+    const m = members.find(x => getUserId(x) === userId);
+    if (!m) return false;
+    const r = m.role || m.user_role || m.permission || (m.user && m.user.role);
+    return r === 'owner' || r === 'admin' || m.is_owner === true || m.is_admin === true;
+  } catch { return false; }
+}
+
+// Command handlers
+async function handleMessage(msg) {
+  if (msg.sender?.is_bot || msg.sender_id === botUserId) return;
+  if (!msg.content?.trim()) return;
+  if (seenIds.has(msg.id)) return;
+  seenIds.add(msg.id);
+  if (seenIds.size > 500) seenIds.clear();
+
+  const content = msg.content.trim();
+  const convId = msg.conversation_id;
+  const userName = msg.sender_display_name || msg.sender?.nickname || '未知用户';
+
+  // 记录群ID，用于全局推送
+  addGroup(convId);
+
+  log('recv', `← [群${convId}] ${userName}: ${content.slice(0,100)}`);
+
+  // 禁言拦截：被禁言用户不处理消息
+  if (isMuted(convId, msg.sender_id)) {
+    const remain = getMuteRemain(convId, msg.sender_id);
+    const mins = Math.ceil(remain / 60000);
+    sendMsg(convId, `<markdown>🔇 **${userName}** 已被禁言，还有 \`${mins}\` 分钟解除</markdown>`);
+    return;
+  }
+
+  // @机器人 AI 对话
+  const botAtPattern = /<at[^>]*id=["']?(2899|375)["']?[^>]*>/i;
+  const hasAtInContent = botAtPattern.test(content);
+  const hasAtInMeta = msg.metadata?.mentions && msg.metadata.mentions.some(m => String(m.id) === '2899' || String(m.id) === '375' || m.user_id === 2899 || m.user_id === 375);
+  const isAtBot = hasAtInContent || hasAtInMeta;
+  if (isAtBot && !content.startsWith('/')) {
+    let question = content.replace(botAtPattern, '').replace(/@\S+\s*/g, '').replace(/^[@\s]+/, '').trim();
+    // 检测图片
+    let imageUrl = null;
+    if (msg.type === 'image' && msg.content && /^https?:\/\//.test(msg.content)) {
+      imageUrl = msg.content;
+    } else if (msg.metadata?.images && msg.metadata.images.length > 0) {
+      const img = msg.metadata.images[0];
+      imageUrl = typeof img === 'string' ? img : (img.url || img.src || img.image_url);
+    } else if (msg.metadata?.image_url) {
+      imageUrl = msg.metadata.image_url;
+    } else if (msg.metadata?.image?.url) {
+      imageUrl = msg.metadata.image.url;
+    } else if (msg.metadata?.elements) {
+      const imgEl = msg.metadata.elements.find(e => (e.type === 'image' || e.type === 'img') && (e.src || e.url || e.image_url));
+      if (imgEl) imageUrl = imgEl.src || imgEl.url || imgEl.image_url;
+    } else if (msg.metadata?.attachments) {
+      const imgAtt = msg.metadata.attachments.find(a => a.type === 'image' || a.content_type?.startsWith('image/'));
+      if (imgAtt) imageUrl = imgAtt.url || imgAtt.image_url;
+    } else {
+      const imgMatch = content.match(/<img[^>]+src=["']([^"']+)["']/i);
+      if (imgMatch) imageUrl = imgMatch[1];
+    }
+    if (question || imageUrl) {
+      (async () => {
+        try {
+          if (!ZHIPU_API_KEY) { sendMsg(convId, '⚠️ AI功能未配置，请在 index.html 中填写 ZHIPU_API_KEY'); return; }
+          sendMsg(convId, imageUrl ? `🖼️ 正在识别图片...` : `🤔 正在思考...`);
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 30000);
+          let messages;
+          if (imageUrl) {
+            const userText = question || '请详细描述这张图片的内容';
+            messages = [{ role: 'user', content: [
+              { type: 'text', text: userText },
+              { type: 'image_url', image_url: { url: imageUrl } }
+            ]}];
+          } else {
+            let context = '';
+            try {
+              const sc = new AbortController();
+              const st = setTimeout(() => sc.abort(), 5000);
+              const sr = await fetch(`https://baike.baidu.com/api/openapi/BaikeLemmaCardApi?scope=103&format=json&appid=379020&bk_key=${encodeURIComponent(question)}&bk_length=500`, { signal: sc.signal });
+              clearTimeout(st);
+              if (sr.ok) { const sd = await sr.json(); if (sd?.abstract) context = `\n\n【参考资料】${sd.abstract}`; }
+            } catch (e) {}
+            const systemPrompt = '你是君灵AI，运行在KukeChat平台的智能机器人助手。KukeChat（库科聊天）是一个即时通讯社交平台，支持群聊、私聊、机器人等功能。请根据用户问题和参考资料简洁回答。';
+            messages = [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: question + context }
+            ];
+          }
+          const res = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${ZHIPU_API_KEY}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model: imageUrl ? 'glm-4v-flash' : 'glm-4-flash', messages }),
+            signal: controller.signal
+          });
+          clearTimeout(timeout);
+          if (!res.ok) throw new Error(`AI接口返回 ${res.status}`);
+          const data = await res.json();
+          const answer = data?.choices?.[0]?.message?.content || '抱歉，我暂时无法回答这个问题。';
+          sendMsg(convId, `<markdown>${answer.slice(0, 2000)}</markdown>`);
+        } catch (e) {
+          log('error', `AI对话失败: ${e.message}`);
+          const errMsg = e.name === 'AbortError' ? 'AI响应超时，请重试' : e.message;
+          sendMsg(convId, `❌AI回复失败：${errMsg}`);
+        }
+      })();
+    }
+    return;
+  }
+
+  // 刷屏检测（指令和签到跳过，群主和ID3038豁免）
+  const isCmd = content.startsWith('/') || content === '签到';
+  const senderRole = msg.sender?.role || msg.sender?.user_role || msg.sender?.permission;
+  const isOwner = senderRole === 'owner' || msg.sender?.is_owner === true;
+  const isMuteExempt = msg.sender_id === 3038 || isOwner;
+  if (!isCmd && !isMuteExempt) {
+    const spamResult = await checkSpam(convId, msg.sender_id, userName);
+    if (spamResult.muted) {
+      sendMsg(convId, `<markdown>🔇 **${userName}** 因刷屏被禁言 \`${spamResult.mins}\` 分钟，并已加入黑名单</markdown>`);
+      return;
+    } else if (spamResult.failed) {
+      sendMsg(convId, '❌禁言失败，机器人可能不是管理员');
+      return;
+    }
+  }
+
+  // 违禁词检测（指令和签到跳过，群主和ID3038豁免）
+  if (!isCmd && !isMuteExempt && isFeatureEnabled(convId, '违禁词检测')) {
+    const hitWord = checkForbidden(convId, content);
+    if (hitWord) {
+      const result = await recordForbidden(convId, msg.sender_id, userName, hitWord);
+      if (result.muted) {
+        sendMsg(convId, `<markdown>🔇 **${userName}** 因多次发送违禁词被禁言 \`${result.mins}\` 分钟，并已加入黑名单</markdown>`);
+      } else if (result.failed) {
+        sendMsg(convId, '❌禁言失败，机器人可能不是管理员');
+      } else {
+        sendMsg(convId, `<markdown>⚠️ **${userName}** 发送了违禁词"${hitWord}"，第 \`${result.count}/4\` 次</markdown>`);
+      }
+      return;
+    }
+  }
+
+  // 黑名单拦截：只拦截指令，日常对话不拦截（群主和ID3038不受限）
+  const senderRole = msg.sender?.role || msg.sender?.user_role || msg.sender?.permission;
+  const isOwner = senderRole === 'owner' || msg.sender?.is_owner === true;
+  if (isCmd && msg.sender_id !== 3038 && !isOwner && isBlacklisted(convId, msg.sender_id) && content !== '/help' && content !== '/黑名单') {
+    sendMsg(convId, `<markdown>🚫 你已被加入黑名单，无法使用此功能</markdown>`);
+    return;
+  }
+
+  if (content === '/help') {
+    sendMsg(convId, `<markdown># 君灵bot指令
+
+## 常用功能
+- \`/help\`：查看本菜单
+- \`/群内在线人数\`：查看当前群内在线人数和在线用户列表
+- \`/签到\`：签到查看专属运势
+- \`/天气[城市]\`：查询天气预报
+- \`/绘图[内容，风格]\`：AI绘图，免费生成图片
+- \`/黑名单\`：查看本群黑名单
+- \`/违禁词表格\`：查看违禁词列表
+
+## 管理员功能
+
+<link action="callback" action_id="help_vote">投票管理</link>：发起和管理投票
+<link action="callback" action_id="help_forbidden">违禁词管理</link>：添加和删除违禁词
+<link action="callback" action_id="help_blacklist">黑名单管理</link>：查看和管理黑名单
+<link action="callback" action_id="help_mute">禁言管理</link>：手动禁言和解除禁言
+<link action="callback" action_id="help_switch">功能开关</link>：开启或关闭各项功能
+<link action="callback" action_id="help_other">其他管理</link>：进群欢迎和全局推送
+</markdown>`);
+  }
+  else if (content === '/违禁词表格') {
+    sendMsg(convId, buildForbiddenTable(convId, '📋 当前违禁词列表'));
+  }
+  else if (content === '/ping') {
+    sendMsg(convId, '🏓 pong！机器人在线');
+  }
+  else if (content.startsWith('/echo ')) {
+    sendMsg(convId, `🔊 ${content.slice(6)}`);
+  }
+  else if (content === '/群内在线人数') {
+    if (!isFeatureEnabled(convId, '群在线人数')) { sendMsg(convId, '群在线人数功能已被管理员关闭'); return; }
+    try {
+      const membersData = await apiRequest('GET', `/bot-api/conversations/${convId}/members`);
+      const members = extractMembers(membersData);
+      const onlineData = await apiRequest('GET', `/bot-api/users/online`);
+      const onlineUsers = extractMembers(onlineData);
+      const onlineIds = new Set(onlineUsers.map(u => getUserId(u)).filter(id => id != null));
+      const onlineInGroup = members.filter(m => {
+        const uid = getUserId(m);
+        if (uid == null) return false;
+        const self = isMemberOnline(m);
+        return self !== null ? self : onlineIds.has(uid);
+      });
+      onlineInGroup.sort((a,b) => getUserId(a) - getUserId(b));
+      let reply = `<markdown># 本群在线人数：${onlineInGroup.length}
+
+# 群内在线用户
+
+`;
+      reply += onlineInGroup.map((m,i) => `${i+1}. ${getUserName(m)}（ID：\`${getUserId(m)}\`）`).join('\n');
+      reply += `</markdown>`;
+      sendMsg(convId, reply);
+    } catch(e) { log('error', `在线人数失败: ${e.message}`); sendMsg(convId, `获取在线人数失败：${e.message}`); }
+  }
+  else if (content === '/签到' || content === '签到') {
+    if (!isFeatureEnabled(convId, '签到')) { sendMsg(convId, '签到功能已被管理员关闭'); return; }
+    const today = getTodayStr();
+    let data = getCheckinData();
+    if (data.date !== today) data = { date: today, conversations: {} };
+    const cid = String(convId);
+    if (!data.conversations[cid]) data.conversations[cid] = { records: {}, count: 0 };
+    const cd = data.conversations[cid];
+    if (cd.records[msg.sender_id]) {
+      const r = cd.records[msg.sender_id];
+      sendMsg(convId, buildCheckinCard(userName, today, r.rank, r.fortuneLevel, r.fortuneDesc, r.star, r.luckyNum, r.color, r.yi, '你已经签过到啦~'));
+      return;
+    }
+    cd.count++;
+    const rank = cd.count;
+    const { fortune, star, luckyNum, color, yi } = generateFortune();
+    cd.records[msg.sender_id] = { time: new Date().toISOString(), rank, fortuneLevel: fortune.level, fortuneDesc: fortune.desc, star, luckyNum, color, yi };
+    saveCheckinData(data);
+    sendMsg(convId, buildCheckinCard(userName, today, rank, fortune.level, fortune.desc, star, luckyNum, color, yi));
+  }
+  else if (content.startsWith('/天气')) {
+    if (!isFeatureEnabled(convId, '天气')) { sendMsg(convId, '天气功能已被管理员关闭'); return; }
+    const match = content.match(/^\/天气\s*\[(.+?)\]/);
+    if (!match) { sendMsg(convId, '⚠️格式错误，请使用：/天气[城市]，例如：/天气[北京]'); return; }
+    const city = match[1].trim();
+    const WEATHER_DESC_MAP = {
+      'Sunny': '晴', 'Clear': '晴', 'Clear sky': '晴',
+      'Partly cloudy': '局部多云', 'Partly Cloudy': '局部多云',
+      'Cloudy': '多云', 'Overcast': '阴',
+      'Mist': '薄雾', 'Fog': '雾', 'Freezing fog': '冻雾',
+      'Patchy rain possible': '可能有零星小雨', 'Patchy rain nearby': '附近有零星小雨',
+      'Light rain': '小雨', 'Light rain shower': '小阵雨',
+      'Moderate rain': '中雨', 'Moderate rain at times': '间歇性中雨',
+      'Heavy rain': '大雨', 'Heavy rain at times': '间歇性大雨',
+      'Torrential rain shower': '暴雨', 'Torrential rain': '暴雨',
+      'Patchy snow possible': '可能有零星小雪', 'Patchy snow nearby': '附近有零星小雪',
+      'Light snow': '小雪', 'Light snow showers': '小阵雪',
+      'Moderate snow': '中雪', 'Moderate or heavy snow': '中到大雪',
+      'Heavy snow': '大雪', 'Blizzard': '暴风雪',
+      'Patchy sleet possible': '可能有零星雨夹雪',
+      'Light sleet': '小雨夹雪', 'Moderate or heavy sleet': '中到大雨夹雪',
+      'Thundery outbreaks possible': '可能有雷暴', 'Patchy light rain with thunder': '雷阵雨',
+      'Moderate or heavy rain with thunder': '雷暴中到大雨', 'Thunderstorm': '雷暴',
+      'Light drizzle': '毛毛雨', 'Patchy light drizzle': '零星毛毛雨',
+      'Freezing drizzle': '冻毛毛雨', 'Heavy freezing drizzle': '强冻毛毛雨',
+      'Light freezing rain': '小冻雨', 'Moderate or heavy freezing rain': '中到大冻雨',
+      'Ice pellets': '冰粒', 'Light showers of ice pellets': '小冰粒阵雨',
+      'Moderate or heavy showers of ice pellets': '中到大冰粒阵雨',
+      'Blowing snow': '吹雪'
+    };
+    const WIND_DIR_MAP = {
+      'N': '北', 'NNE': '北东北', 'NE': '东北', 'ENE': '东东北',
+      'E': '东', 'ESE': '东东南', 'SE': '东南', 'SSE': '南东南',
+      'S': '南', 'SSW': '南西南', 'SW': '西南', 'WSW': '西西南',
+      'W': '西', 'WNW': '西西北', 'NW': '西北', 'NNW': '北西北'
+    };
+    const trDesc = d => {
+      const lower = d.toLowerCase();
+      for (const [key, value] of Object.entries(WEATHER_DESC_MAP)) {
+        if (key.toLowerCase() === lower) return value;
+      }
+      return d;
+    };
+    const trWind = d => WIND_DIR_MAP[d] || d;
+    try {
+      const res = await fetch(`https://wttr.in/${encodeURIComponent(city)}?format=j1&lang=zh`);
+      if (!res.ok) throw new Error(`天气接口返回 ${res.status}`);
+      const data = await res.json();
+      const cur = data.current_condition[0];
+      const area = data.nearest_area[0];
+      const cityName = area.areaName[0].value;
+      const country = area.country[0].value;
+      const hasChinese = /[\u4e00-\u9fa5]/.test(city);
+      if (hasChinese && country !== 'China') {
+        sendMsg(convId, `❌未找到城市"${city}"，请检查城市名是否正确。`);
+        return;
+      }
+      const forecasts = data.weather.slice(0,3).map(day => {
+        const noon = day.hourly.find(h => h.time === '1200') || day.hourly[Math.floor(day.hourly.length/2)];
+        return { date: day.date, desc: trDesc(noon.weatherDesc[0].value), max: day.maxtempC, min: day.mintempC, sunrise: day.astronomy[0].sunrise, sunset: day.astronomy[0].sunset };
+      });
+      const today = forecasts[0];
+      let reply = `<markdown>🌤️ ${cityName}（${country}）天气
+
+**当前天气**
+
+| 项目 | 详情 | 项目 | 详情 |
+|------|------|------|------|
+| 天气 | ${trDesc(cur.weatherDesc[0].value)} | 温度 | ${cur.temp_C}°C |
+| 体感 | ${cur.FeelsLikeC}°C | 湿度 | ${cur.humidity}% |
+| 风速 | ${cur.windspeedKmph} km/h | 风向 | ${trWind(cur.winddir16Point)} |
+| 能见度 | ${cur.visibility} km | 气压 | ${cur.pressure} hPa |
+| 紫外线 | ${cur.uvIndex} | 降水量 | ${cur.precipMM} mm |
+| 云量 | ${cur.cloudcover}% | 今日 | ${today.max}°C / ${today.min}°C |
+| 日出 | ${today.sunrise} | 日落 | ${today.sunset} |
+
+**未来预报**
+
+| 日期 | 天气 | 最高 | 最低 |
+|------|------|------|------|
+`;
+      forecasts.forEach(f => { reply += `| ${f.date} | ${f.desc} | ${f.max}°C | ${f.min}°C |\n`; });
+      reply += `</markdown>`;
+      sendMsg(convId, reply);
+    } catch(e) { log('error', `天气失败: ${e.message}`); sendMsg(convId, `❌获取天气失败：${e.message}\n请检查城市名是否正确。`); }
+  }
+  else if (content.startsWith('/绘图')) {
+    const match = content.match(/^\/绘图\s*\[(.+?)，(.+?)\]/);
+    if (!match) { sendMsg(convId, '⚠️格式：/绘图[内容，风格]，例如：/绘图[一只猫，动漫风格]'); return; }
+    const promptText = match[1].trim();
+    const style = match[2].trim();
+    const fullPrompt = `${promptText}, ${style}`;
+    const seed = Math.floor(Math.random() * 1000000);
+    const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(fullPrompt)}?width=1280&height=1280&seed=${seed}&nologo=true`;
+    sendMsg(convId, `🎨 正在生成「${promptText}」（${style}）...`);
+    (async () => {
+      try {
+        const imgRes = await fetch(imageUrl);
+        if (!imgRes.ok) throw new Error(`图片下载失败 ${imgRes.status}`);
+        const imgBlob = await imgRes.blob();
+        const formData = new FormData();
+        formData.append('file', imgBlob, 'image.png');
+        const uploadRes = await fetch(`${API_BASE}/bot-api/uploads/image`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bot ${botKey}` },
+          body: formData
+        });
+        if (!uploadRes.ok) throw new Error(`图片上传失败 ${uploadRes.status}`);
+        const uploadData = await uploadRes.json();
+        sendMsg(convId, `<markdown>🎨 **${promptText}**（${style}）\n\n<img src="${uploadData.url}" /></markdown>`);
+      } catch (e) {
+        log('error', `绘图失败: ${e.message}`);
+        sendMsg(convId, `❌绘图失败：${e.message}`);
+      }
+    })();
+  }
+  else if (content.startsWith('/进群自动发送')) {
+    const match = content.match(/^\/进群自动发送\s*\[([\s\S]+)\]/);
+    if (!match) { sendMsg(convId, '⚠️格式错误，请使用：/进群自动发送[欢迎内容]'); return; }
+    const welcomeText = match[1].trim();
+    const canUse = await isAdminOrOwner(convId, msg.sender_id, msg.sender);
+    if (!canUse) { sendMsg(convId, '❌只有群主或管理员才能设置进群自动发送'); return; }
+    const data = getWelcomeData();
+    data[String(convId)] = welcomeText;
+    saveWelcomeData(data);
+    sendMsg(convId, `✅已设置本群进群自动发送\n\n———— 内容预览 ————\n\n${welcomeText}`);
+  }
+  else if (content.startsWith('/全局推送')) {
+    if (msg.sender_id !== 3038) { sendMsg(convId, '❌你没有权限使用此命令'); return; }
+    const match = content.match(/^\/全局推送\s*\[(.+?)，([\s\S]+)\]/);
+    if (!match) { sendMsg(convId, '⚠️格式错误，请使用：/全局推送[标题，内容]\n内容中用 /n 换行'); return; }
+    const title = match[1].trim();
+    const body = match[2].trim().replace(/\/n/g, '\n');
+    const now = new Date().toLocaleString('zh-CN', { hour12: false });
+    const pushMsg = `<markdown># ${title}\n\n> ${now}\n\n${body}</markdown>`;
+    const groups = getGroups();
+    let success = 0;
+    for (const gid of groups) { const ok = await sendMsg(gid, pushMsg); if (ok) success++; }
+    sendMsg(convId, `✅已向 ${success}/${groups.length} 个群推送消息`);
+  }
+  else if (content.startsWith('/投票') || content === '/投票结果' || content === '/结束投票') {
+    if (!isFeatureEnabled(convId, '投票')) { sendMsg(convId, '投票功能已被管理员关闭'); return; }
+    const canUse = await canManage(convId, msg.sender_id, msg.sender);
+    if (!canUse) { sendMsg(convId, '❌只有群主、管理员或指定用户才能使用投票功能'); return; }
+    if (content.startsWith('/投票')) {
+      const match = content.match(/^\/投票\s*\[(.+?)\]/);
+      if (!match) { sendMsg(convId, '⚠️格式：/投票[标题，选项1，选项2，选项3...]\n至少2个选项，最多10个'); return; }
+      const parts = match[1].split('，').map(s => s.trim()).filter(Boolean);
+      if (parts.length < 3) { sendMsg(convId, '⚠️需要1个标题+至少2个选项，用中文逗号分隔'); return; }
+      const title = parts[0];
+      const options = parts.slice(1, 11);
+      const voteId = genVoteId();
+      const tempVote = { voteId, title, options, votes: {}, creator: userName };
+      const message = await sendMsgReturnId(convId, buildVoteButtonMessage(tempVote));
+      if (!message || !message.id) { sendMsg(convId, '❌投票创建失败'); return; }
+      const voteData = getVoteData();
+      voteData[String(convId)] = { ...tempVote, messageId: message.id, conversationId: convId, created_at: new Date().toISOString() };
+      saveVoteData(voteData);
+    }
+    else if (content === '/投票结果') {
+      const voteData = getVoteData();
+      const vote = voteData[String(convId)];
+      if (!vote) { sendMsg(convId, '当前没有进行中的投票'); return; }
+      sendMsg(convId, buildVoteResultCard(vote));
+    }
+    else if (content === '/结束投票') {
+      const voteData = getVoteData();
+      const cid = String(convId);
+      const vote = voteData[cid];
+      if (!vote) { sendMsg(convId, '当前没有进行中的投票'); return; }
+      for (let i = 0; i < vote.options.length; i++) {
+        const componentId = `${vote.voteId}_${i}`;
+        await updateButton(vote.conversationId, vote.messageId, componentId, `${i + 1}. ${vote.options[i]}（已结束）`, 'default', true);
+      }
+      sendMsg(convId, buildVoteResultCard(vote));
+      delete voteData[cid];
+      saveVoteData(voteData);
+    }
+  }
+  else if (content.startsWith('/增加违禁词')) {
+    const canUse = await canManage(convId, msg.sender_id, msg.sender);
+    if (!canUse) { sendMsg(convId, '❌只有群主、管理员或指定用户才能管理违禁词'); return; }
+    const match = content.match(/^\/增加违禁词\s*\[(.+?)\]/);
+    if (!match) { sendMsg(convId, '⚠️格式：/增加违禁词[违禁词]'); return; }
+    const word = match[1].trim();
+    const data = getForbiddenWords();
+    const cid = String(convId);
+    if (!data[cid]) data[cid] = [];
+    if (data[cid].includes(word)) {
+      sendMsg(convId, buildForbiddenTable(convId, `⚠️违禁词"${word}"已存在`));
+    } else {
+      data[cid].push(word);
+      saveForbiddenWords(data);
+      sendMsg(convId, buildForbiddenTable(convId, `✅已添加违禁词"${word}"`));
+    }
+  }
+  else if (content.startsWith('/删除违禁词')) {
+    const canUse = await canManage(convId, msg.sender_id, msg.sender);
+    if (!canUse) { sendMsg(convId, '❌只有群主、管理员或指定用户才能管理违禁词'); return; }
+    const match = content.match(/^\/删除违禁词\s*\[(.+?)\]/);
+    if (!match) { sendMsg(convId, '⚠️格式：/删除违禁词[违禁词]'); return; }
+    const word = match[1].trim();
+    const data = getForbiddenWords();
+    const cid = String(convId);
+    if (!data[cid] || !data[cid].includes(word)) {
+      sendMsg(convId, buildForbiddenTable(convId, `❌未出现此违禁词"${word}"`));
+    } else {
+      data[cid] = data[cid].filter(w => w !== word);
+      saveForbiddenWords(data);
+      sendMsg(convId, buildForbiddenTable(convId, `✅已删除违禁词"${word}"`));
+    }
+  }
+  else if (content === '/黑名单') {
+    sendMsg(convId, buildBlacklistCard(convId));
+  }
+  else if (content.startsWith('/删除黑名单')) {
+    const senderRole = msg.sender?.role || msg.sender?.user_role || msg.sender?.permission;
+    const isOwner = senderRole === 'owner' || msg.sender?.is_owner === true;
+    if (msg.sender_id !== 3038 && !isOwner) {
+      sendMsg(convId, '❌只有群主或指定用户才能删除黑名单');
+      return;
+    }
+    const match = content.match(/^\/删除黑名单\s*\[(.+?)\]/);
+    if (!match) { sendMsg(convId, '⚠️格式：/删除黑名单[用户ID]'); return; }
+    const targetId = match[1].trim();
+    const info = removeFromBlacklist(convId, targetId);
+    const cardBody = buildBlacklistCard(convId).replace(/^<markdown>/, '').replace(/<\/markdown>$/, '');
+    if (info) {
+      sendMsg(convId, `<markdown>✅已将 **${info.userName || '用户' + targetId}**（ID：\`${targetId}\`）移出黑名单\n\n${cardBody}</markdown>`);
+    } else {
+      sendMsg(convId, `<markdown>❌未找到ID为 \`${targetId}\` 的黑名单记录\n\n${cardBody}</markdown>`);
+    }
+  }
+  else if (content.startsWith('/添加黑名单')) {
+    const senderRole = msg.sender?.role || msg.sender?.user_role || msg.sender?.permission;
+    const isOwner = senderRole === 'owner' || msg.sender?.is_owner === true;
+    if (msg.sender_id !== 3038 && !isOwner) {
+      sendMsg(convId, '❌只有群主或指定用户才能添加黑名单');
+      return;
+    }
+    const match = content.match(/^\/添加黑名单\s*\[(.+?)\]/);
+    if (!match) { sendMsg(convId, '⚠️格式：/添加黑名单[用户ID]'); return; }
+    const targetId = match[1].trim();
+    const cardBody = buildBlacklistCard(convId).replace(/^<markdown>/, '').replace(/<\/markdown>$/, '');
+    if (isBlacklisted(convId, targetId)) {
+      sendMsg(convId, `<markdown>⚠️ID为 \`${targetId}\` 的用户已在黑名单中\n\n${cardBody}</markdown>`);
+    } else {
+      const targetName = await getUserName(targetId);
+      addToBlacklist(convId, targetId, targetName, '管理员手动添加');
+      sendMsg(convId, `<markdown>✅已将 **${targetName}**（ID：\`${targetId}\`）加入黑名单\n\n${cardBody}</markdown>`);
+    }
+  }
+  else if (content.startsWith('/开启') || content.startsWith('/关闭')) {
+    const canUse = await canManage(convId, msg.sender_id, msg.sender);
+    if (!canUse) { sendMsg(convId, '只有群主或管理员才能开关功能'); return; }
+    const isEnable = content.startsWith('/开启');
+    const match = content.match(/^\/(开启|关闭)\s*\[(.+?)\]/);
+    if (!match) {
+      sendMsg(convId, buildSwitchTable(convId, `格式：/${isEnable?'开启':'关闭'}[功能名]\n可用功能：${ALL_FEATURES.join('、')}`));
+      return;
+    }
+    const feature = match[2].trim();
+    if (!ALL_FEATURES.includes(feature)) {
+      sendMsg(convId, buildSwitchTable(convId, `未知功能"${feature}"\n可用功能：${ALL_FEATURES.join('、')}`));
+      return;
+    }
+    setFeature(convId, feature, isEnable);
+    sendMsg(convId, buildSwitchTable(convId, `已${isEnable?'开启':'关闭'}功能：${feature}`));
+  }
+  // 手动禁言
+  else if (content.startsWith('/禁言') && !content.startsWith('/禁言列表')) {
+    const senderRole = msg.sender?.role || msg.sender?.user_role || msg.sender?.permission;
+    const isOwner = senderRole === 'owner' || msg.sender?.is_owner === true;
+    const canUse = msg.sender_id === 3038 || isOwner || await canManage(convId, msg.sender_id, msg.sender);
+    if (!canUse) { sendMsg(convId, '只有群主、管理员或ID3038才能禁言'); return; }
+    const match = content.match(/^\/禁言\s*\[(\d+)\]\s*\[?(\d*)\]?/);
+    if (!match) { sendMsg(convId, '格式：`/禁言[用户ID] [分钟]`'); return; }
+    const targetId = match[1];
+    if (targetId === '3038') { sendMsg(convId, '不能禁言ID3038'); return; }
+    const minutes = parseInt(match[2]) || 10;
+    const duration = minutes * 60 * 1000;
+    const untilTs = Date.now() + duration;
+    let realMuted = await realMuteUser(convId, targetId);
+    if (!realMuted) {
+      sendMsg(convId, '❌禁言失败，机器人可能不是管理员');
+      return;
+    }
+    scheduleUnmute(convId, targetId, untilTs);
+    const targetName = await getUserName(targetId);
+    const data = getMuteData();
+    if (!data[String(convId)]) data[String(convId)] = {};
+    data[String(convId)][String(targetId)] = { userName: targetName, reason: '管理员手动禁言', count: 1, until: untilTs, duration, realMuted: true };
+    saveMuteData(data);
+    sendMsg(convId, `<markdown>🔇 已禁言 **${targetName}**（ID：\`${targetId}\`）\`${minutes}\` 分钟</markdown>`);
+  }
+  // 手动解除禁言
+  else if (content.startsWith('/解除禁言')) {
+    const senderRole = msg.sender?.role || msg.sender?.user_role || msg.sender?.permission;
+    const isOwner = senderRole === 'owner' || msg.sender?.is_owner === true;
+    const canUse = msg.sender_id === 3038 || isOwner || await canManage(convId, msg.sender_id, msg.sender);
+    if (!canUse) { sendMsg(convId, '只有群主、管理员或ID3038才能解除禁言'); return; }
+    const match = content.match(/^\/解除禁言\s*\[(\d+)\]/);
+    if (!match) { sendMsg(convId, '格式：`/解除禁言[用户ID]`'); return; }
+    const targetId = match[1];
+    await realUnmuteUser(convId, targetId);
+    const data = getMuteData();
+    if (data[String(convId)]?.[String(targetId)]) {
+      delete data[String(convId)][String(targetId)];
+      saveMuteData(data);
+    }
+    const key = `${convId}_${targetId}`;
+    if (muteTimers[key]) { clearTimeout(muteTimers[key]); delete muteTimers[key]; }
+    sendMsg(convId, `<markdown>✅ 已解除用户 \`${targetId}\` 的禁言</markdown>`);
+  }
+  // 禁言列表
+  else if (content === '/禁言列表') {
+    const data = getMuteData();
+    const list = data[String(convId)] || {};
+    const now = Date.now();
+    const active = Object.entries(list).filter(([_, v]) => v.until > now);
+    if (active.length === 0) { sendMsg(convId, '当前没有被禁言的用户'); return; }
+    let reply = `<markdown>## 禁言列表（共${active.length}人）\n\n| 用户ID | 原因 | 剩余时间 | 真禁言 |\n|--------|------|----------|--------|\n`;
+    active.forEach(([uid, info]) => {
+      const mins = Math.ceil((info.until - now) / 60000);
+      reply += `| \`${uid}\` | ${info.reason} | \`${mins}\`分钟 | ${info.realMuted ? '是' : '否'} |\n`;
+    });
+    reply += `</markdown>`;
+    sendMsg(convId, reply);
+  }
+}
+
+function handleJoinEvent(data) {
+  const convId = data.conversation_id;
+  const newUserId = data.user_id || (data.user && data.user.id);
+  const welcomeData = getWelcomeData();
+  let welcome = welcomeData[String(convId)];
+  if (welcome && isFeatureEnabled(convId, '进群欢迎')) {
+    if (newUserId) welcome = welcome.replace(/<@成员>/g, `<at id="${newUserId}" />`);
+    const content = welcome.includes('<markdown>') ? welcome : `<markdown>${welcome}</markdown>`;
+    sendMsg(convId, content);
+  }
+  log('system', `👋 进群事件: ${JSON.stringify(data).slice(0,150)}`);
+}
+
+function connect() {
+  if (!botKey) { log('error', '请先输入 Bot Key'); return; }
+  setStatus('connecting', '连接中...');
+  const url = `wss://chat-api.kuke.ink/bot/ws?key=${encodeURIComponent(botKey)}`;
+  ws = new WebSocket(url);
+
+  ws.onopen = () => { setStatus('connected', '已连接'); log('system', '✅ WebSocket 已连接'); };
+  ws.onmessage = async (event) => {
+    const text = event.data;
+    if (text === 'pong') return;
+    let e;
+    try { e = JSON.parse(text); } catch { return; }
+    if (e.type === 'bot.connection.ready') {
+      botUserId = e.data.user_id;
+      $('botId').textContent = e.data.bot_id;
+      $('userId').textContent = e.data.user_id;
+      log('system', `🤖 机器人就绪 bot_id=${e.data.bot_id} user_id=${e.data.user_id}`);
+      restoreMuteTimers();
+    }
+    else if (e.type === 'message.created') { handleMessage(e.data); }
+    else if (e.type === 'message.interaction') {
+      const data = e.data || {};
+      const iKey = `${data.conversation_id}_${data.message_id}_${data.user_id}_${data.action_id}`;
+      if (seenInteractions.has(iKey)) return;
+      seenInteractions.add(iKey);
+      if (seenInteractions.size > 200) seenInteractions.clear();
+      log('system', `🔘 按钮交互: ${JSON.stringify(e.data).slice(0,150)}`);
+      const data = e.data || {};
+      const actionId = data.action_id || '';
+      const voteMatch = actionId.match(/^(v[a-z0-9]+)_(\d+)$/);
+      if (voteMatch) {
+        const voteId = voteMatch[1];
+        const optionIdx = parseInt(voteMatch[2]);
+        const voteData = getVoteData();
+        for (const cid of Object.keys(voteData)) {
+          const vote = voteData[cid];
+          if (vote.voteId === voteId) {
+            if (optionIdx >= 0 && optionIdx < vote.options.length) {
+              vote.votes[String(data.user_id)] = optionIdx;
+              saveVoteData(voteData);
+              await refreshVoteButtons(vote);
+              const counts = getVoteCounts(vote);
+              await updateButton(data.conversation_id, data.message_id, actionId,
+                `✅已投 ${vote.options[optionIdx]} (${counts[optionIdx]}票)`, 'success', false, 'user', data.user_id);
+            }
+            break;
+          }
+        }
+      }
+      else if (actionId.startsWith('help_')) {
+        let detail = '';
+        if (actionId === 'help_vote') {
+          detail = `<markdown>## 投票管理
+\`/投票[标题，选项1，选项2...]\`：发起投票，点按钮投票
+\`/投票结果\`：查看实时结果
+\`/结束投票\`：结束投票并禁用按钮
+> 仅群主、管理员、ID 3038</markdown>`;
+        } else if (actionId === 'help_forbidden') {
+          detail = `<markdown>## 违禁词管理
+\`/增加违禁词[词]\`：添加违禁词，说2次自动拉黑
+\`/删除违禁词[词]\`：删除违禁词
+\`/违禁词表格\`：查看所有违禁词
+> 仅群主、管理员、ID 3038</markdown>`;
+        } else if (actionId === 'help_blacklist') {
+          detail = `<markdown>## 黑名单管理
+\`/黑名单\`：查看黑名单列表
+\`/添加黑名单[用户ID]\`：手动拉黑
+\`/删除黑名单[用户ID]\`：解除拉黑
+> 黑名单用户不能用指令但可聊天，仅群主和ID 3038可管理</markdown>`;
+        } else if (actionId === 'help_other') {
+          detail = `<markdown>## 其他管理
+\`/进群自动发送[内容]\`：新人进群自动发消息，支持\`<@成员>\`
+\`/全局推送[标题，内容]\`：向所有群推送，\`/n\`换行
+> 进群欢迎仅管理员；全局推送仅ID 3038</markdown>`;
+        } else if (actionId === 'help_mute') {
+          detail = `<markdown>## 禁言管理
+\`/禁言[用户ID] [分钟]\`：手动禁言用户，默认10分钟
+\`/解除禁言[用户ID]\`：手动解除禁言
+\`/禁言列表\`：查看当前被禁言的用户
+> 自动禁言：违禁词4次或刷屏15条，时间累加
+> 仅群主、管理员、ID 3038可用</markdown>`;
+        } else if (actionId === 'help_switch') {
+          detail = `<markdown>## 功能开关
+\`/开启[功能名]\`：开启指定功能
+\`/关闭[功能名]\`：关闭指定功能
+可用功能：签到、天气、投票、违禁词检测、进群欢迎、群在线人数
+> 仅群主或管理员可用</markdown>`;
+        }
+        if (detail) sendMsg(data.conversation_id, detail);
+      }
+    }
+    else {
+      const joinEvents = ['member.joined','conversation.member.joined','user.joined','member.added','conversation.member_added','group.member.joined','conversation.user.joined'];
+      if (joinEvents.includes(e.type)) handleJoinEvent(e.data);
+      else if (e.type === 'group.member.mute_updated') {
+        const cid = e.data.conversation_id;
+        const userId = e.data.user_id;
+        if (e.data.muted === false && userId) {
+          const data = getMuteData();
+          if (data[String(cid)]?.[String(userId)]) {
+            delete data[String(cid)][String(userId)];
+            saveMuteData(data);
+            const key = `${cid}_${userId}`;
+            if (muteTimers[key]) { clearTimeout(muteTimers[key]); delete muteTimers[key]; }
+            log('system', `同步解除禁言: 群${cid} 用户${userId}`);
+          }
+        }
+      }
+      else log('system', `[未知事件] ${e.type}: ${JSON.stringify(e.data).slice(0,200)}`);
+    }
+  };
+  ws.onclose = () => {
+    setStatus('disconnected', '已断开');
+    log('error', '❌ WebSocket 断开，3秒后重连...');
+    botUserId = null;
+    $('botId').textContent = '-';
+    $('userId').textContent = '-';
+    reconnectTimer = setTimeout(connect, 3000);
+  };
+  ws.onerror = (err) => { log('error', `⚠️ WebSocket 错误`); };
+}
+
+function disconnect() {
+  if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+  if (ws) { ws.close(); ws = null; }
+  setStatus('disconnected', '未连接');
+}
+
+$('connectBtn').addEventListener('click', () => {
+  if (ws && ws.readyState === WebSocket.OPEN) { disconnect(); $('connectBtn').textContent = '连接'; $('connectBtn').classList.remove('disconnect'); return; }
+  botKey = $('botKey').value.trim();
+  if (!botKey) { log('error', '请输入 Bot Key'); return; }
+  localStorage.setItem('kuke_bot_key', botKey);
+  connect();
+  $('connectBtn').textContent = '断开';
+  $('connectBtn').classList.add('disconnect');
+});
+
+// 恢复保存的 Bot Key
+const savedKey = localStorage.getItem('kuke_bot_key');
+if (savedKey) $('botKey').value = savedKey;
+
+// ========== 全局推送 ==========
+let pushVerified = false;
+
+function openPushModal() {
+  if (!ws || ws.readyState !== WebSocket.OPEN) { log('error', '请先连接 Bot'); return; }
+  $('pushModal').classList.add('show');
+  if (pushVerified) { showPushForm(); } else { showPushPassword(); }
+}
+
+function closePushModal() {
+  $('pushModal').classList.remove('show');
+  $('pushPassword').value = '';
+  $('pushTitle').value = '';
+  $('pushContent').value = '';
+}
+
+function showPushPassword() {
+  $('pushModalTitle').textContent = '全局推送 - 密码验证';
+  $('pushPasswordStep').style.display = 'block';
+  $('pushFormStep').style.display = 'none';
+}
+
+function showPushForm() {
+  $('pushModalTitle').textContent = '全局推送';
+  $('pushPasswordStep').style.display = 'none';
+  $('pushFormStep').style.display = 'block';
+}
+
+$('pushBtn').addEventListener('click', openPushModal);
+
+$('pushPasswordBtn').addEventListener('click', () => {
+  const pwd = $('pushPassword').value.trim();
+  if (pwd === '1477') { pushVerified = true; showPushForm(); }
+  else { log('error', '密码错误'); }
+});
+
+$('pushPassword').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') $('pushPasswordBtn').click();
+});
+
+$('pushSendBtn').addEventListener('click', async () => {
+  const title = $('pushTitle').value.trim();
+  const content = $('pushContent').value.trim();
+  if (!title) { log('error', '请输入标题'); return; }
+  const body = content.replace(/\/n/g, '\n');
+  const now = new Date().toLocaleString('zh-CN', { hour12: false });
+  const pushMsg = `<markdown># ${title}\n\n> ${now}\n\n${body}</markdown>`;
+  const groups = getGroups();
+  let success = 0;
+  for (const gid of groups) { const ok = await sendMsg(gid, pushMsg); if (ok) success++; }
+  log('system', `✅已向 ${success}/${groups.length} 个群推送消息`);
+  closePushModal();
+});
+
+log('system', '控制面板已就绪，请输入 Bot Key 并点击连接');
+
+// ========== 消息发送栏 ==========
+let userConversations = [];
+
+function refreshGroupSelect() {
+  const select = $('sendGroupSelect');
+  const current = select.value;
+  select.innerHTML = '';
+
+  if (userConversations.length > 0) {
+    // 用户登录后，显示所有会话（群聊+私聊）
+    const groups = userConversations.filter(c => c.type === 'group');
+    const directs = userConversations.filter(c => c.type === 'direct');
+
+    if (groups.length > 0) {
+      const groupOpt = document.createElement('optgroup');
+      groupOpt.label = '群聊';
+      groups.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = c.display_title || c.title || `群 ${c.id}`;
+        groupOpt.appendChild(opt);
+      });
+      select.appendChild(groupOpt);
+    }
+    if (directs.length > 0) {
+      const directOpt = document.createElement('optgroup');
+      directOpt.label = '私聊';
+      directs.forEach(c => {
+        const name = c.direct_user?.nickname || c.direct_user?.username || c.display_title || c.title || `用户 ${c.id}`;
+        const opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = name;
+        directOpt.appendChild(opt);
+      });
+      select.appendChild(directOpt);
+    }
+  } else {
+    // 未登录用户时，显示 Bot 记录的群
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = '选择群...';
+    select.appendChild(placeholder);
+    const groups = getGroups();
+    groups.forEach(gid => {
+      const opt = document.createElement('option');
+      opt.value = gid;
+      opt.textContent = `群 ${gid}`;
+      select.appendChild(opt);
+    });
+  }
+
+  if (current) select.value = current;
+}
+
+$('sendMessageBtn').addEventListener('click', async () => {
+  const gid = $('sendGroupSelect').value;
+  const text = $('sendMessageInput').value.trim();
+  const identity = $('sendIdentity').value;
+  if (!gid) { log('error', '请先选择群'); return; }
+  if (!text) { log('error', '请输入消息内容'); return; }
+  if (identity === 'bot') {
+    if (!ws || ws.readyState !== WebSocket.OPEN) { log('error', '请先连接 Bot'); return; }
+    const ok = await sendMsg(gid, text);
+    if (ok) { $('sendMessageInput').value = ''; log('system', `✅ 已用Bot发送到群 ${gid}`); }
+  } else {
+    if (!userToken) { log('error', '请先登录用户账号'); return; }
+    const ok = await sendAsUser(gid, text);
+    if (ok) { $('sendMessageInput').value = ''; log('system', `✅ 已用用户身份发送到群 ${gid}`); }
+  }
+});
+
+$('sendMessageInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    $('sendMessageBtn').click();
+  }
+});
+
+// 初始化群列表
+refreshGroupSelect();
+
+// ========== 用户账号登录（以用户身份发消息）==========
+let userToken = null;
+let userName = '';
+
+function randomHex(length) {
+  const bytes = new Uint8Array(Math.ceil(length / 2));
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('').slice(0, length);
+}
+
+async function sha256Hex(input) {
+  const bytes = new TextEncoder().encode(input);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function userApiRequest(path, options = {}) {
+  const headers = { ...(options.headers || {}) };
+  let body;
+  if (options.body !== undefined) {
+    body = JSON.stringify(options.body);
+    headers['Content-Type'] = 'application/json';
+  }
+  if (userToken) headers['Authorization'] = `Bearer ${userToken}`;
+  const method = options.method || 'GET';
+  const timestamp = Date.now().toString();
+  const nonce = randomHex(16);
+  const proofPath = path.split('?')[0] || path;
+  headers['X-Kuke-Client'] = 'kukechat-web/0.2.0';
+  headers['X-Kuke-Timestamp'] = timestamp;
+  headers['X-Kuke-Nonce'] = nonce;
+  headers['X-Kuke-Proof'] = await sha256Hex(`${method.toUpperCase()}|${proofPath}|${timestamp}|${nonce}|KukeChat`);
+  const url = `${BASE_URL}${path}`;
+  const res = await fetch(url, { method, headers, body });
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : null;
+  if (!res.ok) throw new Error(data?.detail || `请求失败 ${res.status}`);
+  return data;
+}
+
+async function userLogin() {
+  const account = $('userAccount').value.trim();
+  const password = $('userPassword').value;
+  if (!account || !password) { log('error', '请输入账号和密码'); return; }
+  try {
+    const data = await userApiRequest('/auth/login', {
+      method: 'POST',
+      body: { username_or_email: account, password, remember_me: true }
+    });
+    userToken = data.access_token;
+    userName = data.user?.nickname || data.user?.username || account;
+    $('userStatus').innerHTML = `<span class="logged-in">已登录：${userName}</span>`;
+    $('userAccount').style.display = 'none';
+    $('userPassword').style.display = 'none';
+    $('userLoginBtn').style.display = 'none';
+    $('userLogoutBtn').style.display = 'inline-block';
+    const opt = $('sendIdentity').querySelector('option[value="user"]');
+    opt.disabled = false;
+    opt.textContent = `用户身份（${userName}）`;
+    log('system', `✅ 用户登录成功：${userName}`);
+
+    // 拉取用户的所有会话（群聊+私聊）
+    try {
+      userConversations = await userApiRequest('/conversations');
+      refreshGroupSelect();
+      log('system', `📋 已加载 ${userConversations.length} 个会话`);
+    } catch (e) {
+      log('error', `加载会话失败：${e.message}`);
+    }
+  } catch (e) {
+    log('error', `用户登录失败：${e.message}`);
+  }
+}
+
+function userLogout() {
+  userToken = null;
+  userName = '';
+  userConversations = [];
+  $('userStatus').textContent = '未登录用户账号';
+  $('userAccount').style.display = '';
+  $('userPassword').style.display = '';
+  $('userLoginBtn').style.display = '';
+  $('userLogoutBtn').style.display = 'none';
+  const opt = $('sendIdentity').querySelector('option[value="user"]');
+  opt.disabled = true;
+  opt.textContent = '用户身份（未登录）';
+  $('sendIdentity').value = 'bot';
+  refreshGroupSelect();
+  log('system', '用户已退出登录');
+}
+
+async function sendAsUser(conversationId, text) {
+  try {
+    await userApiRequest(`/conversations/${conversationId}/messages`, {
+      method: 'POST',
+      body: { content: text, type: 'text' }
+    });
+    log('send', `→ [用户][群${conversationId}] ${text.slice(0,80)}${text.length>80?'...':''}`);
+    return true;
+  } catch (e) {
+    log('error', `用户发送失败: ${e.message}`);
+    return false;
+  }
+}
+
+$('userLoginBtn').addEventListener('click', userLogin);
+$('userLogoutBtn').addEventListener('click', userLogout);
+$('userPassword').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') userLogin();
+});
+</script>
+</body>
+</html>
