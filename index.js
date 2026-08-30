@@ -2250,27 +2250,16 @@ KukeChat（库科聊天）是一个即时通讯社交平台，官网 kuke.ink，
 
             // 2. 找一首有播放权限的歌（遍历前5首）
             let song = null;
-            let playUrl = '';
             for (let i = 0; i < Math.min(5, songs.length); i++) {
               const s = songs[i];
-              console.log('[音乐] 尝试第', i+1, '首:', s.name, 'ID:', s.id);
               const urlRes = await fetch(`https://music.sedet.top/api.php?action=url&id=${s.id}`);
               if (urlRes.ok) {
                 const urlData = await urlRes.json();
                 const url = urlData.data?.[0]?.url;
-                if (url && url.length > 10) {
-                  song = s;
-                  playUrl = url;
-                  console.log('[音乐] 找到可用播放链接');
-                  break;
-                }
+                if (url && url.length > 10) { song = s; break; }
               }
             }
-
-            if (!song || !playUrl) {
-              sendMsg(cid, `❌ 「${keyword}」暂无可用播放链接（可能是VIP歌曲）`);
-              return;
-            }
+            if (!song) { sendMsg(cid, `❌ 「${keyword}」暂无可用播放链接（可能是VIP歌曲）`); return; }
 
             const songId = song.id;
             const songName = song.name;
@@ -2284,25 +2273,58 @@ KukeChat（库科聊天）是一个即时通讯社交平台，官网 kuke.ink，
             infoMsg += `\n> 正在为你准备音频...</markdown>`;
             sendMsg(cid, infoMsg);
 
-            // 4. 下载音频（用 fetch，支持 HTTP）
-            console.log('[音乐] 下载音频:', playUrl.substring(0, 80));
-            const audioRes = await fetch(playUrl);
-            if (!audioRes.ok) throw new Error(`音频下载失败 ${audioRes.status}`);
-            const audioBuffer = Buffer.from(await audioRes.arrayBuffer());
-            console.log('[音乐] 音频大小:', (audioBuffer.length / 1024 / 1024).toFixed(2), 'MB');
+            // 4. 获取播放链接并下载（先试320kbps，太大就降128kbps）
+            const MAX_SIZE = 7 * 1024 * 1024; // 7MB，留余量
+            let audioBuffer = null;
+            let usedQuality = '';
+            let playUrl = '';
 
-            if (audioBuffer.length < 1000) throw new Error('音频文件为空');
+            // 尝试不同音质
+            const qualities = [
+              { br: 320000, label: '高品质' },
+              { br: 128000, label: '标准音质' }
+            ];
 
-            // 5. 检查文件大小，KukeChat 语音上传限制约 8MB
-            const MAX_VOICE_SIZE = 8 * 1024 * 1024; // 8MB
-            if (audioBuffer.length > MAX_VOICE_SIZE) {
-              console.log('[音乐] 文件过大', (audioBuffer.length/1024/1024).toFixed(2), 'MB，降级发送链接');
-              sendMsg(cid, `<markdown>🎵 **${songName}** - ${artist}\n\n文件较大，无法直接发送语音\n\n🔗 <link href="${playUrl}">点击播放完整音乐</link></markdown>`);
+            for (const q of qualities) {
+              try {
+                console.log('[音乐] 尝试', q.label, '(br=' + q.br + ')');
+                const urlApi = `https://music.163.com/api/song/enhance/player/url?id=${songId}&ids=%5B${songId}%5D&br=${q.br}`;
+                const urlRes = await fetch(urlApi, { headers: { 'User-Agent': 'Mozilla/5.0', 'Referer': 'https://music.163.com/' } });
+                if (!urlRes.ok) continue;
+                const urlData = await urlRes.json();
+                const url = urlData.data?.[0]?.url;
+                if (!url) continue;
+                playUrl = url;
+
+                console.log('[音乐] 下载音频:', q.label);
+                const audioRes = await fetch(playUrl);
+                if (!audioRes.ok) continue;
+                const buf = Buffer.from(await audioRes.arrayBuffer());
+                console.log('[音乐] 文件大小:', (buf.length/1024/1024).toFixed(2), 'MB');
+
+                if (buf.length < 1000) continue;
+                audioBuffer = buf;
+                usedQuality = q.label;
+                if (buf.length <= MAX_SIZE) {
+                  console.log('[音乐] 大小符合要求，使用', q.label);
+                  break;
+                } else {
+                  console.log('[音乐] 文件过大，尝试降低音质');
+                }
+              } catch (e) {
+                console.log('[音乐]', q.label, '失败:', e.message);
+              }
+            }
+
+            if (!audioBuffer) {
+              // 所有音质都失败，降级发送链接
+              console.log('[音乐] 所有音质下载失败，降级发送链接');
+              sendMsg(cid, `<markdown>🎵 **${songName}** - ${artist}\n\n音频准备失败，已为你提供播放链接\n\n🔗 <link href="${playUrl || 'https://music.163.com/#/song?id=' + songId}">点击播放完整音乐</link></markdown>`);
               return;
             }
 
-            // 6. 上传到 KukeChat 语音接口
-            console.log('[音乐] 上传语音到 KukeChat，大小:', (audioBuffer.length/1024/1024).toFixed(2), 'MB');
+            // 5. 上传到 KukeChat 语音接口
+            console.log('[音乐] 上传语音，音质:', usedQuality, '大小:', (audioBuffer.length/1024/1024).toFixed(2), 'MB');
             let voiceUrl = '';
             let voiceKey = '';
             try {
@@ -2323,13 +2345,12 @@ KukeChat（库科聊天）是一个即时通讯社交平台，官网 kuke.ink，
               voiceUrl = uploadData.url || uploadData.data?.url || uploadData.file_url || uploadData.data?.file_url;
               voiceKey = uploadData.key || uploadData.data?.key || uploadData.file_key || uploadData.data?.file_key;
             } catch (uploadErr) {
-              // 上传失败，降级发送播放链接
               console.log('[音乐] 语音上传失败，降级发送链接:', uploadErr.message);
               sendMsg(cid, `<markdown>🎵 **${songName}** - ${artist}\n\n语音发送失败，已为你提供播放链接\n\n🔗 <link href="${playUrl}">点击播放完整音乐</link></markdown>`);
               return;
             }
 
-            // 7. 发送语音消息
+            // 6. 发送语音消息
             if (voiceUrl) {
               console.log('[音乐] 发送语音 URL:', voiceUrl.substring(0, 80));
               sendMsg(cid, `<voice src="${voiceUrl}" />`);
@@ -2341,7 +2362,7 @@ KukeChat（库科聊天）是一个即时通讯社交平台，官网 kuke.ink，
               sendMsg(cid, `<markdown>🎵 **${songName}** - ${artist}\n\n🔗 <link href="${playUrl}">点击播放完整音乐</link></markdown>`);
             }
 
-            console.log('[音乐] 播放完成');
+            console.log('[音乐] 播放完成，音质:', usedQuality);
           } catch (e) {
             console.error('音乐播放失败:', e.message);
             sendMsg(cid, `❌ 音乐播放失败：${e.message}\n\n可能是网络问题，请稍后重试`);
