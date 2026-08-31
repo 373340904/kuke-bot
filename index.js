@@ -1999,7 +1999,7 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
                 sendMsg(msg.conversation_id, '⚠️ AI功能未配置，请在 index.js 中填写 ZHIPU_API_KEY');
                 return;
               }
-              sendMsg(msg.conversation_id, imageUrl ? `🖼️ 正在识别图片...` : `🤔 正在思考...`);
+              // 已去掉"正在思考"提示，避免看起来像发两遍
               const controller = new AbortController();
               const timeout = setTimeout(() => controller.abort(), 30000);
               let messages;
@@ -2237,7 +2237,7 @@ KukeChat（库科聊天）是一个即时通讯社交平台，官网 kuke.ink，
       const musicMatch = content.match(/^\/播放音乐\s*[\[【](.+)[\]】]$/);
       if (musicMatch) {
         const keyword = musicMatch[1].trim();
-        sendMsg(cid, `🎵 正在搜索「${keyword}」...`);
+        // 已去掉正在搜索提示，避免看起来像发两遍
         (async () => {
           try {
             // 1. 用 SE云音解析 API 搜索歌曲
@@ -3612,3 +3612,4 @@ setInterval(async () => {
   }
   if (changed) saveWR(data);
 }, 10000);
+
