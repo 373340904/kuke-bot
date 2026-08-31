@@ -2060,7 +2060,7 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
                   let groupName = '';
                   let groupDesc = '';
                   try {
-                    const convRes = await fetch(`${KUKE_API_BASE}/bot-api/conversations/${msg.conversation_id}`, { headers: { 'Authorization': `Bot ${BOT_KEY}` } });
+                    const convRes = await fetch(`${BASE_URL}/bot-api/conversations/${msg.conversation_id}`, { headers: { 'Authorization': `Bot ${BOT_KEY}` } });
                     console.log('[群信息调试] conversations status:', convRes.status);
                     if (convRes.ok) {
                       const convText = await convRes.text();
@@ -2075,7 +2075,7 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
                   } catch (e) { console.error('获取群基本信息失败:', e.message); }
                   // 2. 获取完整成员列表（用 members 接口，数据更准确）
                   try {
-                    const memRes = await fetch(`${KUKE_API_BASE}/bot-api/conversations/${msg.conversation_id}/members`, { headers: { 'Authorization': `Bot ${BOT_KEY}` } });
+                    const memRes = await fetch(`${BASE_URL}/bot-api/conversations/${msg.conversation_id}/members`, { headers: { 'Authorization': `Bot ${BOT_KEY}` } });
                     console.log('[群信息调试] members status:', memRes.status);
                     if (memRes.ok) {
                       const memText = await memRes.text();
@@ -3684,6 +3684,7 @@ setInterval(async () => {
   }
   if (changed) saveWR(data);
 }, 10000);
+
 
 
 
