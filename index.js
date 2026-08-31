@@ -2051,15 +2051,38 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
                     }
                   }
                 } catch (e) { /* 搜索失败忽略 */ }
-                // 获取当前群信息
+                // 获取当前群信息（基本信息 + 完整成员列表）
                 let groupInfo = '';
+                let memberCount = '未知';
+                let memberNames = [];
                 try {
+                  // 1. 获取群基本信息
                   const convRes = await fetch(`${KUKE_API_BASE}/bot-api/conversations/${msg.conversation_id}`, { headers: { 'Authorization': `Bot ${BOT_KEY}` } });
+                  let groupName = '未设置';
+                  let groupDesc = '无';
+                  let groupOwner = '未知';
+                  let groupNotice = '无';
+                  let groupCreated = '未知';
                   if (convRes.ok) {
                     const convData = await convRes.json();
-                    const c = convData.data || convData.conversation || convData;
-                    groupInfo = `群名称：${c.name || c.title || '未知'}，群ID：${c.id || c.conversation_id || msg.conversation_id}，成员数：${c.member_count || c.members_count || '未知'}`;
+                    const c = convData.data || convData.conversation || convData.group || convData;
+                    groupName = c.name || c.title || c.group_name || c.nickname || '未设置';
+                    groupDesc = c.description || c.desc || c.bio || '无';
+                    groupOwner = c.owner_id || c.owner || c.creator_id || '未知';
+                    groupNotice = c.notice || c.announcement || '无';
+                    groupCreated = c.created_at || c.create_time || '未知';
                   }
+                  // 2. 获取完整成员列表（用 members 接口，数据更准确）
+                  try {
+                    const memRes = await fetch(`${KUKE_API_BASE}/bot-api/conversations/${msg.conversation_id}/members`, { headers: { 'Authorization': `Bot ${BOT_KEY}` } });
+                    if (memRes.ok) {
+                      const memData = await memRes.json();
+                      const members = memData.data || memData.members || memData.list || (Array.isArray(memData) ? memData : []);
+                      memberCount = members.length;
+                      memberNames = members.slice(0, 10).map(m => m.nickname || m.display_name || m.name || m.username || '未知');
+                    }
+                  } catch (e) { console.error('获取成员列表失败:', e.message); }
+                  groupInfo = `群名称：${groupName}，群ID：${msg.conversation_id}，群描述：${groupDesc}，群主：${groupOwner}，群公告：${groupNotice}，群创建时间：${groupCreated}，成员数：${memberCount}，前10个成员：${memberNames.join('、') || '未知'}`;
                 } catch (e) { console.error('获取群信息失败:', e.message); }
                 const contextInfo = `
 【实时上下文】
