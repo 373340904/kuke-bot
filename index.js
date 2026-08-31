@@ -1681,7 +1681,6 @@ let isConnecting = false;
 
 // 连接 WebSocket
 function connect() {
-function connect() {
   if (isConnecting) { console.log('⏳ 已有连接正在建立，跳过'); return; }
   isConnecting = true;
   if (globalWs) { try { globalWs.removeAllListeners(); globalWs.close(); } catch(e) {} globalWs = null; }
