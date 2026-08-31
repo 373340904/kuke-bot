@@ -2006,7 +2006,7 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
                 sendMsg(msg.conversation_id, '⚠️ AI功能未配置，请在 index.js 中填写 ZHIPU_API_KEY');
                 return;
               }
-              // 已去掉"正在思考"提示，避免看起来像发两遍
+              sendMsg(msg.conversation_id, imageUrl ? "🖼️ 正在深度思考图片..." : "🤔 正在深度思考...");
               const controller = new AbortController();
               const timeout = setTimeout(() => controller.abort(), 30000);
               let messages;
