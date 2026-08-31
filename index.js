@@ -30,7 +30,7 @@ const BASE_URL = 'https://chat-api.kuke.ink/api/v1';
 const WS_URL = `wss://chat-api.kuke.ink/bot/ws?key=${encodeURIComponent(BOT_KEY)}`;
 
 // 机器人信息缓存（从发消息返回数据中提取，避免依赖不可用的GET API）
-const botInfo = { nickname: null, userId: null, botId: null };
+const botInfo = { nickname: null, userId: null, botId: null, username: null, bio: null, avatar: null, status: null };
 let botUserId = null; // 机器人自身的user_id，连接就绪时设置
 function updateBotInfo(data) {
   if (data?.sender) {
@@ -2051,7 +2051,30 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
                     }
                   }
                 } catch (e) { /* 搜索失败忽略 */ }
-                const systemPrompt = `你是君灵AI，运行在KukeChat（库科聊天）平台的智能机器人助手。
+                // 获取当前群信息
+                let groupInfo = '';
+                try {
+                  const convRes = await fetch(`${KUKE_API_BASE}/bot-api/conversations/${msg.conversation_id}`, { headers: { 'Authorization': `Bot ${BOT_KEY}` } });
+                  if (convRes.ok) {
+                    const convData = await convRes.json();
+                    const c = convData.data || convData.conversation || convData;
+                    groupInfo = `群名称：${c.name || c.title || '未知'}，群ID：${c.id || c.conversation_id || msg.conversation_id}，成员数：${c.member_count || c.members_count || '未知'}`;
+                  }
+                } catch (e) { console.error('获取群信息失败:', e.message); }
+                const contextInfo = `
+【实时上下文】
+当前时间：${new Date().toLocaleString('zh-CN')}
+你所在的群：${groupInfo || `群ID：${msg.conversation_id}`}
+你的名字：${botInfo.nickname || '君灵bot'}
+你的用户名：${botInfo.username || '未知'}
+你的用户ID：${botInfo.userId || botUserId || '未知'}
+你的Bot ID：${botInfo.botId || '421'}
+你的个性签名：${botInfo.bio || '未知'}
+你的状态：${botInfo.status || '在线'}
+正在跟你说话的人：${uname}（用户ID：${uid}）
+消息内容：${question || '(图片)'}
+`;
+                const systemPrompt = contextInfo + `你是君灵AI，运行在KukeChat（库科聊天）平台的智能机器人助手。
 
 【关于KukeChat平台】
 KukeChat（库科聊天）是一个即时通讯社交平台，官网 kuke.ink，API 域名 chat-api.kuke.ink。
@@ -3624,6 +3647,7 @@ setInterval(async () => {
   }
   if (changed) saveWR(data);
 }, 10000);
+
 
 
 
