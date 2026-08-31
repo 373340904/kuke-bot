@@ -1675,10 +1675,18 @@ function buildDIYTable(cid, tip) {
 const seenIds = new Set();
 // 按钮交互去重
 const seenInteractions = new Set();
+// 全局 WebSocket 连接（防止重连时多个连接同时接收消息）
+let globalWs = null;
+let isConnecting = false;
 
 // 连接 WebSocket
 function connect() {
+function connect() {
+  if (isConnecting) { console.log('⏳ 已有连接正在建立，跳过'); return; }
+  isConnecting = true;
+  if (globalWs) { try { globalWs.removeAllListeners(); globalWs.close(); } catch(e) {} globalWs = null; }
   const ws = new WebSocket(WS_URL);
+  globalWs = ws;
 
   ws.on('open', () => {
     console.log('✅ 已连接到 KukeChat');
@@ -3556,6 +3564,8 @@ ${diyLink}> 点击分类查看详细指令</markdown>`;
 
   ws.on('close', () => {
     console.log('❌ 连接断开，3秒后重连...');
+    isConnecting = false;
+    if (globalWs === ws) globalWs = null;
     setTimeout(connect, 3000);
   });
 
