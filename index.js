@@ -2014,7 +2014,7 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
                 // 多模态：先下载图片转base64（KukeChat图片需鉴权，智谱无法直接访问URL）
                 let imageDataUrl = null;
                 try {
-                  const imgRes = await fetch(imageUrl);
+                  const imgRes = await fetch(imageUrl, { headers: { 'Referer': 'https://kuke.ink/', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' } });
                   if (imgRes.ok) {
                     const imgBuffer = Buffer.from(await imgRes.arrayBuffer());
                     const contentType = imgRes.headers.get('content-type') || 'image/jpeg';
@@ -2023,7 +2023,7 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
                 } catch (e) {
                   console.error('下载图片失败:', e.message);
                 }
-                const userText = question || '请详细描述这张图片的内容';
+                const userText = question || '请仔细识别这张图片，准确描述图片中的主体物体、场景、颜色、细节。如果是植物/动物/物品，请准确说出它的名称。不要猜测，不确定就说不确定。';
                 if (imageDataUrl) {
                   messages = [{ role: 'user', content: [
                     { type: 'text', text: userText },
@@ -2083,7 +2083,7 @@ KukeChat（库科聊天）是一个即时通讯社交平台，官网 kuke.ink，
                   'Authorization': `Bearer ${ZHIPU_API_KEY}`,
                   'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ model: imageUrl ? 'glm-4v-flash' : 'glm-4-flash', messages }),
+                body: JSON.stringify({ model: imageUrl ? 'glm-4v' : 'glm-4-flash', messages }),
                 signal: controller.signal
               });
               clearTimeout(timeout);
@@ -3621,4 +3621,5 @@ setInterval(async () => {
   }
   if (changed) saveWR(data);
 }, 10000);
+
 
