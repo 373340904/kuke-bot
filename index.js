@@ -2051,52 +2051,59 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
                     }
                   }
                 } catch (e) { /* 搜索失败忽略 */ }
-                // 获取当前群信息（基本信息 + 完整成员列表）
+                // 获取当前群全部信息（基本信息 + 全部成员 + 在线用户）
                 let groupInfo = '';
-                let memberCount = 0;
-                let memberNames = [];
                 try {
-                  // 1. 获取群基本信息（调试日志，看实际返回什么）
+                  // 1. 获取群基本信息
                   let groupName = '';
                   let groupDesc = '';
+                  let groupOwner = '';
                   try {
                     const convRes = await fetch(`${BASE_URL}/bot-api/conversations/${msg.conversation_id}`, { headers: { 'Authorization': `Bot ${BOT_KEY}` } });
-                    console.log('[群信息调试] conversations status:', convRes.status);
                     if (convRes.ok) {
-                      const convText = await convRes.text();
-                      console.log('[群信息调试] conversations body:', convText.substring(0, 500));
-                      try {
-                        const convData = JSON.parse(convText);
-                        const c = convData.data || convData.conversation || convData.group || convData;
-                        groupName = c.name || c.title || c.group_name || c.nickname || c.display_name || '';
-                        groupDesc = c.description || c.desc || c.bio || c.about || '';
-                      } catch(e) { console.log('[群信息调试] JSON解析失败'); }
+                      const convData = await convRes.json();
+                      const c = convData.data || convData.conversation || convData.group || convData;
+                      groupName = c.name || c.title || c.group_name || c.nickname || c.display_name || '';
+                      groupDesc = c.description || c.desc || c.bio || c.about || '';
+                      groupOwner = c.owner_id || c.owner || c.creator_id || '';
                     }
                   } catch (e) { console.error('获取群基本信息失败:', e.message); }
-                  // 2. 获取完整成员列表（用 members 接口，数据更准确）
+                  // 2. 获取全部成员列表
+                  let allMembers = [];
+                  let memberCount = 0;
                   try {
                     const memRes = await fetch(`${BASE_URL}/bot-api/conversations/${msg.conversation_id}/members`, { headers: { 'Authorization': `Bot ${BOT_KEY}` } });
-                    console.log('[群信息调试] members status:', memRes.status);
                     if (memRes.ok) {
-                      const memText = await memRes.text();
-                      console.log('[群信息调试] members body:', memText.substring(0, 500));
-                      try {
-                        const memData = JSON.parse(memText);
-                        const members = memData.data || memData.members || memData.list || memData.items || (Array.isArray(memData) ? memData : []);
-                        memberCount = members.length;
-                        memberNames = members.slice(0, 15).map(m => m.nickname || m.display_name || m.name || m.username || m.user?.nickname || '未知');
-                        console.log('[群信息调试] 成员数:', memberCount, '前几个:', memberNames.slice(0,5).join(','));
-                      } catch(e) { console.log('[群信息调试] members JSON解析失败'); }
+                      const memData = await memRes.json();
+                      allMembers = memData.data || memData.members || memData.list || memData.items || (Array.isArray(memData) ? memData : []);
+                      memberCount = allMembers.length;
                     }
                   } catch (e) { console.error('获取成员列表失败:', e.message); }
-                  // 3. 组装群信息（只显示有值的字段，不显示"未设置"）
+                  // 3. 获取在线用户列表
+                  let onlineUsers = [];
+                  let onlineCount = 0;
+                  try {
+                    const onlineRes = await fetch(`${BASE_URL}/bot-api/users/online`, { method: 'POST', headers: { 'Authorization': `Bot ${BOT_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+                    if (onlineRes.ok) {
+                      const onlineData = await onlineRes.json();
+                      onlineUsers = onlineData.data || onlineData.users || onlineData.list || (Array.isArray(onlineData) ? onlineData : []);
+                      onlineCount = onlineUsers.length;
+                    }
+                  } catch (e) { console.error('获取在线用户失败:', e.message); }
+                  // 4. 组装全部群信息
+                  const allMemberNames = allMembers.map(m => m.nickname || m.display_name || m.name || m.username || (m.user && (m.user.nickname || m.user.username)) || '未知').join('、');
+                  const onlineNames = onlineUsers.map(u => u.nickname || u.display_name || u.name || u.username || '未知').join('、');
                   const parts = [];
                   parts.push(`群ID：${msg.conversation_id}`);
                   if (groupName) parts.push(`群名称：${groupName}`);
                   if (groupDesc) parts.push(`群描述：${groupDesc}`);
-                  parts.push(`成员数：${memberCount}`);
-                  if (memberNames.length > 0) parts.push(`成员列表：${memberNames.join('、')}`);
+                  if (groupOwner) parts.push(`群主ID：${groupOwner}`);
+                  parts.push(`成员总数：${memberCount}`);
+                  if (allMemberNames) parts.push(`全部成员：${allMemberNames}`);
+                  parts.push(`在线人数：${onlineCount}`);
+                  if (onlineNames) parts.push(`在线成员：${onlineNames}`);
                   groupInfo = parts.join('，');
+                  console.log('[群信息] 成员数:', memberCount, '在线数:', onlineCount);
                 } catch (e) { console.error('获取群信息失败:', e.message); }
                 const contextInfo = `
 【实时上下文】
