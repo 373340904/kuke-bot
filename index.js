@@ -1627,7 +1627,7 @@ async function executeDIY(msg, name, paramMap) {
     try {
       sendMsg(cid, '🤔 正在思考...');
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 30000);
+      const timeout = setTimeout(() => controller.abort(), 60000);
       const aiRes = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${ZHIPU_API_KEY}` },
@@ -2091,8 +2091,10 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
                     }
                   } catch (e) { console.error('获取在线用户失败:', e.message); }
                   // 4. 组装全部群信息
-                  const allMemberNames = allMembers.map(m => m.nickname || m.display_name || m.name || m.username || (m.user && (m.user.nickname || m.user.username)) || '未知').join('、');
-                  const onlineNames = onlineUsers.map(u => u.nickname || u.display_name || u.name || u.username || '未知').join('、');
+                  const displayMembers = allMembers.length > 30 ? allMembers.slice(0, 30) : allMembers;
+                  const allMemberNames = displayMembers.map(m => m.nickname || m.display_name || m.name || m.username || (m.user && (m.user.nickname || m.user.username)) || '未知').join('、') + (allMembers.length > 30 ? `等${allMembers.length}人` : '');
+                  const displayOnline = onlineUsers.length > 20 ? onlineUsers.slice(0, 20) : onlineUsers;
+                  const onlineNames = displayOnline.map(u => u.nickname || u.display_name || u.name || u.username || '未知').join('、') + (onlineUsers.length > 20 ? `等${onlineUsers.length}人` : '');
                   const parts = [];
                   parts.push(`群ID：${msg.conversation_id}`);
                   if (groupName) parts.push(`群名称：${groupName}`);
