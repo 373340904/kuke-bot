@@ -2120,10 +2120,10 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
 正在跟你说话的人：${uname}（用户ID：${uid}）
 消息内容：${question || '(图片)'}
 `;
-                const systemPrompt = contextInfo + `你是君灵AI，运行在KukeChat（库科聊天）平台的智能机器人助手。
+                const systemPrompt = contextInfo + `你是君灵AI，运行在KukeChat（酷可聊天）平台的智能机器人助手。
 
 【关于KukeChat平台】
-KukeChat（库科聊天）是一个即时通讯社交平台，官网 kuke.ink，API 域名 chat-api.kuke.ink。
+KukeChat（酷可聊天）是一个即时通讯社交平台，官网 kuke.ink，API 域名 chat-api.kuke.ink。
 核心功能：
 - 群聊与私聊：支持创建群组、一对一私信、@提及成员
 - 消息格式：支持纯文本、Markdown渲染、图片消息、按钮交互组件、超链接组件
@@ -2497,7 +2497,7 @@ ${isClassGroup ? '' : '<link action="callback" action_id="help_diy">自制指令
 |------|------|
 | **创始人** | 君衔（用户ID：\`3038\`） |
 | **引擎** | 智谱AI GLM-4-Flash / GLM-4V 多模态 |
-| **平台** | KukeChat（库科聊天） |
+| **平台** | KukeChat（酷可聊天） |
 | **语言驱动** | Node.js + JavaScript |
 | **后端服务器** | Railway 云端部署 |
 | **版本** | v2.2-music |
@@ -3742,6 +3742,7 @@ setInterval(async () => {
   }
   if (changed) saveWR(data);
 }, 10000);
+
 
 
 
