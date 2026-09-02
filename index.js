@@ -2475,6 +2475,7 @@ KukeChat支持的Markdown语法：
         const helpText = `<markdown># ${botTitle}
 ## 常用
 <link action="callback" action_id="help_common">📋 查看全部常用指令</link>
+- \`/关于\`：查看机器人详细信息
 ## ${adminLabel}
 <link action="callback" action_id="help_vote">投票管理</link>：发起和管理投票
 <link action="callback" action_id="help_forbidden">违禁词管理</link>：添加和删除违禁词
@@ -2484,6 +2485,42 @@ KukeChat支持的Markdown语法：
 ${isClassGroup ? '' : '<link action="callback" action_id="help_diy">自制指令</link>：创建和管理DIY指令\n'}<link action="callback" action_id="help_other">其他管理</link>：进群欢迎和全局推送
 </markdown>`;
         sendMsg(msg.conversation_id, helpText);
+      }
+      else if (content === '/关于' || content === '/about') {
+        const aboutText = `<markdown># 🤖 关于君灵bot
+
+> 通情达理守良知，实事求是爱科学
+
+## 📋 基本信息
+
+| 项目 | 详情 |
+|------|------|
+| **创始人** | 君衔（用户ID：\`3038\`） |
+| **引擎** | 智谱AI GLM-4-Flash / GLM-4V 多模态 |
+| **平台** | KukeChat（库科聊天） |
+| **语言驱动** | Node.js + JavaScript |
+| **后端服务器** | Railway 云端部署 |
+| **版本** | v2.2-music |
+| **上线时间** | 2026年8月 |
+| **功能数量** | 50+ 指令 |
+| **数据存储** | 本地JSON + Railway Postgres |
+| **保活方案** | UptimeRobot + 本地监控自动切换 |
+| **开源地址** | [GitHub](https://github.com/373340904/kuke-bot) |
+| **创建理念** | 为弱势群体服务，通情达理守良知 |
+
+## ✨ 核心特性
+
+- 🤖 **AI对话**：支持文字和图片识别，正常人语气
+- 🛠️ **DIY自制指令**：群内自定义指令，AI协助创建
+- 🔇 **群管理**：禁言、踢人、黑名单、违禁词过滤
+- 🎮 **娱乐功能**：狼人杀、投票、签到、音乐播放
+- 📊 **数据统计**：群活跃统计、在线人数查询
+- 🔄 **双机热备**：云端+本地自动切换，24小时在线
+
+---
+> 君灵bot由君衔独立开发维护，致力于打造最懂用户的智能机器人助手。
+</markdown>`;
+        sendMsg(msg.conversation_id, aboutText);
       }
       else if (content === '/违禁词表格') {
         sendMsg(msg.conversation_id, buildForbiddenTable(msg.conversation_id, '📋 当前违禁词列表'));
