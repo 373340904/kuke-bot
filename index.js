@@ -2707,7 +2707,7 @@ ${isClassGroup ? '' : '<link action="callback" action_id="help_diy">自制指令
 
 > 本群成员发布新的CCW作品时，机器人会自动推送卡片消息
 
-**检测频率：** 每10分钟一次
+**检测频率：** 每20秒一次
 **推送内容：** 作品标题、封面、简介、点赞/浏览数、跳转链接
 
 > 首次开启只记录当前最新作品，后续新作品才会推送
@@ -2727,7 +2727,7 @@ ${isClassGroup ? '' : '<link action="callback" action_id="help_diy">自制指令
         sendMsg(cid, `<markdown># 📊 CCW推送状态
 
 **当前群：** ${enabled ? '✅ 已开启' : '❌ 已关闭'}
-**检测频率：** 每10分钟一次
+**检测频率：** 每20秒一次
 **已记录用户数：** ${Object.keys(pushData.lastCreationId || {}).filter(k => k.startsWith(cid + '_')).length}
 
 > 指令：\`/CCW推送开启\` / \`/CCW推送关闭\`
