@@ -28,6 +28,139 @@ const ZHIPU_API_KEY = 'd9cd0300341d4ac1aed9260c715c1a8a.2aChFKD7pTs3j7Y4'; // �
 
 const BASE_URL = 'https://chat-api.kuke.ink/api/v1';
 const WS_URL = `wss://chat-api.kuke.ink/bot/ws?key=${encodeURIComponent(BOT_KEY)}`;
+const CCW_API_BASE = 'https://community-web.ccw.site/api/v1'; // CCW（酷可聊天）创作者社区 API
+
+// ============================================================
+// CCW 新作品推送功能
+// ============================================================
+const CCW_PUSH_FILE = path.join(__dirname, 'data_ccw_push.json');
+
+// 加载推送记录
+function loadCcwPush() {
+  try {
+    if (fs.existsSync(CCW_PUSH_FILE)) {
+      return JSON.parse(fs.readFileSync(CCW_PUSH_FILE, 'utf-8'));
+    }
+  } catch (e) { console.error('加载CCW推送记录失败:', e.message); }
+  return { enabledGroups: {}, lastCreationId: {} }; // { enabledGroups: {群ID: true}, lastCreationId: {群ID_用户ccw_oid: 最新作品ID} }
+}
+function saveCcwPush(data) {
+  try { fs.writeFileSync(CCW_PUSH_FILE, JSON.stringify(data, null, 2), 'utf-8'); } catch (e) { console.error('保存CCW推送记录失败:', e.message); }
+}
+
+// 获取 CCW 用户作品列表（按创建时间倒序）
+async function getCcwCreations(studentOid, page = 1, perPage = 5) {
+  try {
+    const url = `${CCW_API_BASE}/creations/by_student/${studentOid}?page=${page}&perPage=${perPage}&sortField=createdAt&sortType=DESC`;
+    const res = await fetch(url, {
+      headers: { 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+      timeout: 10000
+    });
+    if (!res.ok) {
+      // 尝试备用端点
+      const url2 = `${CCW_API_BASE}/students/${studentOid}/creations?page=${page}&perPage=${perPage}&sortField=createdAt&sortType=DESC`;
+      const res2 = await fetch(url2, { headers: { 'Content-Type': 'application/json' }, timeout: 10000 });
+      if (!res2.ok) return null;
+      const data2 = await res2.json();
+      return data2?.data || data2?.creations || data2?.list || data2;
+    }
+    const data = await res.json();
+    return data?.data || data?.creations || data?.list || data;
+  } catch (e) {
+    console.error('获取CCW作品失败:', e.message);
+    return null;
+  }
+}
+
+// 构建作品推送卡片（Markdown格式）
+function buildCcwCard(creation, authorName, authorOid) {
+  const title = creation.title || creation.name || '未命名作品';
+  const oid = creation._id || creation.id || creation.oid || '';
+  const cover = creation.cover_url || creation.coverUrl || creation.thumbnail || creation.cover || '';
+  const desc = (creation.description || creation.desc || creation.intro || '').slice(0, 80);
+  const likes = creation.like_count || creation.likeCount || creation.likes || 0;
+  const views = creation.view_count || creation.viewCount || creation.views || 0;
+  const url = `https://ccw.site/detail/${oid}`;
+
+  let card = `<markdown># 🎨 新作品发布
+
+## [${title}](${url})
+
+`;
+  if (cover) {
+    card += `![作品封面](${cover})
+
+`;
+  }
+  if (desc) {
+    card += `> ${desc}
+
+`;
+  }
+  card += `**👤 作者：** ${authorName}
+**👍 点赞：** ${likes}　**👀 浏览：** ${views}
+
+---
+[🔗 点击查看作品](${url})
+</markdown>`;
+  return card;
+}
+
+// 检测并推送 CCW 新作品
+async function checkAndPushCcw() {
+  const pushData = loadCcwPush();
+  const enabledGroups = Object.keys(pushData.enabledGroups || {}).filter(g => pushData.enabledGroups[g]);
+  if (enabledGroups.length === 0) return;
+
+  for (const groupId of enabledGroups) {
+    try {
+      // 获取群成员列表
+      const membersRes = await fetch(`${BASE_URL}/bot-api/conversations/${groupId}/members`, {
+        headers: { 'Authorization': `Bot ${BOT_KEY}` }
+      });
+      if (!membersRes.ok) continue;
+      const membersData = await membersRes.json();
+      const members = membersData?.data || membersData?.members || membersData?.list || [];
+
+      for (const member of members) {
+        const user = member.user || member;
+        const ccwOid = user.ccw_student_oid || user.ccw_oid;
+        if (!ccwOid) continue;
+
+        const authorName = user.nickname || user.display_name || user.username || '未知用户';
+        const key = `${groupId}_${ccwOid}`;
+
+        // 获取最新作品
+        const creations = await getCcwCreations(ccwOid, 1, 3);
+        if (!creations || !Array.isArray(creations) || creations.length === 0) continue;
+
+        const latest = creations[0];
+        const latestId = latest._id || latest.id || latest.oid || '';
+        if (!latestId) continue;
+
+        const lastId = pushData.lastCreationId[key];
+        // 第一次检测时只记录，不推送（避免推送旧作品）
+        if (!lastId) {
+          pushData.lastCreationId[key] = latestId;
+          saveCcwPush(pushData);
+          continue;
+        }
+        // 有新作品
+        if (latestId !== lastId) {
+          console.log(`[CCW推送] 群${groupId} ${authorName} 发布新作品: ${latest.title || latest.name}`);
+          const card = buildCcwCard(latest, authorName, ccwOid);
+          await sendMsg(groupId, card);
+          pushData.lastCreationId[key] = latestId;
+          saveCcwPush(pushData);
+          await new Promise(r => setTimeout(r, 2000)); // 避免发送过快
+        }
+      }
+    } catch (e) {
+      console.error(`[CCW推送] 群${groupId}检测失败:`, e.message);
+    }
+  }
+}
+
 
 // 机器人信息缓存（从发消息返回数据中提取，避免依赖不可用的GET API）
 const botInfo = { nickname: null, userId: null, botId: null, username: null, bio: null, avatar: null, status: null };
@@ -2476,6 +2609,7 @@ KukeChat支持的Markdown语法：
 ## 常用
 <link action="callback" action_id="help_common">📋 查看全部常用指令</link>
 - \`/关于\`：查看机器人详细信息
+- \`/CCW推送开启\`：开启CCW新作品自动推送（管理员）
 ## ${adminLabel}
 <link action="callback" action_id="help_vote">投票管理</link>：发起和管理投票
 <link action="callback" action_id="help_forbidden">违禁词管理</link>：添加和删除违禁词
@@ -2527,6 +2661,42 @@ ${isClassGroup ? '' : '<link action="callback" action_id="help_diy">自制指令
       }
       else if (content === '/ping') {
         sendMsg(msg.conversation_id, '🏓 pong！机器人在线');
+      }
+      else if (content === '/CCW推送开启' || content === '/开启CCW推送') {
+        if (uid !== 3038 && !isAdmin) { sendMsg(cid, '❌ 只有群主或管理员可以开启CCW推送'); return; }
+        const pushData = loadCcwPush();
+        pushData.enabledGroups = pushData.enabledGroups || {};
+        pushData.enabledGroups[cid] = true;
+        saveCcwPush(pushData);
+        sendMsg(cid, `<markdown># ✅ CCW新作品推送已开启
+
+> 本群成员发布新的CCW作品时，机器人会自动推送卡片消息
+
+**检测频率：** 每10分钟一次
+**推送内容：** 作品标题、封面、简介、点赞/浏览数、跳转链接
+
+> 首次开启只记录当前最新作品，后续新作品才会推送
+</markdown>`);
+      }
+      else if (content === '/CCW推送关闭' || content === '/关闭CCW推送') {
+        if (uid !== 3038 && !isAdmin) { sendMsg(cid, '❌ 只有群主或管理员可以关闭CCW推送'); return; }
+        const pushData = loadCcwPush();
+        pushData.enabledGroups = pushData.enabledGroups || {};
+        pushData.enabledGroups[cid] = false;
+        saveCcwPush(pushData);
+        sendMsg(cid, '✅ CCW新作品推送已关闭');
+      }
+      else if (content === '/CCW推送状态') {
+        const pushData = loadCcwPush();
+        const enabled = pushData.enabledGroups?.[cid] === true;
+        sendMsg(cid, `<markdown># 📊 CCW推送状态
+
+**当前群：** ${enabled ? '✅ 已开启' : '❌ 已关闭'}
+**检测频率：** 每10分钟一次
+**已记录用户数：** ${Object.keys(pushData.lastCreationId || {}).filter(k => k.startsWith(cid + '_')).length}
+
+> 指令：\`/CCW推送开启\` / \`/CCW推送关闭\`
+</markdown>`);
       }
       else if (content.startsWith('/echo ')) {
         sendMsg(msg.conversation_id, `🔊 ${content.slice(6)}`);
@@ -3720,6 +3890,11 @@ server.listen(PORT, () => {
   console.log(`HTTP server listening on port ${PORT}`);
   console.log(`网页版: http://localhost:${PORT}`);
 });
+
+// CCW 新作品检测：每10分钟检查一次
+setInterval(() => {
+  checkAndPushCcw().catch(e => console.error('[CCW推送] 定时任务异常:', e.message));
+}, 10 * 60 * 1000);
 
 // 狼人杀超时检测：每10秒检查一次，10分钟无操作强制结束
 setInterval(async () => {
