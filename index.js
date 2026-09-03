@@ -667,7 +667,7 @@ async function refreshVoteButtons(vote) {
 
 // ========== 狼人杀游戏 ==========
 const WEREWOLF_FILE = path.join(__dirname, 'werewolf_data.json');
-const WR_TIMEOUT = 10 * 60 * 1000;
+const WR_TIMEOUT = 20 * 1000;
 
 function loadWR() { try { return JSON.parse(fs.readFileSync(WEREWOLF_FILE, 'utf-8')); } catch { return {}; } }
 function saveWR(d) { fs.writeFileSync(WEREWOLF_FILE, JSON.stringify(d, null, 2), 'utf-8'); }
@@ -4021,7 +4021,7 @@ server.listen(PORT, () => {
   console.log(`网页版: http://localhost:${PORT}`);
 });
 
-// CCW 新作品检测：每10分钟检查一次
+// CCW 新作品检测：每20秒检查一次
 setInterval(() => {
   checkAndPushCcw().catch(e => console.error('[CCW推送] 定时任务异常:', e.message));
 }, 10 * 60 * 1000);
