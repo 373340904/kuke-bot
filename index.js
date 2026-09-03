@@ -60,26 +60,25 @@ function saveCcwBind(data) {
   try { fs.writeFileSync(CCW_BIND_FILE, JSON.stringify(data, null, 2), 'utf-8'); } catch (e) { console.error('保存CCW绑定失败:', e.message); }
 }
 
-// 获取 CCW 用户作品列表（按创建时间倒序）
-async function getCcwCreations(studentOid, page = 1, perPage = 5) {
+// 通过 KukeChat 用户API 获取用户的 CCW 作品数和学生ID
+async function getKukeUserCcwInfo(kukeUserId) {
   try {
-    const url = `${CCW_API_BASE}/creations/by_student/${studentOid}?page=${page}&perPage=${perPage}&sortField=createdAt&sortType=DESC`;
-    const res = await fetch(url, {
-      headers: { 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+    const res = await fetch(`${BASE_URL}/bot-api/users/${kukeUserId}`, {
+      headers: { 'Authorization': `Bot ${BOT_KEY}` },
       timeout: 10000
     });
-    if (!res.ok) {
-      // 尝试备用端点
-      const url2 = `${CCW_API_BASE}/students/${studentOid}/creations?page=${page}&perPage=${perPage}&sortField=createdAt&sortType=DESC`;
-      const res2 = await fetch(url2, { headers: { 'Content-Type': 'application/json' }, timeout: 10000 });
-      if (!res2.ok) return null;
-      const data2 = await res2.json();
-      return data2?.data || data2?.creations || data2?.list || data2;
-    }
+    if (!res.ok) return null;
     const data = await res.json();
-    return data?.data || data?.creations || data?.list || data;
+    const user = data.data || data.user || data;
+    return {
+      ccwStudentOid: user.ccw_student_oid || user.ccw_oid || '',
+      ccwName: user.ccw_name || '',
+      ccwCreationCount: user.ccw_creation_count || 0,
+      ccwFollowerCount: user.ccw_follower_count || 0,
+      nickname: user.nickname || user.display_name || ''
+    };
   } catch (e) {
-    console.error('获取CCW作品失败:', e.message);
+    console.error('获取Kuke用户CCW信息失败:', e.message);
     return null;
   }
 }
@@ -118,7 +117,7 @@ function buildCcwCard(creation, authorName, authorOid) {
   return card;
 }
 
-// 检测并推送 CCW 新作品
+// 检测并推送 CCW 新作品（通过 KukeChat 用户API 检测作品数变化）
 async function checkAndPushCcw() {
   const pushData = loadCcwPush();
   const enabledGroups = Object.keys(pushData.enabledGroups || {}).filter(g => pushData.enabledGroups[g]);
@@ -134,58 +133,48 @@ async function checkAndPushCcw() {
       const membersData = await membersRes.json();
       const members = membersData?.data || membersData?.members || membersData?.list || [];
 
-      // 加载用户绑定数据
-      const bindData = loadCcwBind();
-      // 构建群内绑定用户映射：ccwOid -> { kukeUid, authorName }
-      const groupBoundUsers = {};
       for (const member of members) {
         const user = member.user || member;
         const kukeUid = String(user.user_id || user.id || user.uid || '');
-        if (kukeUid && bindData[kukeUid]?.studentOid) {
-          const ccwOid = bindData[kukeUid].studentOid;
-          groupBoundUsers[ccwOid] = {
-            kukeUid,
-            authorName: bindData[kukeUid].ccwName || user.nickname || user.display_name || user.username || '未知用户'
-          };
-        }
-        // 同时检查成员自身的ccw字段（如果KukeChat返回了）
-        const memberCcwOid = user.ccw_student_oid || user.ccw_oid;
-        if (memberCcwOid && !groupBoundUsers[memberCcwOid]) {
-          groupBoundUsers[memberCcwOid] = {
-            kukeUid: String(user.user_id || user.id || ''),
-            authorName: user.nickname || user.display_name || user.username || '未知用户'
-          };
-        }
-      }
+        if (!kukeUid || kukeUid === String(botUserId)) continue;
 
-      for (const ccwOid of Object.keys(groupBoundUsers)) {
-        const boundInfo = groupBoundUsers[ccwOid];
-        const authorName = boundInfo.authorName;
+        // 通过 KukeChat 用户API 获取 CCW 信息
+        const ccwInfo = await getKukeUserCcwInfo(kukeUid);
+        if (!ccwInfo || !ccwInfo.ccwStudentOid) continue;
+
+        const ccwOid = ccwInfo.ccwStudentOid;
+        const authorName = ccwInfo.nickname || ccwInfo.ccwName || user.nickname || '未知用户';
+        const currentCount = ccwInfo.ccwCreationCount || 0;
         const key = `${groupId}_${ccwOid}`;
 
-        // 获取最新作品
-        const creations = await getCcwCreations(ccwOid, 1, 3);
-        if (!creations || !Array.isArray(creations) || creations.length === 0) continue;
-
-        const latest = creations[0];
-        const latestId = latest._id || latest.id || latest.oid || '';
-        if (!latestId) continue;
-
-        const lastId = pushData.lastCreationId[key];
-        // 第一次检测时只记录，不推送（避免推送旧作品）
-        if (!lastId) {
-          pushData.lastCreationId[key] = latestId;
+        const lastCount = pushData.lastCreationId?.[key]?.count;
+        // 第一次检测时只记录，不推送
+        if (lastCount === undefined) {
+          if (!pushData.lastCreationId) pushData.lastCreationId = {};
+          pushData.lastCreationId[key] = { count: currentCount, time: Date.now() };
           saveCcwPush(pushData);
           continue;
         }
-        // 有新作品
-        if (latestId !== lastId) {
-          console.log(`[CCW推送] 群${groupId} ${authorName} 发布新作品: ${latest.title || latest.name}`);
-          const card = buildCcwCard(latest, authorName, ccwOid);
+        // 作品数增加，说明有新作品
+        if (currentCount > lastCount) {
+          const newCount = currentCount - lastCount;
+          console.log(`[CCW推送] 群${groupId} ${authorName} 发布了${newCount}个新作品（总数: ${currentCount}）`);
+          const ccwHomeUrl = `https://ccw.site/student/${ccwOid}`;
+          const card = `<markdown># 🎨 新作品发布
+
+**👤 作者：** ${authorName}
+**📊 作品总数：** \`${currentCount}\`（新增 \`${newCount}\` 个）
+
+> ${authorName} 刚刚发布了新的CCW作品！
+
+---
+[🔗 点击进入TA的CCW主页查看新作品](${ccwHomeUrl})
+</markdown>`;
           await sendMsg(groupId, card);
-          pushData.lastCreationId[key] = latestId;
+          if (!pushData.lastCreationId) pushData.lastCreationId = {};
+          pushData.lastCreationId[key] = { count: currentCount, time: Date.now() };
           saveCcwPush(pushData);
-          await new Promise(r => setTimeout(r, 2000)); // 避免发送过快
+          await new Promise(r => setTimeout(r, 2000));
         }
       }
     } catch (e) {
@@ -2644,6 +2633,7 @@ KukeChat支持的Markdown语法：
 <link action="callback" action_id="help_common">📋 查看全部常用指令</link>
 - \`/关于\`：查看机器人详细信息
 - \`/绑定CCW [ID]\`：绑定你的CCW账号
+- \`/推送CCW [链接]\`：手动推送新作品
 - \`/CCW推送开启\`：开启CCW新作品自动推送（管理员）
 ## ${adminLabel}
 <link action="callback" action_id="help_vote">投票管理</link>：发起和管理投票
@@ -2741,6 +2731,9 @@ ${isClassGroup ? '' : '<link action="callback" action_id="help_diy">自制指令
 
 > 格式：\`/绑定CCW [你的CCW学生ID]\`
 
+> ⚠️ 注意：自动检测需要你先在 **KukeChat 个人设置** 里绑定 CCW 账号，绑定后机器人才能检测到作品数变化。
+> 如果没绑定，可以用 \`/推送CCW [作品链接]\` 手动推送。
+
 **如何获取学生ID：**
 1. 打开 CCW 官网 ccw.site
 2. 登录后进入个人主页
@@ -2827,6 +2820,40 @@ ${ccwName ? `**CCW昵称：** ${ccwName}` : ''}
         } catch (e) {
           sendMsg(cid, `❌ 检测失败：${e.message}`);
         }
+      }
+      else if (content.startsWith('/推送CCW') || content.startsWith('/推送ccw')) {
+        const parts = content.split(/[\s\[]+/);
+        const workUrl = (parts[1] || '').trim().replace(/[\]】]/g, '');
+        if (!workUrl) {
+          sendMsg(cid, `<markdown># ❌ 格式错误
+
+> 格式：\`/推送CCW [作品链接]\`
+
+**示例：**
+\`/推送CCW https://ccw.site/detail/xxx\`
+
+> 发布新作品后，用这个指令可以手动推送到群里
+</markdown>`);
+          return;
+        }
+        // 提取作品ID
+        let workId = '';
+        const idMatch = workUrl.match(/detail\/([a-zA-Z0-9]+)/);
+        if (idMatch) workId = idMatch[1];
+        else workId = workUrl;
+
+        const authorName = uname;
+        const card = `<markdown># 🎨 新作品发布
+
+**👤 作者：** ${authorName}
+
+> ${authorName} 刚刚发布了新的CCW作品！
+
+---
+[🔗 点击查看作品](${workUrl})
+</markdown>`;
+        sendMsg(cid, card);
+        sendMsg(cid, `🔗 ${workUrl}`);
       }
       else if (content.startsWith('/echo ')) {
         sendMsg(msg.conversation_id, `🔊 ${content.slice(6)}`);
