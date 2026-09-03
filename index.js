@@ -48,6 +48,18 @@ function saveCcwPush(data) {
   try { fs.writeFileSync(CCW_PUSH_FILE, JSON.stringify(data, null, 2), 'utf-8'); } catch (e) { console.error('保存CCW推送记录失败:', e.message); }
 }
 
+// CCW 用户绑定数据
+const CCW_BIND_FILE = path.join(__dirname, 'data_ccw_bind.json');
+function loadCcwBind() {
+  try {
+    if (fs.existsSync(CCW_BIND_FILE)) return JSON.parse(fs.readFileSync(CCW_BIND_FILE, 'utf-8'));
+  } catch (e) { console.error('加载CCW绑定失败:', e.message); }
+  return {}; // { kukeUserId: { studentOid, ccwName, bindTime } }
+}
+function saveCcwBind(data) {
+  try { fs.writeFileSync(CCW_BIND_FILE, JSON.stringify(data, null, 2), 'utf-8'); } catch (e) { console.error('保存CCW绑定失败:', e.message); }
+}
+
 // 获取 CCW 用户作品列表（按创建时间倒序）
 async function getCcwCreations(studentOid, page = 1, perPage = 5) {
   try {
@@ -122,12 +134,33 @@ async function checkAndPushCcw() {
       const membersData = await membersRes.json();
       const members = membersData?.data || membersData?.members || membersData?.list || [];
 
+      // 加载用户绑定数据
+      const bindData = loadCcwBind();
+      // 构建群内绑定用户映射：ccwOid -> { kukeUid, authorName }
+      const groupBoundUsers = {};
       for (const member of members) {
         const user = member.user || member;
-        const ccwOid = user.ccw_student_oid || user.ccw_oid;
-        if (!ccwOid) continue;
+        const kukeUid = String(user.user_id || user.id || user.uid || '');
+        if (kukeUid && bindData[kukeUid]?.studentOid) {
+          const ccwOid = bindData[kukeUid].studentOid;
+          groupBoundUsers[ccwOid] = {
+            kukeUid,
+            authorName: bindData[kukeUid].ccwName || user.nickname || user.display_name || user.username || '未知用户'
+          };
+        }
+        // 同时检查成员自身的ccw字段（如果KukeChat返回了）
+        const memberCcwOid = user.ccw_student_oid || user.ccw_oid;
+        if (memberCcwOid && !groupBoundUsers[memberCcwOid]) {
+          groupBoundUsers[memberCcwOid] = {
+            kukeUid: String(user.user_id || user.id || ''),
+            authorName: user.nickname || user.display_name || user.username || '未知用户'
+          };
+        }
+      }
 
-        const authorName = user.nickname || user.display_name || user.username || '未知用户';
+      for (const ccwOid of Object.keys(groupBoundUsers)) {
+        const boundInfo = groupBoundUsers[ccwOid];
+        const authorName = boundInfo.authorName;
         const key = `${groupId}_${ccwOid}`;
 
         // 获取最新作品
@@ -1874,6 +1907,9 @@ function connect() {
       const cid = String(msg.conversation_id);
       const uid = msg.sender_id;
       const uname = msg.sender_display_name || msg.sender?.nickname || '未知用户';
+      const senderRole = msg.sender?.role || msg.sender?.user_role || msg.sender?.permission || '';
+      const isAdmin = senderRole === 'admin' || senderRole === 'owner';
+      const isOwner = senderRole === 'owner';
 
       // 记录群活跃
       try { recordActivity(cid, uid, uname); } catch (e) { console.error('记录活跃失败:', e.message); }
@@ -2324,8 +2360,6 @@ KukeChat支持的Markdown语法：
 
       // 刷屏检测（指令和签到跳过，群主和ID3038豁免）
       const isCmd = content.startsWith('/') || content === '签到';
-      const senderRole = msg.sender?.role || msg.sender?.user_role || msg.sender?.permission || msg.sender?.member_role || msg.sender?.group_role;
-      const isOwner = senderRole === 'owner' || senderRole === 'admin' || msg.sender?.is_owner === true || msg.sender?.is_admin === true;
       const isMuteExempt = uid === 3038 || isOwner;
       if (!isCmd && !isMuteExempt) {
         const spamResult = await checkSpam(msg.conversation_id, uid, uname);
@@ -2609,6 +2643,7 @@ KukeChat支持的Markdown语法：
 ## 常用
 <link action="callback" action_id="help_common">📋 查看全部常用指令</link>
 - \`/关于\`：查看机器人详细信息
+- \`/绑定CCW [ID]\`：绑定你的CCW账号
 - \`/CCW推送开启\`：开启CCW新作品自动推送（管理员）
 ## ${adminLabel}
 <link action="callback" action_id="help_vote">投票管理</link>：发起和管理投票
@@ -2697,6 +2732,101 @@ ${isClassGroup ? '' : '<link action="callback" action_id="help_diy">自制指令
 
 > 指令：\`/CCW推送开启\` / \`/CCW推送关闭\`
 </markdown>`);
+      }
+      else if (content.startsWith('/绑定CCW') || content.startsWith('/绑定ccw')) {
+        const parts = content.split(/[\s\[]+/);
+        const studentOid = (parts[1] || '').trim().replace(/[\]】]/g, '');
+        if (!studentOid || studentOid.length < 10) {
+          sendMsg(cid, `<markdown># ❌ 绑定失败
+
+> 格式：\`/绑定CCW [你的CCW学生ID]\`
+
+**如何获取学生ID：**
+1. 打开 CCW 官网 ccw.site
+2. 登录后进入个人主页
+3. 网址栏里 \`student/\` 后面的一串字符就是学生ID
+
+> 示例：\`/绑定CCW 63c2807d669fa967f17f5559\`
+</markdown>`);
+          return;
+        }
+        const bindData = loadCcwBind();
+        // 验证学生ID是否有效（尝试获取作品列表）
+        const testCreations = await getCcwCreations(studentOid, 1, 1);
+        let ccwName = '';
+        if (testCreations && Array.isArray(testCreations)) {
+          // 尝试从作品数据获取作者名
+          const firstCreation = testCreations[0];
+          ccwName = firstCreation?.author?.name || firstCreation?.student_name || firstCreation?.authorName || uname;
+        }
+        bindData[String(uid)] = { studentOid, ccwName: ccwName || uname, bindTime: new Date().toISOString() };
+        saveCcwBind(bindData);
+        sendMsg(cid, `<markdown># ✅ CCW绑定成功
+
+**绑定用户：** ${uname}
+**CCW学生ID：** \`${studentOid}\`
+${ccwName ? `**CCW昵称：** ${ccwName}` : ''}
+
+> 本群开启CCW推送后，你发布新作品会自动推送卡片消息
+> 解绑请发送：\`/解绑CCW\`
+</markdown>`);
+      }
+      else if (content === '/解绑CCW' || content === '/解绑ccw') {
+        const bindData = loadCcwBind();
+        if (!bindData[String(uid)]) {
+          sendMsg(cid, '❌ 你还没有绑定CCW账号');
+          return;
+        }
+        delete bindData[String(uid)];
+        saveCcwBind(bindData);
+        sendMsg(cid, '✅ 已解绑CCW账号');
+      }
+      else if (content === '/CCW推送列表' || content === '/ccw推送列表') {
+        const bindData = loadCcwBind();
+        // 获取群成员，筛选已绑定的
+        try {
+          const membersRes = await fetch(`${BASE_URL}/bot-api/conversations/${cid}/members`, { headers: { 'Authorization': `Bot ${BOT_KEY}` } });
+          const membersData = await membersRes.json();
+          const members = membersData?.data || membersData?.members || membersData?.list || [];
+          const boundList = [];
+          for (const m of members) {
+            const user = m.user || m;
+            const kukeUid = String(user.user_id || user.id || '');
+            if (bindData[kukeUid]) {
+              boundList.push({
+                name: user.nickname || user.display_name || user.username || '未知',
+                kukeUid,
+                ccwOid: bindData[kukeUid].studentOid,
+                ccwName: bindData[kukeUid].ccwName || ''
+              });
+            }
+          }
+          let listText = '<markdown># 📋 本群CCW绑定列表\n\n';
+          if (boundList.length === 0) {
+            listText += '> 暂无成员绑定CCW账号\n\n发送 `/绑定CCW [学生ID]` 即可绑定';
+          } else {
+            listText += `**已绑定人数：** \`${boundList.length}\`\n\n`;
+            listText += '| 群昵称 | CCW昵称 | CCW学生ID |\n';
+            listText += '|------|--------|----------|\n';
+            for (const b of boundList) {
+              listText += `| ${b.name} | ${b.ccwName || '-'} | \`${b.ccwOid}\` |\n`;
+            }
+          }
+          listText += '</markdown>';
+          sendMsg(cid, listText);
+        } catch (e) {
+          sendMsg(cid, `❌ 获取列表失败：${e.message}`);
+        }
+      }
+      else if (content === '/检测CCW' || content === '/检测ccw') {
+        if (uid !== 3038 && !isAdmin) { sendMsg(cid, '❌ 只有群主或管理员可以手动检测'); return; }
+        sendMsg(cid, '🔍 正在手动检测CCW新作品...');
+        try {
+          await checkAndPushCcw();
+          sendMsg(cid, '✅ CCW检测完成');
+        } catch (e) {
+          sendMsg(cid, `❌ 检测失败：${e.message}`);
+        }
       }
       else if (content.startsWith('/echo ')) {
         sendMsg(msg.conversation_id, `🔊 ${content.slice(6)}`);
