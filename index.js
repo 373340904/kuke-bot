@@ -465,6 +465,35 @@ async function sendPrivateMsg(userId, content) {
   } catch (e) { console.error('私聊发送失败:', e.message); }
 }
 
+// AI调用辅助函数（供创意游戏使用）
+async function callAI(prompt, systemPrompt) {
+  if (!ZHIPU_API_KEY) throw new Error('ZHIPU_API_KEY 未配置');
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 60000);
+  try {
+    const aiRes = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${ZHIPU_API_KEY}` },
+      body: JSON.stringify({
+        model: 'glm-4-flash',
+        messages: [
+          { role: 'system', content: systemPrompt || '你是一个创意游戏助手，用简洁生动的语言回答。' },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.8
+      }),
+      signal: controller.signal
+    });
+    clearTimeout(timeout);
+    if (!aiRes.ok) throw new Error(`AI API ${aiRes.status}`);
+    const aiData = await aiRes.json();
+    return aiData.choices?.[0]?.message?.content || '';
+  } catch (e) {
+    clearTimeout(timeout);
+    throw e;
+  }
+}
+
 function genVoteId() {
   const voteData = loadVoteData();
   let id;
