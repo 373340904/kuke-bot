@@ -453,18 +453,6 @@ const FATE_FILE = path.join(__dirname, 'fate_data.json');
 function loadFateData() { try { return JSON.parse(fs.readFileSync(FATE_FILE, 'utf-8')); } catch { return {}; } }
 function saveFateData(data) { try { fs.writeFileSync(FATE_FILE, JSON.stringify(data, null, 2), 'utf-8'); } catch (e) { console.error('[命运抉择]保存失败:', e.message); } }
 
-// 私聊发送辅助函数
-async function sendPrivateMsg(userId, content) {
-  try {
-    const resp = await fetch(`${BASE_URL}/bot-api/users/${userId}/messages`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${BOT_KEY}` },
-      body: JSON.stringify({ content })
-    });
-    return await resp.json();
-  } catch (e) { console.error('私聊发送失败:', e.message); }
-}
-
 // AI调用辅助函数（供创意游戏使用）
 async function callAI(prompt, systemPrompt) {
   if (!ZHIPU_API_KEY) throw new Error('ZHIPU_API_KEY 未配置');
@@ -1805,6 +1793,39 @@ function connect() {
 
       console.log(`📩 [群${msg.conversation_id}] ${msg.sender_display_name}: ${msg.content}`);
 
+      // ====== 私聊消息处理：心灵感应答案接收 ======
+      const isPrivateMsg = msg.conversation_type === 'private' || msg.conversation_id === msg.sender_id || String(msg.conversation_id).length <= 6;
+      if (isPrivateMsg && !content.startsWith('/')) {
+        const teleData = loadTelepathyData();
+        let foundGame = null;
+        let foundCid = null;
+        for (const [gid, game] of Object.entries(teleData)) {
+          if (String(game.creator) === String(msg.sender_id) && game.phase === 'waiting_answers') {
+            foundGame = game;
+            foundCid = gid;
+            break;
+          }
+        }
+        if (foundGame) {
+          const lines = content.split(/\n/).map(l => l.trim()).filter(Boolean);
+          for (const line of lines) {
+            if (foundGame.answers.length < 3) {
+              foundGame.answers.push(line);
+            }
+          }
+          if (foundGame.answers.length >= 3) {
+            foundGame.phase = 'guessing';
+            saveTelepathyData(teleData);
+            sendMsg(msg.conversation_id, `<markdown>## ✅ 答案已收到！\n\n**主题：** ${foundGame.theme}\n\n**你的3个答案：**\n1. ${foundGame.answers[0]}\n2. ${foundGame.answers[1]}\n3. ${foundGame.answers[2]}\n\n> 已在群里公布主题，群友可以开始猜了！</markdown>`);
+            sendMsg(foundCid, `<markdown>## 🧠 心灵感应\n\n**主题：** ${foundGame.theme}\n\n📢 出题者已给出3个答案！\n\n> 群友们用 \`/猜[答案]\` 开始猜吧！\n> 猜中越多默契度越高~</markdown>`);
+          } else {
+            saveTelepathyData(teleData);
+            sendMsg(msg.conversation_id, `✅ 已收到 ${foundGame.answers.length}/3 个答案，再发 ${3 - foundGame.answers.length} 个（每行一个）`);
+          }
+          return;
+        }
+      }
+
       // ====== 业务逻辑区，在这里加你的指令 ======
       let content = msg.content.trim();
       const cid = String(msg.conversation_id);
@@ -2867,17 +2888,53 @@ ${isClassGroup ? '' : '<link action="callback" action_id="help_diy">自制指令
         const match = content.match(/^\/命运抉择(?:\[(.+?)\])?/);
         const theme = match && match[1] ? match[1] : '随机冒险';
         const fateData = loadFateData();
-        fateData[String(cid)] = { theme, round: 1, history: [], votes: {} };
+        fateData[String(cid)] = { theme, round: 1, history: [], votes: {}, options: [] };
         saveFateData(fateData);
+        // 先发送加载提示
+        sendMsg(msg.conversation_id, `<markdown>## 🎲 命运抉择\n\n**主题：** ${theme}\n\n> 🤖 AI正在生成剧情场景，请稍候...</markdown>`);
+        // 后台AI处理
         (async () => {
           try {
-            const scene = await callAI(`你是一个互动小说引擎。请以"${theme}"为主题，生成第一个剧情场景。要求：\n1. 场景描述80-120字，有画面感\n2. 给出2-3个选择（用A/B/C标记）\n3. 每个选择简短明确\n4. 格式：先场景描述，然后"## 你的选择"，然后列出选项\n5. 只输出内容，不要解释`);
-            sendMsg(msg.conversation_id, `<markdown>## 🎲 命运抉择\n\n**主题：** ${theme}\n\n---\n\n${scene}\n\n---\n\n> 用按钮投票选择你的命运</markdown>`);
+            const scene = await callAI(`你是一个互动小说引擎。请以"${theme}"为主题，生成第一个剧情场景。要求：
+1. 场景描述80-120字，有画面感和悬念
+2. 给出3个选择（用A/B/C标记），每个选择简短明确
+3. 格式严格如下：
+【场景】
+这里写场景描述
+【选项】
+A. 选项一内容
+B. 选项二内容
+C. 选项三内容
+4. 只输出内容，不要解释，不要其他文字`);
+            // 解析场景和选项
+            let sceneText = scene;
+            let options = [];
+            const sceneMatch = scene.match(/【场景】\s*([\s\S]*?)\s*【选项】/);
+            const optionsMatch = scene.match(/【选项】\s*([\s\S]*)/);
+            if (sceneMatch) sceneText = sceneMatch[1].trim();
+            if (optionsMatch) {
+              const optLines = optionsMatch[1].split(/\n/).map(l => l.trim()).filter(Boolean);
+              for (const line of optLines) {
+                const m = line.match(/^[ABC]\.?\s*(.+)/);
+                if (m) options.push(m[1].trim());
+              }
+            }
+            if (options.length < 2) options = ['继续探索', '换个方向', '停下来观察'];
+            // 保存选项
             const game = loadFateData()[String(cid)];
             if (game) {
-              game.currentScene = scene;
+              game.currentScene = sceneText;
+              game.options = options;
+              game.votes = {};
               saveFateData(loadFateData());
             }
+            // 发送带按钮的场景
+            let buttons = '';
+            options.forEach((opt, i) => {
+              const letter = String.fromCharCode(65 + i);
+              buttons += `<button action="callback" action_id="fate_${cid}_${i}" id="fate_${cid}_${i}">${letter}. ${opt}</button>\n`;
+            });
+            sendMsg(msg.conversation_id, `<markdown>## 🎲 命运抉择\n\n**主题：** ${theme}\n\n---\n\n${sceneText}\n\n---\n\n**你的选择：**\n${buttons}\n> 点击按钮投票，选择你的命运</markdown>`);
           } catch (e) {
             sendMsg(msg.conversation_id, `❌ 命运抉择生成失败：${e.message}`);
           }
@@ -3918,6 +3975,87 @@ ${isClassGroup ? '' : '<link action="callback" action_id="help_diy">自制指令
           sendMsg(data.conversation_id, '❌已取消创建');
           return;
         }
+      }
+      // 命运抉择投票按钮
+      else if (actionId.startsWith('fate_')) {
+        const parts = actionId.split('_');
+        const fateCid = parts[1];
+        const optIdx = parseInt(parts[2]);
+        const fateData = loadFateData();
+        const game = fateData[fateCid];
+        if (!game) { setBtn(data, actionId, '❌ 游戏已结束', 'danger', true); return; }
+        const uid = String(data.user_id);
+        if (game.votes[uid] !== undefined) { setBtn(data, actionId, '✅ 已投票', 'success', true); return; }
+        game.votes[uid] = optIdx;
+        saveFateData(fateData);
+        const totalVotes = Object.keys(game.votes).length;
+        setBtn(data, actionId, `✅ 已选（${totalVotes}票）`, 'success', true);
+        // 检查是否所有人都投票了（简化：5秒后自动结算）
+        setTimeout(() => {
+          const currentGame = loadFateData()[fateCid];
+          if (!currentGame || currentGame.round !== game.round) return;
+          // 计票
+          const voteCounts = {};
+          Object.values(currentGame.votes).forEach(idx => { voteCounts[idx] = (voteCounts[idx] || 0) + 1; });
+          const maxVotes = Math.max(...Object.values(voteCounts));
+          const winnerIdx = parseInt(Object.entries(voteCounts).find(([_, v]) => v === maxVotes)[0]);
+          const chosenOption = currentGame.options[winnerIdx] || '继续';
+          // AI推进剧情
+          (async () => {
+            try {
+              const nextScene = await callAI(`你是一个互动小说引擎。当前剧情：
+主题：${currentGame.theme}
+上一场景：${currentGame.currentScene}
+玩家选择了：${chosenOption}
+请根据选择生成下一个剧情场景。要求：
+1. 承接上一个场景和选择，剧情合理推进
+2. 场景描述80-120字
+3. 给出3个新选择（用A/B/C标记）
+4. 格式严格如下：
+【场景】
+这里写场景描述
+【选项】
+A. 选项一内容
+B. 选项二内容
+C. 选项三内容
+5. 如果剧情到了结局，在场景最后写上【结局】，不需要选项`);
+              let sceneText = nextScene;
+              let newOptions = [];
+              const isEnding = nextScene.includes('【结局】');
+              const sceneMatch = nextScene.match(/【场景】\s*([\s\S]*?)\s*【选项】/);
+              const optionsMatch = nextScene.match(/【选项】\s*([\s\S]*)/);
+              if (sceneMatch) sceneText = sceneMatch[1].trim();
+              else if (isEnding) sceneText = nextScene.replace(/【结局】/g, '').trim();
+              if (optionsMatch && !isEnding) {
+                const optLines = optionsMatch[1].split(/\n/).map(l => l.trim()).filter(Boolean);
+                for (const line of optLines) {
+                  const m = line.match(/^[ABC]\.?\s*(.+)/);
+                  if (m) newOptions.push(m[1].trim());
+                }
+              }
+              if (isEnding) {
+                sendMsg(fateCid, `<markdown>## 🎲 命运抉择 - 结局\n\n**主题：** ${currentGame.theme}\n\n---\n\n${sceneText}\n\n---\n\n> 🏁 故事结束，感谢参与！</markdown>`);
+                delete fateData[fateCid];
+                saveFateData(fateData);
+              } else {
+                if (newOptions.length < 2) newOptions = ['继续探索', '换个方向', '停下来观察'];
+                currentGame.currentScene = sceneText;
+                currentGame.options = newOptions;
+                currentGame.votes = {};
+                currentGame.round++;
+                saveFateData(fateData);
+                let buttons = '';
+                newOptions.forEach((opt, i) => {
+                  const letter = String.fromCharCode(65 + i);
+                  buttons += `<button action="callback" action_id="fate_${fateCid}_${i}" id="fate_${fateCid}_${i}">${letter}. ${opt}</button>\n`;
+                });
+                sendMsg(fateCid, `<markdown>## 🎲 命运抉择 - 第${currentGame.round}轮\n\n**上一轮选择：** ${chosenOption}\n\n---\n\n${sceneText}\n\n---\n\n**你的选择：**\n${buttons}</markdown>`);
+              }
+            } catch (e) {
+              sendMsg(fateCid, `❌ 剧情推进失败：${e.message}`);
+            }
+          })();
+        }, 8000);
       }
       // 帮助分类按钮
       else if (actionId.startsWith('help_')) {
