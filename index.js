@@ -436,6 +436,35 @@ function saveVoteData(data) {
   }
 }
 
+// ========== 创意游戏数据存储 ==========
+const TELEPATHY_FILE = path.join(__dirname, 'telepathy_data.json');
+function loadTelepathyData() { try { return JSON.parse(fs.readFileSync(TELEPATHY_FILE, 'utf-8')); } catch { return {}; } }
+function saveTelepathyData(data) { try { fs.writeFileSync(TELEPATHY_FILE, JSON.stringify(data, null, 2), 'utf-8'); } catch (e) { console.error('[心灵感应]保存失败:', e.message); } }
+
+const UNDERCOVER_FILE = path.join(__dirname, 'undercover_data.json');
+function loadUndercoverData() { try { return JSON.parse(fs.readFileSync(UNDERCOVER_FILE, 'utf-8')); } catch { return {}; } }
+function saveUndercoverData(data) { try { fs.writeFileSync(UNDERCOVER_FILE, JSON.stringify(data, null, 2), 'utf-8'); } catch (e) { console.error('[谁是卧底]保存失败:', e.message); } }
+
+const STORY_FILE = path.join(__dirname, 'story_data.json');
+function loadStoryData() { try { return JSON.parse(fs.readFileSync(STORY_FILE, 'utf-8')); } catch { return {}; } }
+function saveStoryData(data) { try { fs.writeFileSync(STORY_FILE, JSON.stringify(data, null, 2), 'utf-8'); } catch (e) { console.error('[故事接龙]保存失败:', e.message); } }
+
+const FATE_FILE = path.join(__dirname, 'fate_data.json');
+function loadFateData() { try { return JSON.parse(fs.readFileSync(FATE_FILE, 'utf-8')); } catch { return {}; } }
+function saveFateData(data) { try { fs.writeFileSync(FATE_FILE, JSON.stringify(data, null, 2), 'utf-8'); } catch (e) { console.error('[命运抉择]保存失败:', e.message); } }
+
+// 私聊发送辅助函数
+async function sendPrivateMsg(userId, content) {
+  try {
+    const resp = await fetch(`${BASE_URL}/bot-api/users/${userId}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${BOT_KEY}` },
+      body: JSON.stringify({ content })
+    });
+    return await resp.json();
+  } catch (e) { console.error('私聊发送失败:', e.message); }
+}
+
 function genVoteId() {
   const voteData = loadVoteData();
   let id;
@@ -2540,6 +2569,291 @@ ${isClassGroup ? '' : '<link action="callback" action_id="help_diy">自制指令
       else if (content === '/ping') {
         sendMsg(msg.conversation_id, '🏓 pong！机器人在线');
       }
+      // ========== 创意游戏 ==========
+      else if (content.startsWith('/心灵感应')) {
+        const match = content.match(/^\/心灵感应\[(.+?)\]/);
+        if (!match) { sendMsg(msg.conversation_id, '<markdown>## 🧠 心灵感应\n\n**玩法：**\n1. 出题者用 \`/心灵感应[主题]\` 发起\n2. 出题者**私聊机器人**发送3个答案（每行一个）\n3. 群友用 \`/猜[答案]\` 猜这3个词\n4. 猜中越多默契度越高！\n\n> 测测你们的心灵感应有多强~</markdown>'); return; }
+        const theme = match[1];
+        const teleData = loadTelepathyData();
+        teleData[String(cid)] = { theme, answers: [], guesses: {}, creator: msg.sender_id, creatorName: msg.sender_display_name, phase: 'waiting_answers' };
+        saveTelepathyData(teleData);
+        sendMsg(msg.conversation_id, `<markdown>## 🧠 心灵感应\n\n**主题：** ${theme}\n\n📢 请 <at id="${msg.sender_id}" /> **私聊机器人**发送3个答案（每行一个）\n\n> 群友们准备好猜答案了吗？</markdown>`);
+      }
+      else if (content.startsWith('/猜')) {
+        const match = content.match(/^\/猜\[(.+?)\]/);
+        if (!match) { sendMsg(msg.conversation_id, '⚠️格式：/猜[答案]'); return; }
+        const guess = match[1].trim();
+        const teleData = loadTelepathyData();
+        const game = teleData[String(cid)];
+        if (!game || game.phase !== 'guessing') { sendMsg(msg.conversation_id, '⚠️当前没有进行中的心灵感应游戏'); return; }
+        const uid = String(msg.sender_id);
+        if (!game.guesses[uid]) game.guesses[uid] = [];
+        if (game.guesses[uid].includes(guess)) { sendMsg(msg.conversation_id, `⚠️ ${msg.sender_display_name} 已经猜过"${guess}"了`); return; }
+        game.guesses[uid].push(guess);
+        const hit = game.answers.some(a => a.includes(guess) || guess.includes(a));
+        if (hit) {
+          sendMsg(msg.conversation_id, `<markdown>## 🎯 猜中了！\n\n<at id="${msg.sender_id}" /> 猜中了 **"${guess}"**！\n\n> 继续猜剩下的答案~</markdown>`);
+        } else {
+          sendMsg(msg.conversation_id, `❌ ${msg.sender_display_name} 猜"${guess}"不对，继续加油~`);
+        }
+        saveTelepathyData(teleData);
+      }
+      else if (content === '/揭晓') {
+        const teleData = loadTelepathyData();
+        const game = teleData[String(cid)];
+        if (!game) { sendMsg(msg.conversation_id, '⚠️当前没有进行中的心灵感应游戏'); return; }
+        if (game.creator !== msg.sender_id && msg.sender_id !== 3038) { sendMsg(msg.conversation_id, '❌只有出题者才能揭晓答案'); return; }
+        // 计算每个人的默契度
+        let resultText = `<markdown>## 🧠 心灵感应 - 揭晓答案\n\n**主题：** ${game.theme}\n\n**正确答案：**\n`;
+        game.answers.forEach((a, i) => { resultText += `${i + 1}. ${a}\n`; });
+        resultText += '\n## 📊 默契度排行\n\n';
+        const rankings = Object.entries(game.guesses).map(([uid, guesses]) => {
+          const hits = guesses.filter(g => game.answers.some(a => a.includes(g) || g.includes(a))).length;
+          return { uid, hits, total: guesses.length };
+        }).sort((a, b) => b.hits - a.hits);
+        if (rankings.length === 0) {
+          resultText += '> 没有人参与猜测\n';
+        } else {
+          rankings.forEach((r, i) => {
+            const pct = Math.round(r.hits / 3 * 100);
+            const level = pct === 100 ? '🔥 心灵感应' : pct >= 66 ? '💛 默契十足' : pct >= 33 ? '💚 有点默契' : '💔 还需磨合';
+            resultText += `${i + 1}. 用户${r.uid}：猜中${r.hits}/3 → **${pct}%** ${level}\n`;
+          });
+        }
+        resultText += '</markdown>';
+        sendMsg(msg.conversation_id, resultText);
+        delete teleData[String(cid)];
+        saveTelepathyData(teleData);
+      }
+      else if (content === '/谁是卧底') {
+        const wordPairs = [
+          ['苹果', '梨'], ['可乐', '雪碧'], ['老虎', '狮子'], ['玫瑰', '月季'],
+          ['篮球', '足球'], ['咖啡', '奶茶'], ['电影', '电视剧'], ['猫', '狗'],
+          ['夏天', '冬天'], ['老师', '教授'], ['手机', '平板'], ['火车', '飞机'],
+          ['米饭', '面条'], ['钢琴', '吉他'], ['医生', '护士'], ['森林', '草原']
+        ];
+        const pair = wordPairs[Math.floor(Math.random() * wordPairs.length)];
+        const undercoverWord = pair[0], civilianWord = pair[1];
+        const underData = loadUndercoverData();
+        underData[String(cid)] = {
+          civilianWord, undercoverWord,
+          players: {}, phase: 'joining',
+          creator: msg.sender_id, round: 1, descriptions: []
+        };
+        saveUndercoverData(underData);
+        sendMsg(msg.conversation_id, `<markdown>## 🕵️ 谁是卧底\n\n<at id="${msg.sender_id}" /> 发起了游戏！\n\n**参与方式：** 发送 \`/加入\` 参与游戏\n\n> 至少4人开始，卧底的词和你们相似但不同\n> 轮流描述，投票找出卧底！</markdown>`);
+      }
+      else if (content === '/加入') {
+        const underData = loadUndercoverData();
+        const game = underData[String(cid)];
+        if (!game || game.phase !== 'joining') { sendMsg(msg.conversation_id, '⚠️当前没有可加入的谁是卧底游戏'); return; }
+        const uid = String(msg.sender_id);
+        if (game.players[uid]) { sendMsg(msg.conversation_id, `⚠️ ${msg.sender_display_name} 已经加入了`); return; }
+        game.players[uid] = { name: msg.sender_display_name, word: '', isUndercover: false, alive: true };
+        saveUndercoverData(underData);
+        const count = Object.keys(game.players).length;
+        sendMsg(msg.conversation_id, `✅ ${msg.sender_display_name} 加入游戏！当前 ${count} 人`);
+        if (count >= 4) {
+          sendMsg(msg.conversation_id, `<markdown>## 🎮 人数足够！\n\n发送 \`/开始卧底\` 开始游戏</markdown>`);
+        }
+      }
+      else if (content === '/开始卧底') {
+        const underData = loadUndercoverData();
+        const game = underData[String(cid)];
+        if (!game || game.phase !== 'joining') { sendMsg(msg.conversation_id, '⚠️游戏状态不对'); return; }
+        if (game.creator !== msg.sender_id && msg.sender_id !== 3038) { sendMsg(msg.conversation_id, '❌只有发起者才能开始'); return; }
+        const playerIds = Object.keys(game.players);
+        if (playerIds.length < 4) { sendMsg(msg.conversation_id, '⚠️至少需要4人'); return; }
+        // 随机选卧底
+        const undercoverIdx = Math.floor(Math.random() * playerIds.length);
+        playerIds.forEach((pid, i) => {
+          game.players[pid].isUndercover = (i === undercoverIdx);
+          game.players[pid].word = (i === undercoverIdx) ? game.undercoverWord : game.civilianWord;
+        });
+        game.phase = 'describing';
+        game.currentSpeaker = 0;
+        game.speakerOrder = playerIds;
+        saveUndercoverData(underData);
+        // 私聊每个人发词
+        for (const pid of playerIds) {
+          const p = game.players[pid];
+          sendPrivateMsg(pid, `<markdown>## 🕵️ 谁是卧底\n\n你的词是：**${p.word}**\n\n> ${p.isUndercover ? '你是卧底！' : '你是平民'}\n> 用 /描述[内容] 描述你的词</markdown>`);
+        }
+        const firstSpeaker = game.players[playerIds[0]];
+        sendMsg(msg.conversation_id, `<markdown>## 🎮 游戏开始！\n\n已私聊每个人的词语\n\n请 <at id="${playerIds[0]}" /> 先用 \`/描述[内容]\` 描述你的词</markdown>`);
+      }
+      else if (content.startsWith('/描述')) {
+        const match = content.match(/^\/描述\[(.+?)\]/);
+        if (!match) { sendMsg(msg.conversation_id, '⚠️格式：/描述[内容]'); return; }
+        const desc = match[1];
+        const underData = loadUndercoverData();
+        const game = underData[String(cid)];
+        if (!game || game.phase !== 'describing') { sendMsg(msg.conversation_id, '⚠️当前不是描述阶段'); return; }
+        const uid = String(msg.sender_id);
+        const expectedUid = game.speakerOrder[game.currentSpeaker];
+        if (uid !== expectedUid) { sendMsg(msg.conversation_id, `⚠️还没轮到你，当前请 ${game.players[expectedUid].name} 描述`); return; }
+        game.descriptions.push({ uid, name: game.players[uid].name, desc });
+        game.currentSpeaker++;
+        saveUndercoverData(underData);
+        if (game.currentSpeaker >= game.speakerOrder.length) {
+          // 描述完毕，进入投票阶段
+          game.phase = 'voting';
+          saveUndercoverData(underData);
+          let voteText = '<markdown>## 🗳️ 描述完毕，开始投票！\n\n';
+          game.descriptions.forEach((d, i) => { voteText += `${i + 1}. **${d.name}**：${d.desc}\n`; });
+          voteText += '\n用 \`/投卧底[用户ID]\` 投票，得票最多的出局\n</markdown>';
+          sendMsg(msg.conversation_id, voteText);
+        } else {
+          const nextUid = game.speakerOrder[game.currentSpeaker];
+          sendMsg(msg.conversation_id, `✅ ${game.players[uid].name} 描述完毕，请 <at id="${nextUid}" /> 继续描述`);
+        }
+      }
+      else if (content.startsWith('/投卧底')) {
+        const match = content.match(/^\/投卧底\[(.+?)\]/);
+        if (!match) { sendMsg(msg.conversation_id, '⚠️格式：/投卧底[用户ID]'); return; }
+        const targetId = match[1].trim();
+        const underData = loadUndercoverData();
+        const game = underData[String(cid)];
+        if (!game || game.phase !== 'voting') { sendMsg(msg.conversation_id, '⚠️当前不是投票阶段'); return; }
+        const uid = String(msg.sender_id);
+        if (!game.votes) game.votes = {};
+        game.votes[uid] = targetId;
+        saveUndercoverData(underData);
+        const votedCount = Object.keys(game.votes).length;
+        const aliveCount = game.speakerOrder.filter(id => game.players[id].alive).length;
+        sendMsg(msg.conversation_id, `✅ ${msg.sender_display_name} 投票完毕（${votedCount}/${aliveCount}）`);
+        if (votedCount >= aliveCount) {
+          // 计票
+          const voteCounts = {};
+          Object.values(game.votes).forEach(tid => { voteCounts[tid] = (voteCounts[tid] || 0) + 1; });
+          const maxVotes = Math.max(...Object.values(voteCounts));
+          const outIds = Object.entries(voteCounts).filter(([_, v]) => v === maxVotes).map(([id]) => id);
+          if (outIds.length > 1) {
+            sendMsg(msg.conversation_id, '<markdown>## ⚖️ 平票！\n\n本轮无人出局，进入下一轮描述\n\n用 \`/描述[内容]\` 继续</markdown>');
+            game.phase = 'describing';
+            game.currentSpeaker = 0;
+            game.descriptions = [];
+            game.votes = {};
+            game.round++;
+            saveUndercoverData(underData);
+          } else {
+            const outId = outIds[0];
+            const outPlayer = game.players[outId];
+            outPlayer.alive = false;
+            const isUndercover = outPlayer.isUndercover;
+            saveUndercoverData(underData);
+            if (isUndercover) {
+              sendMsg(msg.conversation_id, `<markdown>## 🎉 平民胜利！\n\n**${outPlayer.name}** 是卧底，被投出！\n\n卧底词：**${game.undercoverWord}**\n平民词：**${game.civilianWord}**</markdown>`);
+              delete underData[String(cid)];
+              saveUndercoverData(underData);
+            } else {
+              const aliveUndercover = game.speakerOrder.filter(id => game.players[id].alive && game.players[id].isUndercover).length;
+              const aliveCivilian = game.speakerOrder.filter(id => game.players[id].alive && !game.players[id].isUndercover).length;
+              if (aliveUndercover >= aliveCivilian) {
+                const undercoverPlayer = game.players[game.speakerOrder.find(id => game.players[id].isUndercover)];
+                sendMsg(msg.conversation_id, `<markdown>## 😈 卧底胜利！\n\n**${outPlayer.name}** 是平民，被冤死！\n\n卧底是 **${undercoverPlayer.name}**\n卧底词：**${game.undercoverWord}**\n平民词：**${game.civilianWord}**</markdown>`);
+                delete underData[String(cid)];
+                saveUndercoverData(underData);
+              } else {
+                sendMsg(msg.conversation_id, `<markdown>## 💀 ${outPlayer.name} 出局\n\n是**平民**，游戏继续\n\n进入下一轮描述，用 \`/描述[内容]\`</markdown>`);
+                game.phase = 'describing';
+                game.currentSpeaker = 0;
+                game.speakerOrder = game.speakerOrder.filter(id => game.players[id].alive);
+                game.descriptions = [];
+                game.votes = {};
+                game.round++;
+                saveUndercoverData(underData);
+              }
+            }
+          }
+        }
+      }
+      else if (content.startsWith('/故事接龙')) {
+        const match = content.match(/^\/故事接龙(?:\[(.+?)\])?/);
+        const theme = match && match[1] ? match[1] : '随机';
+        const storyData = loadStoryData();
+        storyData[String(cid)] = { theme, lines: [], creator: msg.sender_id, maxLines: 10 };
+        saveStoryData(storyData);
+        // AI生成开头
+        (async () => {
+          try {
+            const opening = await callAI(`请以"${theme}"为主题，写一个故事的开头第一句话，不超过30字，要有悬念和吸引力。只输出这句话，不要其他内容。`);
+            const game = loadStoryData()[String(cid)];
+            if (game) {
+              game.lines.push({ speaker: 'AI', text: opening.trim() });
+              saveStoryData(loadStoryData());
+            }
+            sendMsg(msg.conversation_id, `<markdown>## 📖 故事接龙\n\n**主题：** ${theme}\n\n> 每人用 \`/接[内容]\` 接下一句，接满10句结束\n\n---\n\n**AI：** ${opening.trim()}\n\n---\n\n下一位请接龙~</markdown>`);
+          } catch (e) {
+            sendMsg(msg.conversation_id, `<markdown>## 📖 故事接龙\n\n**主题：** ${theme}\n\n> 每人用 \`/接[内容]\` 接下一句\n\nAI开头生成失败，请第一位玩家用 \`/接[内容]\` 开始故事</markdown>`);
+          }
+        })();
+      }
+      else if (content.startsWith('/接')) {
+        const match = content.match(/^\/接\[(.+?)\]/);
+        if (!match) { sendMsg(msg.conversation_id, '⚠️格式：/接[内容]'); return; }
+        const line = match[1];
+        const storyData = loadStoryData();
+        const game = storyData[String(cid)];
+        if (!game) { sendMsg(msg.conversation_id, '⚠️当前没有进行中的故事接龙'); return; }
+        game.lines.push({ speaker: msg.sender_display_name, text: line });
+        saveStoryData(storyData);
+        const count = game.lines.length;
+        if (count >= game.maxLines) {
+          // 结束，AI整理
+          (async () => {
+            try {
+              const fullStory = game.lines.map(l => l.text).join('');
+              const polished = await callAI(`请把下面这个接龙故事整理润色成一篇完整流畅的小故事，保留原意，增加细节描写，300字左右。故事内容：${fullStory}`);
+              sendMsg(msg.conversation_id, `<markdown>## 📖 故事接龙 - 完成！\n\n**主题：** ${game.theme}\n\n---\n\n${polished}\n\n---\n\n> 感谢所有参与者的创意！</markdown>`);
+            } catch {
+              const rawStory = game.lines.map(l => `**${l.speaker}：** ${l.text}`).join('\n\n');
+              sendMsg(msg.conversation_id, `<markdown>## 📖 故事接龙 - 完成！\n\n**主题：** ${game.theme}\n\n---\n\n${rawStory}</markdown>`);
+            }
+          })();
+          delete storyData[String(cid)];
+          saveStoryData(storyData);
+        } else {
+          sendMsg(msg.conversation_id, `✅ ${msg.sender_display_name} 接龙！（第${count}/${game.maxLines}句）`);
+        }
+      }
+      else if (content === '/结束故事') {
+        const storyData = loadStoryData();
+        if (!storyData[String(cid)]) { sendMsg(msg.conversation_id, '⚠️当前没有进行中的故事接龙'); return; }
+        const game = storyData[String(cid)];
+        (async () => {
+          try {
+            const fullStory = game.lines.map(l => l.text).join('');
+            const polished = await callAI(`请把下面这个接龙故事整理润色成一篇完整流畅的小故事，保留原意，增加细节描写，300字左右。故事内容：${fullStory}`);
+            sendMsg(msg.conversation_id, `<markdown>## 📖 故事接龙 - 完成！\n\n**主题：** ${game.theme}\n\n---\n\n${polished}</markdown>`);
+          } catch {
+            const rawStory = game.lines.map(l => `**${l.speaker}：** ${l.text}`).join('\n\n');
+            sendMsg(msg.conversation_id, `<markdown>## 📖 故事接龙 - 完成！\n\n${rawStory}</markdown>`);
+          }
+        })();
+        delete storyData[String(cid)];
+        saveStoryData(storyData);
+      }
+      else if (content.startsWith('/命运抉择')) {
+        const match = content.match(/^\/命运抉择(?:\[(.+?)\])?/);
+        const theme = match && match[1] ? match[1] : '随机冒险';
+        const fateData = loadFateData();
+        fateData[String(cid)] = { theme, round: 1, history: [], votes: {} };
+        saveFateData(fateData);
+        (async () => {
+          try {
+            const scene = await callAI(`你是一个互动小说引擎。请以"${theme}"为主题，生成第一个剧情场景。要求：\n1. 场景描述80-120字，有画面感\n2. 给出2-3个选择（用A/B/C标记）\n3. 每个选择简短明确\n4. 格式：先场景描述，然后"## 你的选择"，然后列出选项\n5. 只输出内容，不要解释`);
+            sendMsg(msg.conversation_id, `<markdown>## 🎲 命运抉择\n\n**主题：** ${theme}\n\n---\n\n${scene}\n\n---\n\n> 用按钮投票选择你的命运</markdown>`);
+            const game = loadFateData()[String(cid)];
+            if (game) {
+              game.currentScene = scene;
+              saveFateData(loadFateData());
+            }
+          } catch (e) {
+            sendMsg(msg.conversation_id, `❌ 命运抉择生成失败：${e.message}`);
+          }
+        })();
+      }
       else if (content.startsWith('/echo ')) {
         sendMsg(msg.conversation_id, `🔊 ${content.slice(6)}`);
       }
@@ -3610,7 +3924,11 @@ ${diyLink}> 点击分类查看详细指令</markdown>`;
           detail = `<markdown>## 游戏娱乐
 \`/狼人杀\`：开始狼人杀游戏（6-10人，含预言家、女巫、猎人等角色）
 \`/结束房间[房间号]\`：结束狼人杀房间（房主/群主/${adminLabel}/ID3038）
-> 所有人可发起，房主及管理员可结束</markdown>`;
+\`/心灵感应[主题]\`：出题者给3个答案，其他人猜，测群友默契度
+\`/谁是卧底\`：经典聚会游戏群聊版，分配词语+描述+投票找卧底
+\`/故事接龙[主题]\`：AI开头，每人接一句，最后生成完整故事
+\`/命运抉择[主题]\`：AI生成剧情场景，群成员投票选择，多结局互动冒险
+> 所有人可发起，创意游戏需AI参与</markdown>`;
         } else if (actionId === 'help_list') {
           detail = `<markdown>## 列表查看
 \`/黑名单\`：查看本群黑名单列表
