@@ -3690,7 +3690,7 @@ ${diyLink}> 点击分类查看详细指令</markdown>`;
       if (isFeatureEnabled(convId, '进群欢迎')) {
         // 没有自定义欢迎语时用默认的
         if (!welcome) {
-          welcome = `<at id="${newUserId}" /> 欢迎加入本群！请先阅读群规，有问题随时问~`;
+          welcome = `<at id="${newUserId}" />，欢迎进群~/help查看全部指令`;
         } else {
           // 替换<@成员>为at新成员
           if (newUserId) {
