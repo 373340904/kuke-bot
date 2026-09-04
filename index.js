@@ -441,10 +441,9 @@ function buildVoteButtonMessage(vote) {
   const counts = getVoteCounts(vote);
   const total = counts.reduce((a, b) => a + b, 0);
   let msg = `<markdown># 📊 ${vote.title}\n\n`;
-  msg += `> ID：\`${vote.voteId}\`\n`;
-  msg += `> 总投票：\`${total}\` 人`;
-  if (vote.creator) msg += `\n> 发起人：${vote.creator}`;
-  msg += `\n\n`;
+  msg += `> ID：${vote.voteId}\n`;
+  if (vote.creator) msg += `> 发起人：${vote.creator}\n`;
+  msg += `\n`;
   vote.options.forEach((opt, i) => {
     const count = counts[i];
     const pct = total > 0 ? Math.round(count / total * 100) : 0;
@@ -459,14 +458,13 @@ function buildVoteResultCard(vote) {
   const counts = getVoteCounts(vote);
   const total = counts.reduce((a, b) => a + b, 0);
   let reply = `<markdown># 🏁 ${vote.title} - 投票结果\n\n`;
-  reply += `> 总投票：\`${total}\` 人`;
-  if (vote.creator) reply += `\n> 发起人：${vote.creator}`;
-  reply += `\n\n`;
+  if (vote.creator) reply += `> 发起人：${vote.creator}\n`;
+  reply += `\n`;
   vote.options.forEach((opt, i) => {
     const count = counts[i];
     const pct = total > 0 ? Math.round(count / total * 100) : 0;
     const bar = '█'.repeat(Math.round(pct / 5)) + '░'.repeat(20 - Math.round(pct / 5));
-    reply += `**${i + 1}. ${opt}**\n\`${bar}\` \`${count}\`票 (\`${pct}\`%)\n\n`;
+    reply += `**${i + 1}. ${opt}**\n${bar} ${count}票 (${pct}%)\n\n`;
   });
   reply += `</markdown>`;
   return reply;
@@ -483,7 +481,7 @@ async function refreshVoteButtons(vote) {
       for (let i = 0; i < vote.options.length; i++) {
         const componentId = `${vote.voteId}_${i}`;
         const pct = total > 0 ? Math.round(counts[i] / total * 100) : 0;
-        const label = `\`${i + 1}\`. ${vote.options[i]} · \`${counts[i]}\`票(\`${pct}\`%)`;
+        const label = `${i + 1}. ${vote.options[i]} · ${counts[i]}票(${pct}%)`;
         await updateButton(gid, msgId, componentId, label, 'primary', false);
       }
     }
@@ -492,7 +490,7 @@ async function refreshVoteButtons(vote) {
     for (let i = 0; i < vote.options.length; i++) {
       const componentId = `${vote.voteId}_${i}`;
       const pct = total > 0 ? Math.round(counts[i] / total * 100) : 0;
-      const label = `\`${i + 1}\`. ${vote.options[i]} · \`${counts[i]}\`票(\`${pct}\`%)`;
+        const label = `${i + 1}. ${vote.options[i]} · ${counts[i]}票(${pct}%)`;
       await updateButton(vote.conversationId, vote.messageId, componentId, label, 'primary', false);
     }
   }
