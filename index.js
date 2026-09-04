@@ -414,12 +414,26 @@ function addGroup(conversationId) {
 const VOTE_FILE = path.join(__dirname, 'vote_data.json');
 
 function loadVoteData() {
-  try { return JSON.parse(fs.readFileSync(VOTE_FILE, 'utf-8')); }
-  catch { return {}; }
+  try {
+    if (!fs.existsSync(VOTE_FILE)) return {};
+    return JSON.parse(fs.readFileSync(VOTE_FILE, 'utf-8'));
+  } catch (e) {
+    console.error('[投票] 数据文件损坏，备份后重置:', e.message);
+    try {
+      const backup = VOTE_FILE + '.broken.' + Date.now();
+      fs.copyFileSync(VOTE_FILE, backup);
+      console.log('[投票] 已备份到:', backup);
+    } catch (e2) { console.error('[投票] 备份失败:', e2.message); }
+    return {};
+  }
 }
 
 function saveVoteData(data) {
-  fs.writeFileSync(VOTE_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  try {
+    fs.writeFileSync(VOTE_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  } catch (e) {
+    console.error('[投票] 保存失败:', e.message);
+  }
 }
 
 function genVoteId() {
@@ -2963,7 +2977,19 @@ ${isClassGroup ? '' : '<link action="callback" action_id="help_diy">自制指令
           if (!vidMatch) { sendMsg(msg.conversation_id, '⚠️格式：/投票结果[投票ID]'); return; }
           const voteData = loadVoteData();
           const vote = voteData[vidMatch[1]];
-          if (!vote) { sendMsg(msg.conversation_id, '❌找不到该投票ID'); return; }
+          if (!vote) {
+            const allVotes = loadVoteData();
+            const allIds = Object.keys(allVotes);
+            let hint = '❌找不到该投票ID';
+            if (allIds.length > 0) {
+              hint += `\n当前可用ID：${allIds.map(id => '`' + id + '`').join('、')}`;
+            } else {
+              hint += '\n当前没有进行中的投票';
+            }
+            hint += '\n发送 `/投票列表` 查看所有投票';
+            sendMsg(msg.conversation_id, `<markdown>${hint}</markdown>`);
+            return;
+          }
           sendMsg(msg.conversation_id, buildVoteResultCard(vote));
         }
         else if (content === '/结束投票' || content.startsWith('/结束投票')) {
@@ -2993,6 +3019,27 @@ ${isClassGroup ? '' : '<link action="callback" action_id="help_diy">自制指令
           }
           delete voteData[vote.voteId];
           saveVoteData(voteData);
+        }
+      }
+      else if (content === '/投票列表' || content === '/投票id列表') {
+        const voteData = loadVoteData();
+        const voteIds = Object.keys(voteData);
+        if (voteIds.length === 0) {
+          sendMsg(msg.conversation_id, '<markdown># 📋 投票列表\n\n> 当前没有进行中的投票</markdown>');
+        } else {
+          let listText = '<markdown># 📋 进行中的投票\n\n';
+          listText += `**共 \`${voteIds.length}\` 个投票**\n\n`;
+          listText += '| ID | 标题 | 类型 | 创建时间 |\n';
+          listText += '|----|------|------|----------|\n';
+          for (const vid of voteIds) {
+            const v = voteData[vid];
+            const vtype = v.isGlobal ? '全局' : '单群';
+            const ctime = v.created_at ? new Date(v.created_at).toLocaleString('zh-CN') : '未知';
+            const title = (v.title || '').replace(/\|/g, '\\|').slice(0, 20);
+            listText += `| \`${vid}\` | ${title} | ${vtype} | ${ctime} |\n`;
+          }
+          listText += '\n> 用 `/结束投票[ID]` 结束指定投票</markdown>';
+          sendMsg(msg.conversation_id, listText);
         }
       }
       else if (content.startsWith('/增加违禁词')) {
