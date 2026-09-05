@@ -2897,7 +2897,7 @@ ${isClassGroup ? '' : '<link action="callback" action_id="help_diy">自制指令
         const match = content.match(/^\/命运抉择(?:\[(.+?)\])?/);
         const theme = match && match[1] ? match[1] : '随机冒险';
         const fateData = loadFateData();
-        fateData[String(cid)] = { theme, round: 1, history: [], votes: {}, options: [] };
+        fateData[String(cid)] = { theme, round: 1, history: [], votes: {}, options: [], creator: msg.sender_id, creatorName: msg.sender_display_name };
         saveFateData(fateData);
         // 先发送加载提示
         sendMsg(msg.conversation_id, `<markdown>## 🎲 命运抉择\n\n**主题：** ${theme}\n\n> 🤖 AI正在生成剧情场景，请稍候...</markdown>`);
@@ -2941,7 +2941,7 @@ C. 选项三内容
             let buttons = '';
             options.forEach((opt, i) => {
               const letter = String.fromCharCode(65 + i);
-              buttons += `<button action="callback" action_id="fate_${cid}_${i}" id="fate_${cid}_${i}">${letter}. ${opt}</button>\n`;
+              buttons += `<button action="callback" action_id="fate_${cid}_1_${i}" id="fate_${cid}_1_${i}">${letter}. ${opt}</button>\n`;
             });
             sendMsg(msg.conversation_id, `<markdown>## 🎲 命运抉择\n\n**主题：** ${theme}\n\n---\n\n${sceneText}\n\n---\n\n**你的选择：**\n${buttons}\n> 点击按钮投票，选择你的命运</markdown>`);
           } catch (e) {
@@ -3985,36 +3985,43 @@ C. 选项三内容
           return;
         }
       }
-      // 命运抉择投票按钮
+      // 命运抉择投票按钮（单人模式）
       else if (actionId.startsWith('fate_')) {
         const parts = actionId.split('_');
         const fateCid = parts[1];
-        const optIdx = parseInt(parts[2]);
+        const btnRound = parseInt(parts[2]);
+        const optIdx = parseInt(parts[3]);
         const fateData = loadFateData();
         const game = fateData[fateCid];
         if (!game) { setBtn(data, actionId, '❌ 游戏已结束', 'danger', true); return; }
         const uid = String(data.user_id);
-        if (game.votes[uid] !== undefined) { setBtn(data, actionId, '✅ 已投票', 'success', true); return; }
+        // 只有发起者可以玩
+        if (String(game.creator) !== uid) {
+          setBtn(data, actionId, '🚫 只有发起者可以玩', 'danger', true);
+          return;
+        }
+        // 不同轮数分开，检查是否是当前轮
+        if (btnRound !== game.round) {
+          setBtn(data, actionId, '⏳ 已过期', 'default', true);
+          return;
+        }
+        // 本轮已经选择过了
+        if (game.votes[uid] !== undefined) {
+          setBtn(data, actionId, '🚫您已选择过啦', 'danger', true);
+          return;
+        }
+        // 记录选择并立即推进剧情
         game.votes[uid] = optIdx;
+        game.history.push({ round: game.round, choice: game.options[optIdx] });
         saveFateData(fateData);
-        const totalVotes = Object.keys(game.votes).length;
-        setBtn(data, actionId, `✅ 已选（${totalVotes}票）`, 'success', true);
-        // 检查是否所有人都投票了（简化：5秒后自动结算）
-        setTimeout(() => {
-          const currentGame = loadFateData()[fateCid];
-          if (!currentGame || currentGame.round !== game.round) return;
-          // 计票
-          const voteCounts = {};
-          Object.values(currentGame.votes).forEach(idx => { voteCounts[idx] = (voteCounts[idx] || 0) + 1; });
-          const maxVotes = Math.max(...Object.values(voteCounts));
-          const winnerIdx = parseInt(Object.entries(voteCounts).find(([_, v]) => v === maxVotes)[0]);
-          const chosenOption = currentGame.options[winnerIdx] || '继续';
-          // AI推进剧情
-          (async () => {
-            try {
-              const nextScene = await callAI(`你是一个互动小说引擎。当前剧情：
-主题：${currentGame.theme}
-上一场景：${currentGame.currentScene}
+        const chosenOption = game.options[optIdx] || '继续';
+        setBtn(data, actionId, `✅ ${chosenOption}`, 'success', true);
+        // 立即AI推进剧情
+        (async () => {
+          try {
+            const nextScene = await callAI(`你是一个互动小说引擎。当前剧情：
+主题：${game.theme}
+上一场景：${game.currentScene}
 玩家选择了：${chosenOption}
 请根据选择生成下一个剧情场景。要求：
 1. 承接上一个场景和选择，剧情合理推进
@@ -4028,43 +4035,45 @@ A. 选项一内容
 B. 选项二内容
 C. 选项三内容
 5. 如果剧情到了结局，在场景最后写上【结局】，不需要选项`);
-              let sceneText = nextScene;
-              let newOptions = [];
-              const isEnding = nextScene.includes('【结局】');
-              const sceneMatch = nextScene.match(/【场景】\s*([\s\S]*?)\s*【选项】/);
-              const optionsMatch = nextScene.match(/【选项】\s*([\s\S]*)/);
-              if (sceneMatch) sceneText = sceneMatch[1].trim();
-              else if (isEnding) sceneText = nextScene.replace(/【结局】/g, '').trim();
-              if (optionsMatch && !isEnding) {
-                const optLines = optionsMatch[1].split(/\n/).map(l => l.trim()).filter(Boolean);
-                for (const line of optLines) {
-                  const m = line.match(/^[ABC]\.?\s*(.+)/);
-                  if (m) newOptions.push(m[1].trim());
-                }
+            let sceneText = nextScene;
+            let newOptions = [];
+            const isEnding = nextScene.includes('【结局】');
+            const sceneMatch = nextScene.match(/【场景】\s*([\s\S]*?)\s*【选项】/);
+            const optionsMatch = nextScene.match(/【选项】\s*([\s\S]*)/);
+            if (sceneMatch) sceneText = sceneMatch[1].trim();
+            else if (isEnding) sceneText = nextScene.replace(/【结局】/g, '').trim();
+            if (optionsMatch && !isEnding) {
+              const optLines = optionsMatch[1].split(/\n/).map(l => l.trim()).filter(Boolean);
+              for (const line of optLines) {
+                const m = line.match(/^[ABC]\.?\s*(.+)/);
+                if (m) newOptions.push(m[1].trim());
               }
-              if (isEnding) {
-                sendMsg(fateCid, `<markdown>## 🎲 命运抉择 - 结局\n\n**主题：** ${currentGame.theme}\n\n---\n\n${sceneText}\n\n---\n\n> 🏁 故事结束，感谢参与！</markdown>`);
-                delete fateData[fateCid];
-                saveFateData(fateData);
-              } else {
-                if (newOptions.length < 2) newOptions = ['继续探索', '换个方向', '停下来观察'];
-                currentGame.currentScene = sceneText;
-                currentGame.options = newOptions;
-                currentGame.votes = {};
-                currentGame.round++;
-                saveFateData(fateData);
-                let buttons = '';
-                newOptions.forEach((opt, i) => {
-                  const letter = String.fromCharCode(65 + i);
-                  buttons += `<button action="callback" action_id="fate_${fateCid}_${i}" id="fate_${fateCid}_${i}">${letter}. ${opt}</button>\n`;
-                });
-                sendMsg(fateCid, `<markdown>## 🎲 命运抉择 - 第${currentGame.round}轮\n\n**上一轮选择：** ${chosenOption}\n\n---\n\n${sceneText}\n\n---\n\n**你的选择：**\n${buttons}</markdown>`);
-              }
-            } catch (e) {
-              sendMsg(fateCid, `❌ 剧情推进失败：${e.message}`);
             }
-          })();
-        }, 8000);
+            const currentData = loadFateData();
+            const currentGame = currentData[fateCid];
+            if (!currentGame) return;
+            if (isEnding) {
+              sendMsg(fateCid, `<markdown>## 🎲 命运抉择 - 结局\n\n**主题：** ${currentGame.theme}\n\n---\n\n${sceneText}\n\n---\n\n> 🏁 故事结束，感谢参与！</markdown>`);
+              delete currentData[fateCid];
+              saveFateData(currentData);
+            } else {
+              if (newOptions.length < 2) newOptions = ['继续探索', '换个方向', '停下来观察'];
+              currentGame.currentScene = sceneText;
+              currentGame.options = newOptions;
+              currentGame.votes = {};
+              currentGame.round++;
+              saveFateData(currentData);
+              let buttons = '';
+              newOptions.forEach((opt, i) => {
+                const letter = String.fromCharCode(65 + i);
+                buttons += `<button action="callback" action_id="fate_${fateCid}_${currentGame.round}_${i}" id="fate_${fateCid}_${currentGame.round}_${i}">${letter}. ${opt}</button>\n`;
+              });
+              sendMsg(fateCid, `<markdown>## 🎲 命运抉择 - 第${currentGame.round}轮\n\n**上一轮选择：** ${chosenOption}\n\n---\n\n${sceneText}\n\n---\n\n**你的选择：**\n${buttons}</markdown>`);
+            }
+          } catch (e) {
+            sendMsg(fateCid, `❌ 剧情推进失败：${e.message}`);
+          }
+        })();
       }
       // 帮助分类按钮
       else if (actionId.startsWith('help_')) {
