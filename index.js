@@ -491,6 +491,64 @@ async function callAI(prompt, systemPrompt) {
   }
 }
 
+// 增强联网搜索（多源：百度百科 + DuckDuckGo）
+async function webSearch(query, maxResults) {
+  const results = [];
+  const limit = maxResults || 5;
+
+  // 源1：百度百科
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6000);
+    const res = await fetch(`https://baike.baidu.com/api/openapi/BaikeLemmaCardApi?scope=103&format=json&appid=379020&bk_key=${encodeURIComponent(query)}&bk_length=800`, { signal: controller.signal });
+    clearTimeout(timeout);
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.abstract) {
+        results.push({ title: data.title || query, abstract: data.abstract, source: '百度百科' });
+      }
+    }
+  } catch (e) { console.log('[搜索] 百度百科失败:', e.message); }
+
+  // 源2：DuckDuckGo HTML 搜索
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, {
+      signal: controller.signal,
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+    });
+    clearTimeout(timeout);
+    if (res.ok) {
+      const html = await res.text();
+      // 简单解析搜索结果
+      const resultRegex = /<a[^>]*class="result__a"[^>]*>(.*?)<\/a>[\s\S]*?<a[^>]*class="result__snippet"[^>]*>(.*?)<\/a>/g;
+      let match;
+      let count = 0;
+      while ((match = resultRegex.exec(html)) !== null && count < limit) {
+        const title = match[1].replace(/<[^>]*>/g, '').trim();
+        const abstract = match[2].replace(/<[^>]*>/g, '').trim();
+        if (title && abstract) {
+          results.push({ title, abstract, source: 'DuckDuckGo' });
+          count++;
+        }
+      }
+    }
+  } catch (e) { console.log('[搜索] DuckDuckGo失败:', e.message); }
+
+  return results;
+}
+
+// 格式化搜索结果为文本
+function formatSearchResults(results) {
+  if (!results || results.length === 0) return '';
+  let text = '\n\n【联网搜索结果】';
+  results.forEach((r, i) => {
+    text += `\n${i + 1}. [${r.source}] ${r.title}\n   ${r.abstract.substring(0, 300)}`;
+  });
+  return text;
+}
+
 function genVoteId() {
   const voteData = loadVoteData();
   let id;
@@ -2139,20 +2197,13 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
                   ]}];
                 }
               } else {
-                // 纯文本 + 联网搜索增强
+                // 纯文本 + 增强联网搜索
                 let context = '';
                 try {
-                  const searchController = new AbortController();
-                  const searchTimeout = setTimeout(() => searchController.abort(), 5000);
-                  const searchRes = await fetch(`https://baike.baidu.com/api/openapi/BaikeLemmaCardApi?scope=103&format=json&appid=379020&bk_key=${encodeURIComponent(question)}&bk_length=500`, { signal: searchController.signal });
-                  clearTimeout(searchTimeout);
-                  if (searchRes.ok) {
-                    const searchData = await searchRes.json();
-                    if (searchData?.abstract) {
-                      context = `\n\n【参考资料】${searchData.abstract}`;
-                    }
-                  }
-                } catch (e) { /* 搜索失败忽略 */ }
+                  const searchResults = await webSearch(question, 5);
+                  context = formatSearchResults(searchResults);
+                  if (context) console.log('[AI搜索] 找到', searchResults.length, '条结果');
+                } catch (e) { console.log('[AI搜索] 搜索失败:', e.message); }
                 // 获取当前群全部信息（基本信息 + 全部成员 + 在线用户）
                 let groupInfo = '';
                 try {
@@ -2249,6 +2300,12 @@ KukeChat支持的Markdown语法：
 - 需要对比数据时用 | 表格 |
 - 代码用代码块
 - 根据内容选择合适排版，不强迫所有语法都用，但绝对不要纯文本！
+【内容安全规则】
+- 严格遵守中国法律法规，不生成色情、低俗、暴力、恐怖、违法违规内容
+- 涉及亲密情节时，用文学化、含蓄的方式描述，聚焦情感和心理描写，不写露骨的身体细节
+- 不生成任何形式的色情内容，包括但不限于详细的性行为描写、裸露描写
+- 可以讨论爱情、情感、人际关系等健康话题
+
 【回答规则】
 - 用户询问KukeChat平台相关问题时，基于以上知识准确回答
 - 可以识别图片内容并详细描述
