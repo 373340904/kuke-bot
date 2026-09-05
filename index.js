@@ -1804,7 +1804,7 @@ function connect() {
 
       // ====== 私聊消息处理：心灵感应答案接收 ======
       const isPrivateMsg = msg.conversation_type === 'private' || msg.conversation_id === msg.sender_id || String(msg.conversation_id).length <= 6;
-      if (isPrivateMsg && !content.startsWith('/')) {
+      if (isPrivateMsg && !msg.content.trim().startsWith('/')) {
         const teleData = loadTelepathyData();
         let foundGame = null;
         let foundCid = null;
