@@ -21,7 +21,7 @@ console.log = function(...args) {
 };
 
 // ====== 配置区：把下面的引号里换成你自己的 Bot Key ======
-const BOT_KEY = 'kcb_live_421_vJhzsuy8kP9ay7EfCUvmNz0CEvZoRQAjoVZXNjyRHi';
+const BOT_KEY = 'kcb_live_421_nNLtaS1IDYmNmGbFk7HVwYj4H7gGDhyfKAbp9T0zyunYSro';
 // 智谱AI免费Key（glm-4-flash模型完全免费），申请地址：https://open.bigmodel.cn/usercenter/apikeys
 const ZHIPU_API_KEY = 'd9cd0300341d4ac1aed9260c715c1a8a.2aChFKD7pTs3j7Y4'; // 在这里填你的智谱AI API Key
 // ========================================================
