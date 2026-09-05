@@ -1861,6 +1861,7 @@ function connect() {
       console.log(`📩 [群${msg.conversation_id}] ${msg.sender_display_name}: ${msg.content}`);
 
       // ====== 私聊消息处理：心灵感应答案接收 ======
+      console.log('[私聊检测] conv_id=', msg.conversation_id, 'sender_id=', msg.sender_id, 'conv_type=', msg.conversation_type, 'content=', msg.content?.substring(0, 50));
       const isPrivateMsg = msg.conversation_type === 'private' || msg.conversation_id === msg.sender_id || String(msg.conversation_id).length <= 6;
       if (isPrivateMsg && !msg.content.trim().startsWith('/')) {
         const teleData = loadTelepathyData();
@@ -1874,7 +1875,7 @@ function connect() {
           }
         }
         if (foundGame) {
-          const lines = content.split(/\n/).map(l => l.trim()).filter(Boolean);
+          const lines = msg.content.split(/\n/).map(l => l.trim()).filter(Boolean);
           for (const line of lines) {
             if (foundGame.answers.length < 3) {
               foundGame.answers.push(line);
