@@ -2689,12 +2689,13 @@ ${isClassGroup ? '' : '<link action="callback" action_id="help_diy">自制指令
       // ========== 创意游戏 ==========
       else if (content.startsWith('/心灵感应')) {
         const match = content.match(/^\/心灵感应\[(.+?)\]/);
-        if (!match) { sendMsg(msg.conversation_id, '<markdown>## 🧠 心灵感应\n\n**玩法：**\n1. 出题者用 \`/心灵感应[主题]\` 发起\n2. 出题者**私聊机器人**发送3个答案（每行一个）\n3. 群友用 \`/猜[答案]\` 猜这3个词\n4. 猜中越多默契度越高！\n\n> 测测你们的心灵感应有多强~</markdown>'); return; }
+        if (!match) { sendMsg(msg.conversation_id, '<markdown>## 🧠 心灵感应\n\n**玩法：**\n1. 出题者用 \`/心灵感应[主题]\` 发起\n2. 其他人点击"加入"按钮参与（至少1人）\n3. 出题者点击"开始"，然后**私聊机器人**发送3个答案\n4. 参与者用 \`/猜[答案]\` 猜这3个词\n5. 出题者用 \`/揭晓\` 公布结果\n\n> 测测你们的心灵感应有多强~</markdown>'); return; }
         const theme = match[1];
         const teleData = loadTelepathyData();
-        teleData[String(cid)] = { theme, answers: [], guesses: {}, creator: msg.sender_id, creatorName: msg.sender_display_name, phase: 'waiting_answers' };
+        teleData[String(cid)] = { theme, answers: [], guesses: {}, creator: msg.sender_id, creatorName: msg.sender_display_name, players: {}, phase: 'waiting_players' };
         saveTelepathyData(teleData);
-        sendMsg(msg.conversation_id, `<markdown>## 🧠 心灵感应\n\n**主题：** ${theme}\n\n📢 请 <at id="${msg.sender_id}" /> **私聊机器人**发送3个答案（每行一个）\n\n> 群友们准备好猜答案了吗？</markdown>`);
+        const roomId = String(cid);
+        sendMsg(msg.conversation_id, `<markdown>## 🧠 心灵感应 - 房间\n\n**主题：** ${theme}\n**出题者：** ${msg.sender_display_name}\n**参与者：** 0人（至少1人才能开始）\n\n<button action="callback" action_id="telepathy_join_${roomId}" id="telepathy_join_${roomId}">🙋 加入游戏</button>\n<button action="callback" action_id="telepathy_start_${roomId}" id="telepathy_start_${roomId}">▶️ 开始游戏（仅出题者）</button>\n\n> 至少1人加入后，出题者点击开始</markdown>`);
       }
       else if (content.startsWith('/猜')) {
         const match = content.match(/^\/猜\[(.+?)\]/);
@@ -2704,6 +2705,8 @@ ${isClassGroup ? '' : '<link action="callback" action_id="help_diy">自制指令
         const game = teleData[String(cid)];
         if (!game || game.phase !== 'guessing') { sendMsg(msg.conversation_id, '⚠️当前没有进行中的心灵感应游戏'); return; }
         const uid = String(msg.sender_id);
+        // 只有加入的参与者才能猜
+        if (!game.players[uid] && String(game.creator) !== uid) { sendMsg(msg.conversation_id, '⚠️你没有加入这个游戏，点击"加入"按钮参与'); return; }
         if (!game.guesses[uid]) game.guesses[uid] = [];
         if (game.guesses[uid].includes(guess)) { sendMsg(msg.conversation_id, `⚠️ ${msg.sender_display_name} 已经猜过"${guess}"了`); return; }
         game.guesses[uid].push(guess);
@@ -4042,6 +4045,38 @@ C. 选项三内容
           sendMsg(data.conversation_id, '❌已取消创建');
           return;
         }
+      }
+      // 心灵感应加入按钮
+      else if (actionId.startsWith('telepathy_join_')) {
+        const roomId = actionId.replace('telepathy_join_', '');
+        const teleData = loadTelepathyData();
+        const game = teleData[roomId];
+        if (!game) { setBtn(data, actionId, '❌ 房间已关闭', 'danger', true); return; }
+        if (game.phase !== 'waiting_players') { setBtn(data, actionId, '⏳ 游戏已开始', 'default', true); return; }
+        const uid = String(data.user_id);
+        if (String(game.creator) === uid) { setBtn(data, actionId, '👑 你是出题者', 'default', true); return; }
+        if (game.players[uid]) { setBtn(data, actionId, '✅ 已加入', 'success', true); return; }
+        game.players[uid] = { name: data.user?.nickname || data.user?.username || '玩家' + uid };
+        saveTelepathyData(teleData);
+        const playerCount = Object.keys(game.players).length;
+        setBtn(data, actionId, `✅ 已加入（${playerCount}人）`, 'success', true);
+        sendMsg(data.conversation_id, `🙋 ${game.players[uid].name} 加入了心灵感应！当前 ${playerCount} 人参与`);
+      }
+      // 心灵感应开始按钮
+      else if (actionId.startsWith('telepathy_start_')) {
+        const roomId = actionId.replace('telepathy_start_', '');
+        const teleData = loadTelepathyData();
+        const game = teleData[roomId];
+        if (!game) { setBtn(data, actionId, '❌ 房间已关闭', 'danger', true); return; }
+        if (game.phase !== 'waiting_players') { setBtn(data, actionId, '⏳ 已开始', 'default', true); return; }
+        const uid = String(data.user_id);
+        if (String(game.creator) !== uid) { setBtn(data, actionId, '🚫 仅出题者可开始', 'danger', true); return; }
+        const playerCount = Object.keys(game.players).length;
+        if (playerCount < 1) { setBtn(data, actionId, '⚠️ 至少1人加入', 'danger', true); return; }
+        game.phase = 'waiting_answers';
+        saveTelepathyData(teleData);
+        setBtn(data, actionId, '▶️ 已开始', 'success', true);
+        sendMsg(data.conversation_id, `<markdown>## 🧠 心灵感应开始！\n\n**主题：** ${game.theme}\n**参与者：** ${playerCount}人\n\n📢 请出题者 <at id="${game.creator}" /> **私聊机器人**发送3个答案（每行一个）\n\n> 参与者准备好猜答案了吗？</markdown>`);
       }
       // 命运抉择投票按钮（单人模式）
       else if (actionId.startsWith('fate_')) {
