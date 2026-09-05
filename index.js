@@ -28,6 +28,34 @@ const ZHIPU_API_KEY = 'd9cd0300341d4ac1aed9260c715c1a8a.2aChFKD7pTs3j7Y4'; // �
 
 const BASE_URL = 'https://chat-api.kuke.ink/api/v1';
 const WS_URL = `wss://chat-api.kuke.ink/bot/ws?key=${encodeURIComponent(BOT_KEY)}`;
+
+// ========== 内存缓存机制（减少文件IO，降低延迟） ==========
+const cache = new Map();
+const cacheTTL = 5000;
+const writeQueue = new Map();
+
+function cachedLoad(key, filePath, defaultValue) {
+  const now = Date.now();
+  const cached = cache.get(key);
+  if (cached && now - cached.time < cacheTTL) return cached.data;
+  try {
+    if (!fs.existsSync(filePath)) { cache.set(key, { data: defaultValue, time: now }); return defaultValue; }
+    const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    cache.set(key, { data, time: now });
+    return data;
+  } catch { cache.set(key, { data: defaultValue, time: now }); return defaultValue; }
+}
+
+function cachedSave(key, filePath, data) {
+  cache.set(key, { data, time: Date.now() });
+  if (writeQueue.has(key)) clearTimeout(writeQueue.get(key));
+  const timer = setTimeout(() => {
+    try { fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8'); }
+    catch (e) { console.error('[缓存写入失败]', key, e.message); }
+    writeQueue.delete(key);
+  }, 2000);
+  writeQueue.set(key, timer);
+}
 // 机器人信息缓存（从发消息返回数据中提取，避免依赖不可用的GET API）
 const botInfo = { nickname: null, userId: null, botId: null, username: null, bio: null, avatar: null, status: null };
 let botUserId = null; // 机器人自身的user_id，连接就绪时设置
@@ -413,45 +441,26 @@ function addGroup(conversationId) {
 // ========== 投票功能（按钮版）==========
 const VOTE_FILE = path.join(__dirname, 'vote_data.json');
 
-function loadVoteData() {
-  try {
-    if (!fs.existsSync(VOTE_FILE)) return {};
-    return JSON.parse(fs.readFileSync(VOTE_FILE, 'utf-8'));
-  } catch (e) {
-    console.error('[投票] 数据文件损坏，备份后重置:', e.message);
-    try {
-      const backup = VOTE_FILE + '.broken.' + Date.now();
-      fs.copyFileSync(VOTE_FILE, backup);
-      console.log('[投票] 已备份到:', backup);
-    } catch (e2) { console.error('[投票] 备份失败:', e2.message); }
-    return {};
-  }
-}
+function loadVoteData() { return cachedLoad('vote', VOTE_FILE, {}); }
 
-function saveVoteData(data) {
-  try {
-    fs.writeFileSync(VOTE_FILE, JSON.stringify(data, null, 2), 'utf-8');
-  } catch (e) {
-    console.error('[投票] 保存失败:', e.message);
-  }
-}
+function saveVoteData(data) { cachedSave('vote', VOTE_FILE, data); }
 
 // ========== 创意游戏数据存储 ==========
 const TELEPATHY_FILE = path.join(__dirname, 'telepathy_data.json');
-function loadTelepathyData() { try { return JSON.parse(fs.readFileSync(TELEPATHY_FILE, 'utf-8')); } catch { return {}; } }
-function saveTelepathyData(data) { try { fs.writeFileSync(TELEPATHY_FILE, JSON.stringify(data, null, 2), 'utf-8'); } catch (e) { console.error('[心灵感应]保存失败:', e.message); } }
+function loadTelepathyData() { return cachedLoad('telepathy', TELEPATHY_FILE, {}); }
+function saveTelepathyData(data) { cachedSave('telepathy', TELEPATHY_FILE, data); }
 
 const UNDERCOVER_FILE = path.join(__dirname, 'undercover_data.json');
-function loadUndercoverData() { try { return JSON.parse(fs.readFileSync(UNDERCOVER_FILE, 'utf-8')); } catch { return {}; } }
-function saveUndercoverData(data) { try { fs.writeFileSync(UNDERCOVER_FILE, JSON.stringify(data, null, 2), 'utf-8'); } catch (e) { console.error('[谁是卧底]保存失败:', e.message); } }
+function loadUndercoverData() { return cachedLoad('undercover', UNDERCOVER_FILE, {}); }
+function saveUndercoverData(data) { cachedSave('undercover', UNDERCOVER_FILE, data); }
 
 const STORY_FILE = path.join(__dirname, 'story_data.json');
-function loadStoryData() { try { return JSON.parse(fs.readFileSync(STORY_FILE, 'utf-8')); } catch { return {}; } }
-function saveStoryData(data) { try { fs.writeFileSync(STORY_FILE, JSON.stringify(data, null, 2), 'utf-8'); } catch (e) { console.error('[故事接龙]保存失败:', e.message); } }
+function loadStoryData() { return cachedLoad('story', STORY_FILE, {}); }
+function saveStoryData(data) { cachedSave('story', STORY_FILE, data); }
 
 const FATE_FILE = path.join(__dirname, 'fate_data.json');
-function loadFateData() { try { return JSON.parse(fs.readFileSync(FATE_FILE, 'utf-8')); } catch { return {}; } }
-function saveFateData(data) { try { fs.writeFileSync(FATE_FILE, JSON.stringify(data, null, 2), 'utf-8'); } catch (e) { console.error('[命运抉择]保存失败:', e.message); } }
+function loadFateData() { return cachedLoad('fate', FATE_FILE, {}); }
+function saveFateData(data) { cachedSave('fate', FATE_FILE, data); }
 
 // AI调用辅助函数（供创意游戏使用）
 async function callAI(prompt, systemPrompt) {
@@ -560,7 +569,7 @@ async function refreshVoteButtons(vote) {
 const WEREWOLF_FILE = path.join(__dirname, 'werewolf_data.json');
 const WR_TIMEOUT = 20 * 1000;
 
-function loadWR() { try { return JSON.parse(fs.readFileSync(WEREWOLF_FILE, 'utf-8')); } catch { return {}; } }
+function loadWR() { return cachedLoad('werewolf', WEREWOLF_FILE, {}); }
 function saveWR(d) { fs.writeFileSync(WEREWOLF_FILE, JSON.stringify(d, null, 2), 'utf-8'); }
 
 const ROLE_INFO = {
