@@ -4394,16 +4394,21 @@ C. 选项三内容
           sendMsg(data.conversation_id, card);
           console.log('[设置导航] 已发送第', targetPage, '页');
           // 撤回旧卡片，避免旧卡片按钮还能点
-          if (data.message_id) {
+          const oldMsgId = data.message_id || data.messageId || data.msg_id || data.id;
+          console.log('[设置导航] 尝试撤回旧卡片, message_id=', oldMsgId, 'data keys=', Object.keys(data));
+          if (oldMsgId) {
             try {
-              await fetch(`${BASE_URL}/bot-api/conversations/${data.conversation_id}/messages/${data.message_id}/recall`, {
+              const recallRes = await fetch(`${BASE_URL}/bot-api/conversations/${data.conversation_id}/messages/${oldMsgId}/recall`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${BOT_KEY}` }
               });
-              console.log('[设置导航] 已撤回旧卡片');
+              const recallText = await recallRes.text();
+              console.log('[设置导航] 撤回结果:', recallRes.status, recallText.substring(0, 200));
             } catch (recallErr) {
-              console.log('[设置导航] 撤回旧卡片失败（可忽略）:', recallErr.message);
+              console.log('[设置导航] 撤回旧卡片失败:', recallErr.message);
             }
+          } else {
+            console.log('[设置导航] 没有找到 message_id 字段，无法撤回');
           }
         } catch (e) {
           console.error('[设置导航错误]', e.message, e.stack);
