@@ -492,6 +492,8 @@ const CHAT_MODELS = [
   { id: 'glm-4-flash', name: 'GLM-4-Flash', company: '智谱AI', desc: '免费高速，128K上下文', pros: '✅ 内置key，免费', context: '128K', api: 'zhipu', hasKey: true },
   { id: 'glm-4-air', name: 'GLM-4-Air', company: '智谱AI', desc: '高性价比，性能强', pros: '✅ 内置key，免费额度', context: '128K', api: 'zhipu', hasKey: true },
   { id: 'glm-3-turbo', name: 'GLM-3-Turbo', company: '智谱AI', desc: '经典稳定，便宜', pros: '✅ 内置key，免费额度', context: '128K', api: 'zhipu', hasKey: true },
+  { id: 'pollinations-openai', name: 'Pollinations-GPT', company: 'Pollinations', desc: '✅ 完全免费，无需key，OpenAI模型', pros: '✅ 免费、无需key、直接用', context: '128K', api: 'pollinations', hasKey: true },
+  { id: 'pollinations-mistral', name: 'Pollinations-Mistral', company: 'Pollinations', desc: '✅ 完全免费，无需key，Mistral模型', pros: '✅ 免费、无需key、直接用', context: '128K', api: 'pollinations', hasKey: true },
   { id: 'gpt-4o-mini', name: 'GPT-4o-Mini', company: 'OpenAI', desc: '轻量旗舰，免费额度', pros: '需输入key，免费额度', context: '128K', api: 'openai', hasKey: false },
   { id: 'claude-3-5-sonnet', name: 'Claude-3.5', company: 'Anthropic', desc: '写作分析最强', pros: '需输入key', context: '200K', api: 'anthropic', hasKey: false },
   { id: 'qwen-turbo', name: 'Qwen-Turbo', company: '阿里通义', desc: '极速，免费额度', pros: '需输入key，免费额度', context: '128K', api: 'qwen', hasKey: false },
@@ -645,27 +647,43 @@ function buildSetCard(page, cid) {
 
 // AI调用辅助函数（供创意游戏使用）
 async function callAI(prompt, systemPrompt) {
-  if (!ZHIPU_API_KEY) throw new Error('ZHIPU_API_KEY 未配置');
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 60000);
   try {
-    const aiRes = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${ZHIPU_API_KEY}` },
-      body: JSON.stringify({
-        model: loadSetData().chatModel || 'glm-4-flash',
-        messages: [
-          { role: 'system', content: systemPrompt || '你是一个创意游戏助手，用简洁生动的语言回答。' },
-          { role: 'user', content: prompt }
-        ],
-        temperature: 0.8
-      }),
-      signal: controller.signal
-    });
+    const currentModel = loadSetData().chatModel || 'glm-4-flash';
+    const modelInfo = CHAT_MODELS.find(m => m.id === currentModel);
+    const sys = systemPrompt || '你是一个创意游戏助手，用简洁生动的语言回答。';
+    
+    let aiRes;
+    if (modelInfo?.api === 'pollinations') {
+      const pollModel = currentModel === 'pollinations-mistral' ? 'mistral' : 'openai';
+      aiRes = await fetch(`https://text.pollinations.ai/${encodeURIComponent(prompt)}?model=${pollModel}&system=${encodeURIComponent(sys)}`, {
+        signal: controller.signal
+      });
+    } else {
+      if (!ZHIPU_API_KEY) throw new Error('ZHIPU_API_KEY 未配置');
+      aiRes = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${ZHIPU_API_KEY}` },
+        body: JSON.stringify({
+          model: currentModel,
+          messages: [
+            { role: 'system', content: sys },
+            { role: 'user', content: prompt }
+          ],
+          temperature: 0.8
+        }),
+        signal: controller.signal
+      });
+    }
     clearTimeout(timeout);
     if (!aiRes.ok) throw new Error(`AI API ${aiRes.status}`);
-    const aiData = await aiRes.json();
-    return aiData.choices?.[0]?.message?.content || '';
+    if (modelInfo?.api === 'pollinations') {
+      return await aiRes.text();
+    } else {
+      const aiData = await aiRes.json();
+      return aiData.choices?.[0]?.message?.content || '';
+    }
   } catch (e) {
     clearTimeout(timeout);
     throw e;
@@ -1933,23 +1951,44 @@ async function executeDIY(msg, name, paramMap) {
       sendMsg(cid, '🤔 正在思考...');
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 60000);
-      const aiRes = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${ZHIPU_API_KEY}` },
-        body: JSON.stringify({
-          model: loadSetData().chatModel || 'glm-4-flash',
-          messages: [
-            { role: 'system', content: (cmd.content || '你是一个友好的群聊助手，用简洁自然的语言回答用户的问题。') + '\n\n【重要信息】你当前使用的AI大模型是：' + (CHAT_MODELS.find(m => m.id === loadSetData().chatModel)?.name || loadSetData().chatModel) + '。当用户问你是什么模型/什么AI/什么引擎时，你要如实告诉用户你当前使用的模型名称。' },
-            { role: 'user', content: userInput }
-          ],
-          temperature: 0.7
-        }),
-        signal: controller.signal
-      });
+      const currentModel = loadSetData().chatModel || 'glm-4-flash';
+      const modelInfo = CHAT_MODELS.find(m => m.id === currentModel);
+      const systemContent = (cmd.content || '你是一个友好的群聊助手，用简洁自然的语言回答用户的问题。') + '\n\n【重要信息】你当前使用的AI大模型是：' + (modelInfo?.name || currentModel) + '。当用户问你是什么模型/什么AI/什么引擎时，你要如实告诉用户你当前使用的模型名称。';
+      
+      let aiRes;
+      if (modelInfo?.api === 'pollinations') {
+        // Pollinations 免费API（不用key）
+        const pollModel = currentModel === 'pollinations-mistral' ? 'mistral' : 'openai';
+        aiRes = await fetch(`https://text.pollinations.ai/${encodeURIComponent(userInput)}?model=${pollModel}&system=${encodeURIComponent(systemContent)}`, {
+          signal: controller.signal
+        });
+      } else {
+        // 智谱AI（默认）
+        aiRes = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${ZHIPU_API_KEY}` },
+          body: JSON.stringify({
+            model: currentModel,
+            messages: [
+              { role: 'system', content: systemContent },
+              { role: 'user', content: userInput }
+            ],
+            temperature: 0.7
+          }),
+          signal: controller.signal
+        });
+      }
       clearTimeout(timeout);
       if (!aiRes.ok) throw new Error(`AI API ${aiRes.status}`);
-      const aiData = await aiRes.json();
-      const aiReply = aiData.choices?.[0]?.message?.content || '（AI没有回复）';
+      let aiReply;
+      if (modelInfo?.api === 'pollinations') {
+        // Pollinations 返回纯文本
+        aiReply = await aiRes.text();
+      } else {
+        // 智谱返回JSON
+        const aiData = await aiRes.json();
+        aiReply = aiData.choices?.[0]?.message?.content || '（AI没有回复）';
+      }
       sendMsg(cid, `<markdown>${aiReply}</markdown>`);
     } catch (e) {
       sendMsg(cid, `❌ AI回复失败：${e.message}`);
