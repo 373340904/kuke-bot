@@ -2347,24 +2347,41 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
         const sd = loadSetData();
         return sd.features[featureId] !== false;
       }
-      // 指令到功能ID的映射
+      // 指令到功能ID的映射（全面覆盖）
       const cmdFeatureMap = {
-        '/签到': 'checkin', '/天气': 'weather', '/投票': 'vote', '/音乐': 'music', '/播放': 'music',
-        '/绘图': 'draw', '/画': 'draw', '/狼人杀': 'werewolf', '/心灵感应': 'telepathy', '/谁是卧底': 'undercover',
-        '/故事接龙': 'story', '/命运抉择': 'fate', '/DIY': 'diy', '/自制': 'diy',
-        '/违禁词': 'forbidden', '/黑名单': 'blacklist', '/禁言': 'mute', '/欢迎': 'welcome',
-        '/活跃': 'activity', '/推送': 'broadcast', '/全局推送': 'broadcast'
+        // 日常工具
+        '/签到': 'checkin', '/天气': 'weather', '/音乐': 'music', '/播放': 'music', '/搜索': 'music',
+        '/绘图': 'draw', '/画': 'draw', '/生成图片': 'draw', '/百科': 'weather', '/翻译': 'weather',
+        // 游戏娱乐
+        '/投票': 'vote', '/发起投票': 'vote', '/结束投票': 'vote', '/投票列表': 'vote',
+        '/狼人杀': 'werewolf', '/心灵感应': 'telepathy', '/谁是卧底': 'undercover', '/故事接龙': 'story', '/命运抉择': 'fate',
+        '/猜': 'telepathy', '/揭晓': 'telepathy',
+        // DIY
+        '/DIY': 'diy', '/自制': 'diy', '/DTY': 'diy', '/删除DIY': 'diy', '/自制功能': 'diy',
+        // 群管理
+        '/违禁词': 'forbidden', '/添加违禁词': 'forbidden', '/删除违禁词': 'forbidden', '/违禁词列表': 'forbidden',
+        '/黑名单': 'blacklist', '/添加黑名单': 'blacklist', '/删除黑名单': 'blacklist', '/黑名单列表': 'blacklist',
+        '/禁言': 'mute', '/解除禁言': 'mute', '/踢人': 'mute',
+        '/欢迎': 'welcome', '/设置欢迎': 'welcome',
+        '/活跃': 'activity', '/今日活跃': 'activity', '/群活跃': 'activity',
+        '/推送': 'broadcast', '/全局推送': 'broadcast',
+        // AI功能
+        '/set': 'ai_chat', '/设置': 'ai_chat', '/关于': 'ai_chat', '/help': 'ai_chat', '/帮助': 'ai_chat', '/ping': 'ai_chat'
       };
-      // 检查当前指令是否被关闭
-      let featureBlocked = false;
-      for (const [cmd, fid] of Object.entries(cmdFeatureMap)) {
-        if (content.startsWith(cmd) && !isFeatureEnabled(fid)) {
-          sendMsg(cid, `⚠️ 该功能已被管理员关闭`);
-          featureBlocked = true;
-          break;
+      // 检查当前指令是否被关闭（设置指令本身不被拦截）
+      const isSetCommand = content.startsWith('/set') || content.startsWith('/设置') || content.startsWith('/set-state') || content.startsWith('/set-key');
+      if (!isSetCommand) {
+        let featureBlocked = false;
+        for (const [cmd, fid] of Object.entries(cmdFeatureMap)) {
+          if (content.startsWith(cmd) && !isFeatureEnabled(fid)) {
+            console.log('[功能开关] 指令', cmd, '被拦截，功能', fid, '已关闭');
+            sendMsg(cid, `⚠️ 该功能已被管理员关闭`);
+            featureBlocked = true;
+            break;
+          }
         }
+        if (featureBlocked) return;
       }
-      if (featureBlocked) return;
 
       // @机器人 AI 对话
       const botUid = botUserId || botInfo.userId || 3039;
@@ -2413,6 +2430,26 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
           const imgMatch = content.match(/<img[^>]+src=["']([^"']+)["']/i);
           if (imgMatch) imageUrl = imgMatch[1];
         }
+        // 功能开关检查
+        const setDataFeatures = loadSetData();
+        const aiChatEnabled = setDataFeatures.features['ai_chat'] !== false;
+        const imgRecogEnabled = setDataFeatures.features['image_recognition'] !== false;
+        
+        if (!aiChatEnabled) {
+          // AI对话功能关闭，不回复
+          console.log('[功能开关] AI对话已关闭，不回复');
+          return;
+        }
+        if (!imgRecogEnabled && imageUrl) {
+          // 图片识别功能关闭，只进行纯文本对话
+          console.log('[功能开关] 图片识别已关闭，忽略图片');
+          imageUrl = null;
+          if (!question) {
+            sendMsg(msg.conversation_id, '⚠️ 图片识别功能已被管理员关闭');
+            return;
+          }
+        }
+        
         if (question || imageUrl) {
           (async () => {
             try {
