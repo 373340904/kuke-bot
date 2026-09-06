@@ -543,21 +543,21 @@ const FEATURE_CATEGORIES = [
 function buildSetCard(page, cid) {
   const setData = loadSetData();
   const navBtn = (dir) => {
-    if (dir === 'prev') return ''; // 去掉上一步按钮
-    const target = page + 1;
-    if (target > 6) return '';
-    return `<button action="callback" action_id="set_nav_next_${page}" id="set_nav_next_${page}">下一步 ➡️</button>\n`;
+    const target = dir === 'prev' ? page - 1 : page + 1;
+    if (target < 1 || target > 6) return '';
+    const label = dir === 'prev' ? '⬅️ 上一步' : '下一步 ➡️';
+    return `<button action="callback" action_id="set_nav_${dir}_${page}" id="set_nav_${dir}_${page}">${label}</button>`;
   };
 
   if (page === 1) {
-    let card = `<markdown>## ⚙️ 设置 - 1/6\n\n### 🤖 对话模型\n\n**当前：** ${CHAT_MODELS.find(m => m.id === setData.chatModel)?.name || setData.chatModel}\n\n`;
+    let card = `<markdown>## ⚙️ 设置 - 1/6\n\n> 💡 所有设置点击即时生效，可随时返回修改\n\n### 🤖 对话模型\n\n**当前：** ${CHAT_MODELS.find(m => m.id === setData.chatModel)?.name || setData.chatModel}\n\n`;
     CHAT_MODELS.forEach((m, i) => {
       const active = setData.chatModel === m.id ? '✅' : '';
       const keyTag = m.hasKey ? '' : '🔑';
       card += `<button action="callback" action_id="set_chat_model_${m.id}" id="set_chat_model_${m.id}">${active}${m.name}${keyTag}</button>`;
       if ((i + 1) % 2 === 0) card += '\n';
     });
-    card += `\n\n${navBtn('next')}\n> 🔑=需输入key，/set-key{模型,key}</markdown>`;
+    card += `\n\n${navBtn('prev')} ${navBtn('next')}\n> 🔑=需输入key，/set-key{模型,key}</markdown>`;
     return card;
   }
 
@@ -569,7 +569,7 @@ function buildSetCard(page, cid) {
       card += `<button action="callback" action_id="set_vision_model_${m.id}" id="set_vision_model_${m.id}">${active}${m.name}${keyTag}</button>`;
       if ((i + 1) % 2 === 0) card += '\n';
     });
-    card += `\n\n${navBtn('next')}</markdown>`;
+    card += `\n\n${navBtn('prev')} ${navBtn('next')}</markdown>`;
     return card;
   }
 
@@ -588,7 +588,7 @@ function buildSetCard(page, cid) {
       if (idx % 2 !== 0) card += '\n';
       card += '\n';
     }
-    card += `${navBtn('next')}\n> 关闭后所有群都不能用该功能</markdown>`;
+    card += `${navBtn('prev')} ${navBtn('next')}\n> 关闭后所有群都不能用该功能</markdown>`;
     return card;
   }
 
@@ -608,7 +608,7 @@ function buildSetCard(page, cid) {
       card += '\n';
     }
     card += `**设置指令：**\n\`/set-state{群号,AIstate:open}\` 开启\n\`/set-state{群号,AIstate:off}\` 关闭\n\n`;
-    card += `${navBtn('next')}\n> 禁用后群内使用AI会提示 The AI in this group has been disabled!</markdown>`;
+    card += `${navBtn('prev')} ${navBtn('next')}\n> 禁用后群内使用AI会提示 The AI in this group has been disabled!</markdown>`;
     return card;
   }
 
@@ -619,7 +619,7 @@ function buildSetCard(page, cid) {
     let card = `<markdown>## ⚙️ 设置 - 5/6\n\n### 🎭 AI个性\n\n**语气：**\n${toneBtn('normal', '正常')}${toneBtn('friendly', '友好')}\n${toneBtn('professional', '专业')}${toneBtn('humorous', '幽默')}\n\n`;
     card += `**长度：**\n${lenBtn('short', '简短')}${lenBtn('medium', '中等')}${lenBtn('long', '详细')}\n\n`;
     card += `**Markdown：**\n<button action="callback" action_id="set_personality_markdown_toggle" id="set_personality_markdown_toggle">${p.markdown ? '🟢开启' : '🔴关闭'}</button>\n\n`;
-    card += `${navBtn('next')}</markdown>`;
+    card += `${navBtn('prev')} ${navBtn('next')}</markdown>`;
     return card;
   }
 
