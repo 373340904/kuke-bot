@@ -489,25 +489,20 @@ function getDefaultSetData() {
 }
 
 const CHAT_MODELS = [
-  { id: 'glm-4-flash', name: 'GLM-4-Flash', company: '智谱AI', desc: '免费高速，适合日常对话，响应极快', pros: '免费、快速、中文好', cons: '复杂推理一般', context: '128K' },
-  { id: 'glm-4', name: 'GLM-4', company: '智谱AI', desc: '智谱旗舰模型，综合能力强', pros: '综合强、中文好、工具调用', cons: '收费', context: '128K' },
-  { id: 'gpt-4o', name: 'GPT-4o', company: 'OpenAI', desc: 'OpenAI最新多模态旗舰，全能型', pros: '全能、多模态、推理强', cons: '收费、较慢', context: '128K' },
-  { id: 'gpt-3-5-turbo', name: 'GPT-3.5-Turbo', company: 'OpenAI', desc: '经典性价比模型，快速稳定', pros: '快速、稳定、便宜', cons: '能力一般', context: '16K' },
-  { id: 'claude-3-5-sonnet', name: 'Claude-3.5-Sonnet', company: 'Anthropic', desc: 'Anthropic平衡型，写作和分析强', pros: '写作好、分析强、安全', cons: '收费、国内访问难', context: '200K' },
-  { id: 'claude-3-opus', name: 'Claude-3-Opus', company: 'Anthropic', desc: 'Anthropic最强模型，深度推理', pros: '推理最强、写作最好', cons: '贵、慢、国内访问难', context: '200K' },
-  { id: 'deepseek-v2', name: 'DeepSeek-V2', company: '深度求索', desc: '国产开源旗舰，代码和数学强', pros: '开源、代码强、数学好', cons: '中文一般', context: '128K' },
-  { id: 'qwen-max', name: 'Qwen-Max', company: '阿里通义', desc: '阿里旗舰，中文理解最强', pros: '中文最强、工具调用、便宜', cons: '推理一般', context: '32K' }
+  { id: 'glm-4-flash', name: 'GLM-4-Flash（免费）', company: '智谱AI', desc: '完全免费！高速响应，适合日常对话，128K上下文', pros: '✅ 完全免费、响应快、中文好、128K上下文', cons: '复杂推理一般', context: '128K' },
+  { id: 'glm-4', name: 'GLM-4（旗舰）', company: '智谱AI', desc: '智谱旗舰模型，综合能力最强，支持工具调用', pros: '综合强、中文好、工具调用、128K', cons: '收费', context: '128K' },
+  { id: 'glm-4-air', name: 'GLM-4-Air（高性价比）', company: '智谱AI', desc: '高性价比版本，性能接近GLM-4，价格更低', pros: '性价比高、速度快、中文好', cons: '比Flash贵', context: '128K' },
+  { id: 'glm-4-airx', name: 'GLM-4-AirX（极速）', company: '智谱AI', desc: '极速版本，响应速度最快，适合实时对话', pros: '速度最快、延迟低', cons: '能力略低', context: '8K' },
+  { id: 'glm-4-long', name: 'GLM-4-Long（长文本）', company: '智谱AI', desc: '超长上下文版本，支持1M tokens，适合长文档', pros: '1M超长上下文、长文档处理', cons: '速度较慢', context: '1M' },
+  { id: 'glm-3-turbo', name: 'GLM-3-Turbo（经典）', company: '智谱AI', desc: '经典稳定版本，成熟可靠，价格便宜', pros: '稳定、便宜、成熟', cons: '能力不如GLM-4', context: '128K' },
+  { id: 'glm-4v-flash', name: 'GLM-4V-Flash（免费多模态）', company: '智谱AI', desc: '免费多模态模型，支持图文理解', pros: '免费、多模态、快速', cons: '视觉能力一般', context: '8K' },
+  { id: 'glm-4v', name: 'GLM-4V（旗舰多模态）', company: '智谱AI', desc: '旗舰多模态模型，图文理解能力最强', pros: '视觉强、多模态、综合好', cons: '收费', context: '8K' }
 ];
 
 const VISION_MODELS = [
-  { id: 'glm-4v', name: 'GLM-4V', company: '智谱AI', desc: '智谱多模态，图文理解', pros: '免费、中文好、快速', cons: '细节一般', context: '8K' },
-  { id: 'gpt-4v', name: 'GPT-4V', company: 'OpenAI', desc: 'OpenAI视觉模型，识别精准', pros: '识别准、细节好', cons: '收费、慢', context: '128K' },
-  { id: 'claude-3-opus-vision', name: 'Claude-3-Opus-Vision', company: 'Anthropic', desc: 'Anthropic视觉，文档理解强', pros: '文档强、分析深', cons: '贵、国内访问难', context: '200K' },
-  { id: 'qwen-vl-max', name: 'Qwen-VL-Max', company: '阿里通义', desc: '阿里视觉，中文OCR最强', pros: 'OCR强、中文好、便宜', cons: '推理一般', context: '32K' },
-  { id: 'deepseek-vl', name: 'DeepSeek-VL', company: '深度求索', desc: '开源视觉模型', pros: '开源、可本地部署', cons: '能力一般', context: '4K' },
-  { id: 'gemini-pro-vision', name: 'Gemini-Pro-Vision', company: 'Google', desc: 'Google多模态，实时性强', pros: '实时、多模态、免费额度', cons: '国内访问难、中文一般', context: '32K' },
-  { id: 'llava-1-6', name: 'LLaVA-1.6', company: '开源社区', desc: '最流行开源视觉模型', pros: '开源、免费、可部署', cons: '能力有限', context: '4K' },
-  { id: 'internvl2', name: 'InternVL2', company: '上海AI实验室', desc: '国产开源视觉，性能接近闭源', pros: '开源、性能强、中文好', cons: '部署要求高', context: '8K' }
+  { id: 'glm-4v-flash', name: 'GLM-4V-Flash（免费）', company: '智谱AI', desc: '免费多模态模型，支持图文理解，响应快', pros: '✅ 完全免费、快速、中文好', cons: '细节一般', context: '8K' },
+  { id: 'glm-4v', name: 'GLM-4V（旗舰）', company: '智谱AI', desc: '旗舰多模态模型，图文理解能力最强', pros: '视觉强、多模态、综合好', cons: '收费', context: '8K' },
+  { id: 'glm-4-flash', name: 'GLM-4-Flash（纯文本）', company: '智谱AI', desc: '免费纯文本模型，不支持图片，仅用于对比', pros: '免费、快速', cons: '不支持图片', context: '128K' }
 ];
 
 const FEATURE_CATEGORIES = [
@@ -653,7 +648,7 @@ async function callAI(prompt, systemPrompt) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${ZHIPU_API_KEY}` },
       body: JSON.stringify({
-        model: 'glm-4-flash',
+        model: loadSetData().chatModel || 'glm-4-flash',
         messages: [
           { role: 'system', content: systemPrompt || '你是一个创意游戏助手，用简洁生动的语言回答。' },
           { role: 'user', content: prompt }
@@ -1937,7 +1932,7 @@ async function executeDIY(msg, name, paramMap) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${ZHIPU_API_KEY}` },
         body: JSON.stringify({
-          model: 'glm-4-flash',
+          model: loadSetData().chatModel || 'glm-4-flash',
           messages: [
             { role: 'system', content: cmd.content || '你是一个友好的群聊助手，用简洁自然的语言回答用户的问题。' },
             { role: 'user', content: userInput }
@@ -2193,7 +2188,7 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${ZHIPU_API_KEY}` },
               body: JSON.stringify({
-                model: 'glm-4-flash',
+                model: loadSetData().chatModel || 'glm-4-flash',
                 messages: [
                   { role: 'system', content: aiPrompt },
                   { role: 'user', content: `指令名：${state.name}\n用户需求：${userNeed}` }
@@ -2873,8 +2868,7 @@ ${isClassGroup ? '' : '<link action="callback" action_id="help_diy">自制指令
       else if (content === '/set' || content === '/设置') {
         console.log('[设置调试] sender_id=', msg.sender_id, 'type=', typeof msg.sender_id);
         const isCreator = String(msg.sender_id) === '3038';
-        const isGroupOwner = typeof isOwner !== 'undefined' && isOwner;
-        if (!isCreator && !isGroupOwner) { sendMsg(msg.conversation_id, `❌ 只有创始人或群主可以使用设置（你的ID：${msg.sender_id}）`); return; }
+        if (!isCreator) { sendMsg(msg.conversation_id, `❌ 只有创始人君衔（ID 3038）可以使用设置（你的ID：${msg.sender_id}）`); return; }
         try {
           const card = buildSetCard(1, cid);
           sendMsg(msg.conversation_id, card);
@@ -4300,12 +4294,21 @@ C. 选项三内容
       }
       // 设置系统导航按钮
       else if (actionId.startsWith('set_nav_')) {
+        console.log('[设置导航] 点击:', actionId, 'conversation:', data.conversation_id);
         const parts = actionId.split('_');
         const dir = parts[2];
         const page = parseInt(parts[3]);
         const targetPage = dir === 'prev' ? page - 1 : page + 1;
-        setBtn(data, actionId, dir === 'prev' ? '⬅️' : '➡️', 'default', true);
-        sendMsg(data.conversation_id, buildSetCard(targetPage, String(data.conversation_id)));
+        console.log('[设置导航] dir=', dir, 'page=', page, 'target=', targetPage);
+        try {
+          setBtn(data, actionId, dir === 'prev' ? '⬅️' : '➡️', 'default', true);
+          const card = buildSetCard(targetPage, String(data.conversation_id));
+          sendMsg(data.conversation_id, card);
+          console.log('[设置导航] 已发送第', targetPage, '页');
+        } catch (e) {
+          console.error('[设置导航错误]', e.message, e.stack);
+          sendMsg(data.conversation_id, `❌ 导航失败：${e.message}`);
+        }
       }
       // 设置对话模型
       else if (actionId.startsWith('set_chat_model_')) {
@@ -4316,6 +4319,7 @@ C. 选项三内容
         setData.chatModel = modelId;
         saveSetData(setData);
         setBtn(data, actionId, `✅ ${model.name}`, 'success', true);
+        console.log('[设置] 对话模型已切换为:', modelId);
         sendMsg(data.conversation_id, `<markdown>## 🤖 对话模型已切换\n\n**模型名称：** ${model.name}\n**开发商：** ${model.company}\n**上下文：** ${model.context}\n\n**简介：** ${model.desc}\n\n**优点：** ${model.pros}\n**缺点：** ${model.cons}\n\n> 已切换为 ${model.name}，后续AI对话使用此模型</markdown>`);
       }
       // 设置识图模型
