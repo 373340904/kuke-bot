@@ -492,6 +492,8 @@ const CHAT_MODELS = [
   { id: 'glm-4-flash', name: 'GLM-4-Flash', company: '智谱AI', desc: '免费高速，128K上下文', pros: '✅ 内置key，免费', context: '128K', api: 'zhipu', hasKey: true },
   { id: 'glm-4-air', name: 'GLM-4-Air', company: '智谱AI', desc: '高性价比，性能强', pros: '✅ 内置key，免费额度', context: '128K', api: 'zhipu', hasKey: true },
   { id: 'glm-3-turbo', name: 'GLM-3-Turbo', company: '智谱AI', desc: '经典稳定，便宜', pros: '✅ 内置key，免费额度', context: '128K', api: 'zhipu', hasKey: true },
+  { id: 'gpt-4o-mini', name: 'GPT-4o-Mini', company: 'OpenAI', desc: '轻量旗舰，免费额度', pros: '需输入key，免费额度', context: '128K', api: 'openai', hasKey: false },
+  { id: 'claude-3-5-sonnet', name: 'Claude-3.5', company: 'Anthropic', desc: '写作分析最强', pros: '需输入key', context: '200K', api: 'anthropic', hasKey: false },
   { id: 'qwen-turbo', name: 'Qwen-Turbo', company: '阿里通义', desc: '极速，免费额度', pros: '需输入key，免费额度', context: '128K', api: 'qwen', hasKey: false },
   { id: 'qwen-plus', name: 'Qwen-Plus', company: '阿里通义', desc: '性价比，免费额度', pros: '需输入key，免费额度', context: '128K', api: 'qwen', hasKey: false },
   { id: 'doubao-lite', name: 'Doubao-Lite', company: '字节豆包', desc: '轻量，免费额度', pros: '需输入key，免费额度', context: '32K', api: 'doubao', hasKey: false },
@@ -570,24 +572,27 @@ function buildSetCard(page, cid) {
   }
 
   if (page === 3) {
-    // 总功能开关
-    let card = `<markdown>## ⚙️ 设置中心 - 第3/6页\n\n### 🔌 总功能开关\n\n`;
+    let card = `<markdown>## ⚙️ 设置 - 3/6\n\n### 🔌 功能开关\n\n`;
+    let idx = 0;
     for (const cat of FEATURE_CATEGORIES) {
       card += `**${cat.name}**\n`;
       for (const f of cat.features) {
         const on = setData.features[f.id] !== false;
-        const status = on ? '🟢 开' : '🔴 关';
-        card += `<button action="callback" action_id="set_feature_${f.id}" id="set_feature_${f.id}">${f.name}：${status}</button>\n`;
+        const status = on ? '🟢' : '🔴';
+        card += `<button action="callback" action_id="set_feature_${f.id}" id="set_feature_${f.id}">${status}${f.name}</button>`;
+        idx++;
+        if (idx % 2 === 0) card += '\n';
       }
+      if (idx % 2 !== 0) card += '\n';
       card += '\n';
     }
-    card += `${navBtn('next')}\n> 点击按钮切换功能开关</markdown>`;
+    card += `${navBtn('next')}\n> 关闭后所有群都不能用该功能</markdown>`;
     return card;
   }
 
   if (page === 4) {
     // 群AI状态管理
-    let card = `<markdown>## ⚙️ 设置中心 - 第4/6页\n\n### 👥 群AI状态管理\n\n`;
+    let card = `<markdown>## ⚙️ 设置 - 4/6\n\n### 👥 群AI状态管理\n\n`;
     const groups = loadGroups();
     if (groups.length === 0) {
       card += '> 暂无群数据\n\n';
@@ -606,21 +611,19 @@ function buildSetCard(page, cid) {
   }
 
   if (page === 5) {
-    // AI个性设置
     const p = setData.personality;
-    const toneBtn = (val, label) => `<button action="callback" action_id="set_personality_tone_${val}" id="set_personality_tone_${val}">${p.tone === val ? '✅ ' : ''}${label}</button>\n`;
-    const lenBtn = (val, label) => `<button action="callback" action_id="set_personality_length_${val}" id="set_personality_length_${val}">${p.length === val ? '✅ ' : ''}${label}</button>\n`;
-    let card = `<markdown>## ⚙️ 设置中心 - 第5/6页\n\n### 🎭 AI个性设置\n\n**语气风格：**\n${toneBtn('normal', '😐 正常')}${toneBtn('friendly', '😊 友好')}${toneBtn('professional', '💼 专业')}${toneBtn('humorous', '😂 幽默')}\n`;
-    card += `**回复长度：**\n${lenBtn('short', '简短')}${lenBtn('medium', '中等')}${lenBtn('long', '详细')}\n`;
-    card += `**Markdown排版：**\n<button action="callback" action_id="set_personality_markdown_toggle" id="set_personality_markdown_toggle">${p.markdown ? '🟢 已开启' : '🔴 已关闭'}</button>\n\n`;
-
-    card += `${navBtn('next')}\n> 点击按钮调整AI个性</markdown>`;
+    const toneBtn = (val, label) => `<button action="callback" action_id="set_personality_tone_${val}" id="set_personality_tone_${val}">${p.tone === val ? '✅' : ''}${label}</button>`;
+    const lenBtn = (val, label) => `<button action="callback" action_id="set_personality_length_${val}" id="set_personality_length_${val}">${p.length === val ? '✅' : ''}${label}</button>`;
+    let card = `<markdown>## ⚙️ 设置 - 5/6\n\n### 🎭 AI个性\n\n**语气：**\n${toneBtn('normal', '正常')}${toneBtn('friendly', '友好')}\n${toneBtn('professional', '专业')}${toneBtn('humorous', '幽默')}\n\n`;
+    card += `**长度：**\n${lenBtn('short', '简短')}${lenBtn('medium', '中等')}${lenBtn('long', '详细')}\n\n`;
+    card += `**Markdown：**\n<button action="callback" action_id="set_personality_markdown_toggle" id="set_personality_markdown_toggle">${p.markdown ? '🟢开启' : '🔴关闭'}</button>\n\n`;
+    card += `${navBtn('next')}</markdown>`;
     return card;
   }
 
   if (page === 6) {
     // 数据与维护
-    let card = `<markdown>## ⚙️ 设置中心 - 第6/6页\n\n### 📊 数据与维护\n\n`;
+    let card = `<markdown>## ⚙️ 设置 - 6/6\n\n### 📊 数据与维护\n\n`;
     card += `**当前配置：**\n- 对话模型：${CHAT_MODELS.find(m => m.id === setData.chatModel)?.name || setData.chatModel}\n- 识图模型：${VISION_MODELS.find(m => m.id === setData.visionModel)?.name || setData.visionModel}\n- 已开启功能：${Object.values(setData.features).filter(v => v !== false).length}/${Object.keys(setData.features).length}\n- 已管理群：${Object.keys(setData.groupAI || {}).length}个\n\n`;
     card += `**维护操作：**\n<button action="callback" action_id="set_action_reset" id="set_action_reset">🔄 恢复默认设置</button>\n<button action="callback" action_id="set_action_export" id="set_action_export">📤 导出配置</button>\n\n`;
     card += `**关于：**\n> 君灵bot 设置系统 v1.0\n> 创始人：君衔（ID 3038）\n> 所有设置即时生效\n\n`;
@@ -2300,6 +2303,30 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
         return;
       }
 
+      // 功能开关检查
+      function isFeatureEnabled(featureId) {
+        const sd = loadSetData();
+        return sd.features[featureId] !== false;
+      }
+      // 指令到功能ID的映射
+      const cmdFeatureMap = {
+        '/签到': 'checkin', '/天气': 'weather', '/投票': 'vote', '/音乐': 'music', '/播放': 'music',
+        '/绘图': 'draw', '/画': 'draw', '/狼人杀': 'werewolf', '/心灵感应': 'telepathy', '/谁是卧底': 'undercover',
+        '/故事接龙': 'story', '/命运抉择': 'fate', '/DIY': 'diy', '/自制': 'diy',
+        '/违禁词': 'forbidden', '/黑名单': 'blacklist', '/禁言': 'mute', '/欢迎': 'welcome',
+        '/活跃': 'activity', '/推送': 'broadcast', '/全局推送': 'broadcast'
+      };
+      // 检查当前指令是否被关闭
+      let featureBlocked = false;
+      for (const [cmd, fid] of Object.entries(cmdFeatureMap)) {
+        if (content.startsWith(cmd) && !isFeatureEnabled(fid)) {
+          sendMsg(cid, `⚠️ 该功能已被管理员关闭`);
+          featureBlocked = true;
+          break;
+        }
+      }
+      if (featureBlocked) return;
+
       // @机器人 AI 对话
       const botUid = botUserId || botInfo.userId || 3039;
       const botIdNum = botInfo.botId || 421;
@@ -2898,6 +2925,12 @@ ${isClassGroup ? '' : '<link action="callback" action_id="help_diy">自制指令
       }
       else if (content.startsWith('/set-key')) {
         if (String(msg.sender_id) !== '3038') { sendMsg(msg.conversation_id, '❌ 只有创始人可以设置API key'); return; }
+        // 检查是否是私聊
+        const isPrivate = !msg.conversation_id || String(msg.conversation_id).startsWith('private_') || msg.conversation_type === 'private' || String(msg.sender_id) === String(msg.conversation_id);
+        if (!isPrivate) {
+          sendMsg(msg.conversation_id, '<markdown>## 🔑 API Key 设置\n\n> ⚠️ 为了安全，请**私聊机器人**设置API key！\n\n私聊发送：\n\`/set-key{模型名,key}\`\n\n例如：\`/set-key{qwen-turbo,sk-xxx}\`</markdown>');
+          return;
+        }
         const match = content.match(/^\/set-key\{(.+?)\}/);
         if (!match) { sendMsg(msg.conversation_id, '⚠️格式：/set-key{模型名,key}\n例如：/set-key{qwen-turbo,sk-xxx}'); return; }
         const params = match[1].split(',').map(s => s.trim());
