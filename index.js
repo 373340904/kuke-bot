@@ -498,9 +498,9 @@ const CHAT_MODELS = [
   // OpenAI（需配置API key）
   { id: 'gpt-4o', name: 'GPT-4o（OpenAI·旗舰）', company: 'OpenAI', desc: 'OpenAI最新多模态旗舰，全能型，推理最强', pros: '全能、多模态、推理强', cons: '需配置API key、收费', context: '128K', api: 'openai' },
   { id: 'gpt-4o-mini', name: 'GPT-4o-Mini（OpenAI·免费）', company: 'OpenAI', desc: 'OpenAI小型模型，有免费额度，快速', pros: '有免费额度、快速', cons: '需配置API key', context: '128K', api: 'openai' },
-  { id: 'gpt-3.5-turbo', name: 'GPT-3.5-Turbo（OpenAI·经典）', company: 'OpenAI', desc: '经典性价比模型，快速稳定', pros: '快速、稳定、便宜', cons: '需配置API key', context: '16K', api: 'openai' },
+  { id: 'gpt-3-5-turbo', name: 'gpt-3-5-turbo（OpenAI·经典）', company: 'OpenAI', desc: '经典性价比模型，快速稳定', pros: '快速、稳定、便宜', cons: '需配置API key', context: '16K', api: 'openai' },
   // Anthropic（需配置API key）
-  { id: 'claude-3.5-sonnet', name: 'Claude-3.5-Sonnet（Anthropic）', company: 'Anthropic', desc: 'Anthropic平衡型，写作和分析最强', pros: '写作好、分析强、安全', cons: '需配置API key、国内访问难', context: '200K', api: 'anthropic' },
+  { id: 'claude-3-5-sonnet', name: 'claude-3-5-sonnet（Anthropic）', company: 'Anthropic', desc: 'Anthropic平衡型，写作和分析最强', pros: '写作好、分析强、安全', cons: '需配置API key、国内访问难', context: '200K', api: 'anthropic' },
   { id: 'claude-3-opus', name: 'Claude-3-Opus（Anthropic·最强）', company: 'Anthropic', desc: 'Anthropic最强模型，深度推理', pros: '推理最强、写作最好', cons: '需配置API key、贵', context: '200K', api: 'anthropic' },
   // 深度求索（需配置API key）
   { id: 'deepseek-chat', name: 'DeepSeek-V2（深度求索）', company: '深度求索', desc: '国产开源旗舰，代码和数学最强', pros: '代码强、数学好、开源', cons: '需配置API key', context: '128K', api: 'deepseek' },
