@@ -462,6 +462,181 @@ const FATE_FILE = path.join(__dirname, 'fate_data.json');
 function loadFateData() { return cachedLoad('fate', FATE_FILE, {}); }
 function saveFateData(data) { cachedSave('fate', FATE_FILE, data); }
 
+// ========== 设置系统数据存储 ==========
+const SET_FILE = path.join(__dirname, 'set_data.json');
+function loadSetData() {
+  try {
+    if (!fs.existsSync(SET_FILE)) return getDefaultSetData();
+    const data = JSON.parse(fs.readFileSync(SET_FILE, 'utf-8'));
+    return { ...getDefaultSetData(), ...data };
+  } catch { return getDefaultSetData(); }
+}
+function saveSetData(data) { try { fs.writeFileSync(SET_FILE, JSON.stringify(data, null, 2), 'utf-8'); } catch (e) { console.error('[设置]保存失败:', e.message); } }
+function getDefaultSetData() {
+  return {
+    chatModel: 'glm-4-flash',
+    visionModel: 'glm-4v',
+    features: {
+      ai_chat: true, checkin: true, weather: true, vote: true,
+      music: true, draw: true, werewolf: true, telepathy: true,
+      undercover: true, story: true, fate: true, diy: true,
+      forbidden: true, blacklist: true, mute: true, welcome: true,
+      activity: true, broadcast: true, image_recognition: true
+    },
+    groupAI: {},
+    personality: { tone: 'normal', length: 'medium', markdown: true, temperature: 0.7 }
+  };
+}
+
+// 构建设置卡片
+function buildSetCard(page, cid) {
+  const setData = loadSetData();
+  const navBtn = (dir) => {
+    const target = dir === 'prev' ? page - 1 : page + 1;
+    if (target < 1 || target > 6) return '';
+    const label = dir === 'prev' ? '⬅️ 上一步' : '下一步 ➡️';
+    return `<button action="callback" action_id="set_nav_${dir}_${page}" id="set_nav_${dir}_${page}">${label}</button>\n`;
+  };
+
+  if (page === 1) {
+    // 对话大模型
+    let card = `<markdown>## ⚙️ 设置中心 - 第1/6页\n\n### 🤖 对话大模型\n\n**当前模型：** ${CHAT_MODELS.find(m => m.id === setData.chatModel)?.name || setData.chatModel}\n\n`;
+    CHAT_MODELS.forEach((m, i) => {
+      const active = setData.chatModel === m.id ? '✅ ' : '';
+      card += `<button action="callback" action_id="set_chat_model_${m.id}" id="set_chat_model_${m.id}">${active}${i+1}. ${m.name}</button>\n`;
+    });
+    card += `\n${navBtn('next')}\n> 点击模型切换，切换后显示详细信息</markdown>`;
+    return card;
+  }
+
+  if (page === 2) {
+    // 识图大模型
+    let card = `<markdown>## ⚙️ 设置中心 - 第2/6页\n\n### 🖼️ 识图大模型\n\n**当前模型：** ${VISION_MODELS.find(m => m.id === setData.visionModel)?.name || setData.visionModel}\n\n`;
+    VISION_MODELS.forEach((m, i) => {
+      const active = setData.visionModel === m.id ? '✅ ' : '';
+      card += `<button action="callback" action_id="set_vision_model_${m.id}" id="set_vision_model_${m.id}">${active}${i+1}. ${m.name}</button>\n`;
+    });
+    card += `\n${navBtn('prev')}${navBtn('next')}\n> 点击模型切换识图引擎</markdown>`;
+    return card;
+  }
+
+  if (page === 3) {
+    // 总功能开关
+    let card = `<markdown>## ⚙️ 设置中心 - 第3/6页\n\n### 🔌 总功能开关\n\n`;
+    for (const cat of FEATURE_CATEGORIES) {
+      card += `**${cat.name}**\n`;
+      for (const f of cat.features) {
+        const on = setData.features[f.id] !== false;
+        const status = on ? '🟢 开' : '🔴 关';
+        card += `<button action="callback" action_id="set_feature_${f.id}" id="set_feature_${f.id}">${f.name}：${status}</button>\n`;
+      }
+      card += '\n';
+    }
+    card += `${navBtn('prev')}${navBtn('next')}\n> 点击按钮切换功能开关</markdown>`;
+    return card;
+  }
+
+  if (page === 4) {
+    // 群AI状态管理
+    let card = `<markdown>## ⚙️ 设置中心 - 第4/6页\n\n### 👥 群AI状态管理\n\n`;
+    const groups = loadGroups();
+    if (groups.length === 0) {
+      card += '> 暂无群数据\n\n';
+    } else {
+      card += '| 群号 | AI状态 | 操作 |\n|------|--------|------|\n';
+      for (const gid of groups.slice(0, 10)) {
+        const state = setData.groupAI?.[String(gid)] || 'open';
+        const stateText = state === 'open' ? '🟢 开启' : '🔴 关闭';
+        card += `| \`${gid}\` | ${stateText} | 查看 |\n`;
+      }
+      card += '\n';
+    }
+    card += `**设置指令：**\n\`/set-state{群号,AIstate:open}\` 开启\n\`/set-state{群号,AIstate:off}\` 关闭\n\n`;
+    card += `${navBtn('prev')}${navBtn('next')}\n> 禁用后群内使用AI会提示 The AI in this group has been disabled!</markdown>`;
+    return card;
+  }
+
+  if (page === 5) {
+    // AI个性设置
+    const p = setData.personality;
+    const toneBtn = (val, label) => `<button action="callback" action_id="set_personality_tone_${val}" id="set_personality_tone_${val}">${p.tone === val ? '✅ ' : ''}${label}</button>\n`;
+    const lenBtn = (val, label) => `<button action="callback" action_id="set_personality_length_${val}" id="set_personality_length_${val}">${p.length === val ? '✅ ' : ''}${label}</button>\n`;
+    let card = `<markdown>## ⚙️ 设置中心 - 第5/6页\n\n### 🎭 AI个性设置\n\n**语气风格：**\n${toneBtn('normal', '😐 正常')}${toneBtn('friendly', '😊 友好')}${toneBtn('professional', '💼 专业')}${toneBtn('humorous', '😂 幽默')}\n`;
+    card += `**回复长度：**\n${lenBtn('short', '简短')}${lenBtn('medium', '中等')}${lenBtn('long', '详细')}\n`;
+    card += `**Markdown排版：**\n<button action="callback" action_id="set_personality_markdown_toggle" id="set_personality_markdown_toggle">${p.markdown ? '🟢 已开启' : '🔴 已关闭'}</button>\n\n`;
+    card += `**回复温度：** ${p.temperature}\n<button action="callback" action_id="set_personality_temp_down" id="set_personality_temp_down">➖ 降低</button><button action="callback" action_id="set_personality_temp_up" id="set_personality_temp_up">➕ 升高</button>\n\n`;
+    card += `${navBtn('prev')}${navBtn('next')}\n> 点击按钮调整AI个性</markdown>`;
+    return card;
+  }
+
+  if (page === 6) {
+    // 数据与维护
+    let card = `<markdown>## ⚙️ 设置中心 - 第6/6页\n\n### 📊 数据与维护\n\n`;
+    card += `**当前配置：**\n- 对话模型：${CHAT_MODELS.find(m => m.id === setData.chatModel)?.name || setData.chatModel}\n- 识图模型：${VISION_MODELS.find(m => m.id === setData.visionModel)?.name || setData.visionModel}\n- 已开启功能：${Object.values(setData.features).filter(v => v !== false).length}/${Object.keys(setData.features).length}\n- 已管理群：${Object.keys(setData.groupAI || {}).length}个\n\n`;
+    card += `**维护操作：**\n<button action="callback" action_id="set_action_reset" id="set_action_reset">🔄 恢复默认设置</button>\n<button action="callback" action_id="set_action_export" id="set_action_export">📤 导出配置</button>\n\n`;
+    card += `**关于：**\n> 君灵bot 设置系统 v1.0\n> 创始人：君衔（ID 3038）\n> 所有设置即时生效\n\n`;
+    card += `${navBtn('prev')}\n> 设置完成，感谢使用！</markdown>`;
+    return card;
+  }
+
+  return '<markdown>## ⚙️ 设置中心\n\n页面不存在</markdown>';
+}
+
+// 对话大模型列表
+const CHAT_MODELS = [
+  { id: 'glm-4-flash', name: 'GLM-4-Flash', company: '智谱AI', desc: '免费高速，适合日常对话，响应极快', pros: '免费、快速、中文好', cons: '复杂推理一般', context: '128K' },
+  { id: 'glm-4', name: 'GLM-4', company: '智谱AI', desc: '智谱旗舰模型，综合能力强', pros: '综合强、中文好、工具调用', cons: '收费', context: '128K' },
+  { id: 'gpt-4o', name: 'GPT-4o', company: 'OpenAI', desc: 'OpenAI最新多模态旗舰，全能型', pros: '全能、多模态、推理强', cons: '收费、较慢', context: '128K' },
+  { id: 'gpt-3.5-turbo', name: 'GPT-3.5-Turbo', company: 'OpenAI', desc: '经典性价比模型，快速稳定', pros: '快速、稳定、便宜', cons: '能力一般', context: '16K' },
+  { id: 'claude-3.5-sonnet', name: 'Claude-3.5-Sonnet', company: 'Anthropic', desc: 'Anthropic平衡型，写作和分析强', pros: '写作好、分析强、安全', cons: '收费、国内访问难', context: '200K' },
+  { id: 'claude-3-opus', name: 'Claude-3-Opus', company: 'Anthropic', desc: 'Anthropic最强模型，深度推理', pros: '推理最强、写作最好', cons: '贵、慢、国内访问难', context: '200K' },
+  { id: 'deepseek-v2', name: 'DeepSeek-V2', company: '深度求索', desc: '国产开源旗舰，代码和数学强', pros: '开源、代码强、数学好', cons: '中文一般', context: '128K' },
+  { id: 'qwen-max', name: 'Qwen-Max', company: '阿里通义', desc: '阿里旗舰，中文理解最强', pros: '中文最强、工具调用、便宜', cons: '推理一般', context: '32K' }
+];
+
+// 识图大模型列表
+const VISION_MODELS = [
+  { id: 'glm-4v', name: 'GLM-4V', company: '智谱AI', desc: '智谱多模态，图文理解', pros: '免费、中文好、快速', cons: '细节一般', context: '8K' },
+  { id: 'gpt-4v', name: 'GPT-4V', company: 'OpenAI', desc: 'OpenAI视觉模型，识别精准', pros: '识别准、细节好', cons: '收费、慢', context: '128K' },
+  { id: 'claude-3-opus-vision', name: 'Claude-3-Opus-Vision', company: 'Anthropic', desc: 'Anthropic视觉，文档理解强', pros: '文档强、分析深', cons: '贵、国内访问难', context: '200K' },
+  { id: 'qwen-vl-max', name: 'Qwen-VL-Max', company: '阿里通义', desc: '阿里视觉，中文OCR最强', pros: 'OCR强、中文好、便宜', cons: '推理一般', context: '32K' },
+  { id: 'deepseek-vl', name: 'DeepSeek-VL', company: '深度求索', desc: '开源视觉模型', pros: '开源、可本地部署', cons: '能力一般', context: '4K' },
+  { id: 'gemini-pro-vision', name: 'Gemini-Pro-Vision', company: 'Google', desc: 'Google多模态，实时性强', pros: '实时、多模态、免费额度', cons: '国内访问难、中文一般', context: '32K' },
+  { id: 'llava-1.6', name: 'LLaVA-1.6', company: '开源社区', desc: '最流行开源视觉模型', pros: '开源、免费、可部署', cons: '能力有限', context: '4K' },
+  { id: 'internvl2', name: 'InternVL2', company: '上海AI实验室', desc: '国产开源视觉，性能接近闭源', pros: '开源、性能强、中文好', cons: '部署要求高', context: '8K' }
+];
+
+// 功能列表（分类）
+const FEATURE_CATEGORIES = [
+  { name: '🤖 AI功能', features: [
+    { id: 'ai_chat', name: 'AI对话', desc: '@机器人对话' },
+    { id: 'image_recognition', name: '图片识别', desc: 'AI识别图片内容' }
+  ]},
+  { name: '📋 日常工具', features: [
+    { id: 'checkin', name: '签到', desc: '每日签到运势' },
+    { id: 'weather', name: '天气', desc: '查询天气' },
+    { id: 'music', name: '音乐播放', desc: '搜索播放音乐' },
+    { id: 'draw', name: 'AI绘图', desc: 'AI生成图片' }
+  ]},
+  { name: '🎮 游戏娱乐', features: [
+    { id: 'vote', name: '投票', desc: '发起投票' },
+    { id: 'werewolf', name: '狼人杀', desc: '狼人杀游戏' },
+    { id: 'telepathy', name: '心灵感应', desc: '默契度游戏' },
+    { id: 'undercover', name: '谁是卧底', desc: '卧底游戏' },
+    { id: 'story', name: '故事接龙', desc: 'AI故事接龙' },
+    { id: 'fate', name: '命运抉择', desc: '互动剧情冒险' },
+    { id: 'diy', name: 'DIY自制指令', desc: '自定义指令' }
+  ]},
+  { name: '🔧 群管理', features: [
+    { id: 'forbidden', name: '违禁词', desc: '违禁词检测' },
+    { id: 'blacklist', name: '黑名单', desc: '黑名单管理' },
+    { id: 'mute', name: '禁言', desc: '禁言管理' },
+    { id: 'welcome', name: '进群欢迎', desc: '新人欢迎' },
+    { id: 'activity', name: '群活跃统计', desc: '活跃度统计' },
+    { id: 'broadcast', name: '全局推送', desc: '全局消息推送' }
+  ]}
+];
+
 // AI调用辅助函数（供创意游戏使用）
 async function callAI(prompt, systemPrompt) {
   if (!ZHIPU_API_KEY) throw new Error('ZHIPU_API_KEY 未配置');
@@ -2135,6 +2310,15 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
       if (isAtBot && atPureText.startsWith('/')) {
         content = atPureText;
       }
+      // 群AI状态检查
+      if (isAtBot && !atPureText.startsWith('/')) {
+        const setDataAI = loadSetData();
+        const groupAIState = setDataAI.groupAI?.[String(cid)];
+        if (groupAIState === 'off') {
+          sendMsg(cid, '<markdown>## ⚠️ The AI in this group has been disabled!\n\n> 此群AI功能已被管理员禁用\n> 请联系管理员开启或使用其他群</markdown>');
+          return;
+        }
+      }
       if (isAtBot && !atPureText.startsWith('/')) {
         let question = atPureText;
         // 检测图片
@@ -2679,6 +2863,27 @@ ${isClassGroup ? '' : '<link action="callback" action_id="help_diy">自制指令
 > 君灵bot由君衔独立开发维护，致力于打造最懂用户的智能机器人助手。
 </markdown>`;
         sendMsg(msg.conversation_id, aboutText);
+      }
+      else if (content === '/set' || content === '/设置') {
+        if (msg.sender_id !== 3038 && !isOwner) { sendMsg(msg.conversation_id, '❌ 只有创始人或群主可以使用设置'); return; }
+        sendMsg(msg.conversation_id, buildSetCard(1, cid));
+      }
+      else if (content.startsWith('/set-state')) {
+        if (msg.sender_id !== 3038 && !isOwner) { sendMsg(msg.conversation_id, '❌ 只有创始人或群主可以设置'); return; }
+        const match = content.match(/^\/set-state\{(.+?)\}/);
+        if (!match) { sendMsg(msg.conversation_id, '⚠️格式：/set-state{群号,AIstate:open} 或 /set-state{群号,AIstate:off}'); return; }
+        const params = match[1].split(',').map(s => s.trim());
+        const groupId = params[0];
+        let state = 'open';
+        for (const p of params) {
+          if (p.startsWith('AIstate:')) state = p.split(':')[1].trim();
+        }
+        const setData = loadSetData();
+        if (!setData.groupAI) setData.groupAI = {};
+        setData.groupAI[groupId] = state;
+        saveSetData(setData);
+        const stateText = state === 'open' ? '✅ 已开启' : '❌ 已关闭';
+        sendMsg(msg.conversation_id, `<markdown>## ⚙️ 群AI状态已设置\n\n**群号：** \`${groupId}\`\n**AI状态：** ${stateText}\n\n> 格式：\`/set-state{群号,AIstate:open/off}\`</markdown>`);
       }
       else if (content === '/违禁词表格') {
         sendMsg(msg.conversation_id, buildForbiddenTable(msg.conversation_id, '📋 当前违禁词列表'));
@@ -4077,6 +4282,97 @@ C. 选项三内容
         saveTelepathyData(teleData);
         setBtn(data, actionId, '▶️ 已开始', 'success', true);
         sendMsg(data.conversation_id, `<markdown>## 🧠 心灵感应开始！\n\n**主题：** ${game.theme}\n**参与者：** ${playerCount}人\n\n📢 请出题者 <at id="${game.creator}" /> **私聊机器人**发送3个答案（每行一个）\n\n> 参与者准备好猜答案了吗？</markdown>`);
+      }
+      // 设置系统导航按钮
+      else if (actionId.startsWith('set_nav_')) {
+        const parts = actionId.split('_');
+        const dir = parts[2];
+        const page = parseInt(parts[3]);
+        const targetPage = dir === 'prev' ? page - 1 : page + 1;
+        setBtn(data, actionId, dir === 'prev' ? '⬅️' : '➡️', 'default', true);
+        sendMsg(data.conversation_id, buildSetCard(targetPage, String(data.conversation_id)));
+      }
+      // 设置对话模型
+      else if (actionId.startsWith('set_chat_model_')) {
+        const modelId = actionId.replace('set_chat_model_', '');
+        const model = CHAT_MODELS.find(m => m.id === modelId);
+        if (!model) { setBtn(data, actionId, '❌ 模型不存在', 'danger', true); return; }
+        const setData = loadSetData();
+        setData.chatModel = modelId;
+        saveSetData(setData);
+        setBtn(data, actionId, `✅ ${model.name}`, 'success', true);
+        sendMsg(data.conversation_id, `<markdown>## 🤖 对话模型已切换\n\n**模型名称：** ${model.name}\n**开发商：** ${model.company}\n**上下文：** ${model.context}\n\n**简介：** ${model.desc}\n\n**优点：** ${model.pros}\n**缺点：** ${model.cons}\n\n> 已切换为 ${model.name}，后续AI对话使用此模型</markdown>`);
+      }
+      // 设置识图模型
+      else if (actionId.startsWith('set_vision_model_')) {
+        const modelId = actionId.replace('set_vision_model_', '');
+        const model = VISION_MODELS.find(m => m.id === modelId);
+        if (!model) { setBtn(data, actionId, '❌ 模型不存在', 'danger', true); return; }
+        const setData = loadSetData();
+        setData.visionModel = modelId;
+        saveSetData(setData);
+        setBtn(data, actionId, `✅ ${model.name}`, 'success', true);
+        sendMsg(data.conversation_id, `<markdown>## 🖼️ 识图模型已切换\n\n**模型名称：** ${model.name}\n**开发商：** ${model.company}\n**上下文：** ${model.context}\n\n**简介：** ${model.desc}\n\n**优点：** ${model.pros}\n**缺点：** ${model.cons}\n\n> 已切换为 ${model.name}，后续图片识别使用此模型</markdown>`);
+      }
+      // 功能开关
+      else if (actionId.startsWith('set_feature_')) {
+        const featureId = actionId.replace('set_feature_', '');
+        const setData = loadSetData();
+        const current = setData.features[featureId] !== false;
+        setData.features[featureId] = !current;
+        saveSetData(setData);
+        const newStatus = !current ? '🟢 开' : '🔴 关';
+        setBtn(data, actionId, `${featureId}：${newStatus}`, !current ? 'success' : 'danger', false);
+        sendMsg(data.conversation_id, `✅ 功能 ${featureId} 已${!current ? '开启' : '关闭'}`);
+      }
+      // 个性设置-语气
+      else if (actionId.startsWith('set_personality_tone_')) {
+        const val = actionId.replace('set_personality_tone_', '');
+        const setData = loadSetData();
+        setData.personality.tone = val;
+        saveSetData(setData);
+        setBtn(data, actionId, '✅ 已设置', 'success', true);
+        sendMsg(data.conversation_id, `✅ AI语气已设置为：${val}`);
+      }
+      // 个性设置-长度
+      else if (actionId.startsWith('set_personality_length_')) {
+        const val = actionId.replace('set_personality_length_', '');
+        const setData = loadSetData();
+        setData.personality.length = val;
+        saveSetData(setData);
+        setBtn(data, actionId, '✅ 已设置', 'success', true);
+        sendMsg(data.conversation_id, `✅ AI回复长度已设置为：${val}`);
+      }
+      // 个性设置-Markdown开关
+      else if (actionId === 'set_personality_markdown_toggle') {
+        const setData = loadSetData();
+        setData.personality.markdown = !setData.personality.markdown;
+        saveSetData(setData);
+        setBtn(data, actionId, setData.personality.markdown ? '🟢 已开启' : '🔴 已关闭', setData.personality.markdown ? 'success' : 'danger', false);
+        sendMsg(data.conversation_id, `✅ Markdown排版已${setData.personality.markdown ? '开启' : '关闭'}`);
+      }
+      // 个性设置-温度调整
+      else if (actionId === 'set_personality_temp_up' || actionId === 'set_personality_temp_down') {
+        const setData = loadSetData();
+        const delta = actionId === 'set_personality_temp_up' ? 0.1 : -0.1;
+        setData.personality.temperature = Math.max(0, Math.min(2, Math.round((setData.personality.temperature + delta) * 10) / 10));
+        saveSetData(setData);
+        setBtn(data, actionId, `当前：${setData.personality.temperature}`, 'default', false);
+        sendMsg(data.conversation_id, `✅ 回复温度已调整为：${setData.personality.temperature}`);
+      }
+      // 维护操作
+      else if (actionId.startsWith('set_action_')) {
+        const action = actionId.replace('set_action_', '');
+        if (action === 'reset') {
+          const setData = getDefaultSetData();
+          saveSetData(setData);
+          setBtn(data, actionId, '✅ 已恢复默认', 'success', true);
+          sendMsg(data.conversation_id, '✅ 所有设置已恢复默认值');
+        } else if (action === 'export') {
+          const setData = loadSetData();
+          setBtn(data, actionId, '📤 导出中...', 'default', true);
+          sendMsg(data.conversation_id, `<markdown>## 📤 配置导出\n\n**对话模型：** ${setData.chatModel}\n**识图模型：** ${setData.visionModel}\n**已开启功能：** ${Object.values(setData.features).filter(v => v !== false).length}个\n\n> 完整配置已记录，可在 set_data.json 查看</markdown>`);
+        }
       }
       // 命运抉择投票按钮（单人模式）
       else if (actionId.startsWith('fate_')) {
