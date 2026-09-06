@@ -4393,6 +4393,18 @@ C. 选项三内容
           const card = buildSetCard(targetPage, String(data.conversation_id));
           sendMsg(data.conversation_id, card);
           console.log('[设置导航] 已发送第', targetPage, '页');
+          // 撤回旧卡片，避免旧卡片按钮还能点
+          if (data.message_id) {
+            try {
+              await fetch(`${BASE_URL}/bot-api/conversations/${data.conversation_id}/messages/${data.message_id}/recall`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${BOT_KEY}` }
+              });
+              console.log('[设置导航] 已撤回旧卡片');
+            } catch (recallErr) {
+              console.log('[设置导航] 撤回旧卡片失败（可忽略）:', recallErr.message);
+            }
+          }
         } catch (e) {
           console.error('[设置导航错误]', e.message, e.stack);
           sendMsg(data.conversation_id, `❌ 导航失败：${e.message}`);
