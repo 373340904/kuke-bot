@@ -2105,16 +2105,16 @@ function connect() {
       // 忽略自己发的消息
       if (msg.sender?.is_bot) return;
 
+      // 去重（必须在所有处理之前）
+      if (seenIds.has(msg.id)) return;
+      seenIds.add(msg.id);
+      if (seenIds.size > 500) seenIds.clear();
+
       // 群3900已作废，提示前往新群（任何消息都触发）
       if (String(msg.conversation_id) === '3900') {
         sendMsg(msg.conversation_id, '⚠️ 此群已作废，请前往 https://link.wtturl.cn/?target=https%3A%2F%2Fccw.site%2Fdetail%2F66d52d2366bfcb0e0b42e7c8%3Finvite%3DFfplCSsFqYCvtz7IzGHs6x&scene=im&aid=582478&lang=zh 加入新群！！');
         return;
       }
-
-      // 去重
-      if (seenIds.has(msg.id)) return;
-      seenIds.add(msg.id);
-      if (seenIds.size > 500) seenIds.clear();
 
       // 记录群ID，用于全局推送
       addGroup(msg.conversation_id);
