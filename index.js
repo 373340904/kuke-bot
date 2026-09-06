@@ -1269,9 +1269,50 @@ function saveSwitches(data) {
   fs.writeFileSync(SWITCH_FILE, JSON.stringify(data, null, 2), 'utf-8');
 }
 function isFeatureEnabled(cid, feature) {
+  // 旧系统：按群区分的功能开关
   const data = loadSwitches();
   const disabled = data[String(cid)] || [];
-  return !disabled.includes(feature);
+  const groupEnabled = !disabled.includes(feature);
+  
+  // 新系统：全局功能开关（/set 里设置的，所有群生效）
+  const featureMap = {
+    '签到': 'checkin',
+    '天气': 'weather',
+    '投票': 'vote',
+    '音乐': 'music',
+    '绘图': 'draw',
+    '狼人杀': 'werewolf',
+    '心灵感应': 'telepathy',
+    '谁是卧底': 'undercover',
+    '故事接龙': 'story',
+    '命运抉择': 'fate',
+    'DIY': 'diy',
+    '违禁词检测': 'forbidden',
+    '黑名单': 'blacklist',
+    '禁言': 'mute',
+    '进群欢迎': 'welcome',
+    '群活跃': 'activity',
+    '全局推送': 'broadcast',
+    '群在线人数': 'ai_chat',
+    'AI对话': 'ai_chat',
+    '图片识别': 'image_recognition'
+  };
+  const globalFeatureId = featureMap[feature];
+  let globalEnabled = true;
+  if (globalFeatureId) {
+    try {
+      const setData = loadSetData();
+      globalEnabled = setData.features[globalFeatureId] !== false;
+    } catch (e) {
+      console.log('[功能开关] 读取全局设置失败:', e.message);
+    }
+  }
+  
+  const result = groupEnabled && globalEnabled;
+  if (!result) {
+    console.log('[功能开关] 功能', feature, '被关闭，群:', cid, '群开关:', groupEnabled, '全局开关:', globalEnabled);
+  }
+  return result;
 }
 function setFeature(cid, feature, enable) {
   const data = loadSwitches();
