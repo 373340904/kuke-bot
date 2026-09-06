@@ -2871,8 +2871,17 @@ ${isClassGroup ? '' : '<link action="callback" action_id="help_diy">自制指令
         sendMsg(msg.conversation_id, aboutText);
       }
       else if (content === '/set' || content === '/设置') {
-        if (msg.sender_id !== 3038 && !isOwner) { sendMsg(msg.conversation_id, '❌ 只有创始人或群主可以使用设置'); return; }
-        sendMsg(msg.conversation_id, buildSetCard(1, cid));
+        console.log('[设置调试] sender_id=', msg.sender_id, 'type=', typeof msg.sender_id);
+        const isCreator = String(msg.sender_id) === '3038';
+        const isGroupOwner = typeof isOwner !== 'undefined' && isOwner;
+        if (!isCreator && !isGroupOwner) { sendMsg(msg.conversation_id, `❌ 只有创始人或群主可以使用设置（你的ID：${msg.sender_id}）`); return; }
+        try {
+          const card = buildSetCard(1, cid);
+          sendMsg(msg.conversation_id, card);
+        } catch (e) {
+          console.error('[设置错误]', e.message, e.stack);
+          sendMsg(msg.conversation_id, `❌ 生成设置卡片失败：${e.message}`);
+        }
       }
       else if (content.startsWith('/set-state')) {
         if (msg.sender_id !== 3038 && !isOwner) { sendMsg(msg.conversation_id, '❌ 只有创始人或群主可以设置'); return; }
