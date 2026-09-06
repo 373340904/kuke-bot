@@ -488,6 +488,58 @@ function getDefaultSetData() {
   };
 }
 
+const CHAT_MODELS = [
+  { id: 'glm-4-flash', name: 'GLM-4-Flash', company: '智谱AI', desc: '免费高速，适合日常对话，响应极快', pros: '免费、快速、中文好', cons: '复杂推理一般', context: '128K' },
+  { id: 'glm-4', name: 'GLM-4', company: '智谱AI', desc: '智谱旗舰模型，综合能力强', pros: '综合强、中文好、工具调用', cons: '收费', context: '128K' },
+  { id: 'gpt-4o', name: 'GPT-4o', company: 'OpenAI', desc: 'OpenAI最新多模态旗舰，全能型', pros: '全能、多模态、推理强', cons: '收费、较慢', context: '128K' },
+  { id: 'gpt-3.5-turbo', name: 'GPT-3.5-Turbo', company: 'OpenAI', desc: '经典性价比模型，快速稳定', pros: '快速、稳定、便宜', cons: '能力一般', context: '16K' },
+  { id: 'claude-3.5-sonnet', name: 'Claude-3.5-Sonnet', company: 'Anthropic', desc: 'Anthropic平衡型，写作和分析强', pros: '写作好、分析强、安全', cons: '收费、国内访问难', context: '200K' },
+  { id: 'claude-3-opus', name: 'Claude-3-Opus', company: 'Anthropic', desc: 'Anthropic最强模型，深度推理', pros: '推理最强、写作最好', cons: '贵、慢、国内访问难', context: '200K' },
+  { id: 'deepseek-v2', name: 'DeepSeek-V2', company: '深度求索', desc: '国产开源旗舰，代码和数学强', pros: '开源、代码强、数学好', cons: '中文一般', context: '128K' },
+  { id: 'qwen-max', name: 'Qwen-Max', company: '阿里通义', desc: '阿里旗舰，中文理解最强', pros: '中文最强、工具调用、便宜', cons: '推理一般', context: '32K' }
+];
+
+const VISION_MODELS = [
+  { id: 'glm-4v', name: 'GLM-4V', company: '智谱AI', desc: '智谱多模态，图文理解', pros: '免费、中文好、快速', cons: '细节一般', context: '8K' },
+  { id: 'gpt-4v', name: 'GPT-4V', company: 'OpenAI', desc: 'OpenAI视觉模型，识别精准', pros: '识别准、细节好', cons: '收费、慢', context: '128K' },
+  { id: 'claude-3-opus-vision', name: 'Claude-3-Opus-Vision', company: 'Anthropic', desc: 'Anthropic视觉，文档理解强', pros: '文档强、分析深', cons: '贵、国内访问难', context: '200K' },
+  { id: 'qwen-vl-max', name: 'Qwen-VL-Max', company: '阿里通义', desc: '阿里视觉，中文OCR最强', pros: 'OCR强、中文好、便宜', cons: '推理一般', context: '32K' },
+  { id: 'deepseek-vl', name: 'DeepSeek-VL', company: '深度求索', desc: '开源视觉模型', pros: '开源、可本地部署', cons: '能力一般', context: '4K' },
+  { id: 'gemini-pro-vision', name: 'Gemini-Pro-Vision', company: 'Google', desc: 'Google多模态，实时性强', pros: '实时、多模态、免费额度', cons: '国内访问难、中文一般', context: '32K' },
+  { id: 'llava-1.6', name: 'LLaVA-1.6', company: '开源社区', desc: '最流行开源视觉模型', pros: '开源、免费、可部署', cons: '能力有限', context: '4K' },
+  { id: 'internvl2', name: 'InternVL2', company: '上海AI实验室', desc: '国产开源视觉，性能接近闭源', pros: '开源、性能强、中文好', cons: '部署要求高', context: '8K' }
+];
+
+const FEATURE_CATEGORIES = [
+  { name: '🤖 AI功能', features: [
+    { id: 'ai_chat', name: 'AI对话', desc: '@机器人对话' },
+    { id: 'image_recognition', name: '图片识别', desc: 'AI识别图片内容' }
+  ]},
+  { name: '📋 日常工具', features: [
+    { id: 'checkin', name: '签到', desc: '每日签到运势' },
+    { id: 'weather', name: '天气', desc: '查询天气' },
+    { id: 'music', name: '音乐播放', desc: '搜索播放音乐' },
+    { id: 'draw', name: 'AI绘图', desc: 'AI生成图片' }
+  ]},
+  { name: '🎮 游戏娱乐', features: [
+    { id: 'vote', name: '投票', desc: '发起投票' },
+    { id: 'werewolf', name: '狼人杀', desc: '狼人杀游戏' },
+    { id: 'telepathy', name: '心灵感应', desc: '默契度游戏' },
+    { id: 'undercover', name: '谁是卧底', desc: '卧底游戏' },
+    { id: 'story', name: '故事接龙', desc: 'AI故事接龙' },
+    { id: 'fate', name: '命运抉择', desc: '互动剧情冒险' },
+    { id: 'diy', name: 'DIY自制指令', desc: '自定义指令' }
+  ]},
+  { name: '🔧 群管理', features: [
+    { id: 'forbidden', name: '违禁词', desc: '违禁词检测' },
+    { id: 'blacklist', name: '黑名单', desc: '黑名单管理' },
+    { id: 'mute', name: '禁言', desc: '禁言管理' },
+    { id: 'welcome', name: '进群欢迎', desc: '新人欢迎' },
+    { id: 'activity', name: '群活跃统计', desc: '活跃度统计' },
+    { id: 'broadcast', name: '全局推送', desc: '全局消息推送' }
+  ]}
+];
+
 // 构建设置卡片
 function buildSetCard(page, cid) {
   const setData = loadSetData();
@@ -583,59 +635,13 @@ function buildSetCard(page, cid) {
 }
 
 // 对话大模型列表
-const CHAT_MODELS = [
-  { id: 'glm-4-flash', name: 'GLM-4-Flash', company: '智谱AI', desc: '免费高速，适合日常对话，响应极快', pros: '免费、快速、中文好', cons: '复杂推理一般', context: '128K' },
-  { id: 'glm-4', name: 'GLM-4', company: '智谱AI', desc: '智谱旗舰模型，综合能力强', pros: '综合强、中文好、工具调用', cons: '收费', context: '128K' },
-  { id: 'gpt-4o', name: 'GPT-4o', company: 'OpenAI', desc: 'OpenAI最新多模态旗舰，全能型', pros: '全能、多模态、推理强', cons: '收费、较慢', context: '128K' },
-  { id: 'gpt-3.5-turbo', name: 'GPT-3.5-Turbo', company: 'OpenAI', desc: '经典性价比模型，快速稳定', pros: '快速、稳定、便宜', cons: '能力一般', context: '16K' },
-  { id: 'claude-3.5-sonnet', name: 'Claude-3.5-Sonnet', company: 'Anthropic', desc: 'Anthropic平衡型，写作和分析强', pros: '写作好、分析强、安全', cons: '收费、国内访问难', context: '200K' },
-  { id: 'claude-3-opus', name: 'Claude-3-Opus', company: 'Anthropic', desc: 'Anthropic最强模型，深度推理', pros: '推理最强、写作最好', cons: '贵、慢、国内访问难', context: '200K' },
-  { id: 'deepseek-v2', name: 'DeepSeek-V2', company: '深度求索', desc: '国产开源旗舰，代码和数学强', pros: '开源、代码强、数学好', cons: '中文一般', context: '128K' },
-  { id: 'qwen-max', name: 'Qwen-Max', company: '阿里通义', desc: '阿里旗舰，中文理解最强', pros: '中文最强、工具调用、便宜', cons: '推理一般', context: '32K' }
-];
+
 
 // 识图大模型列表
-const VISION_MODELS = [
-  { id: 'glm-4v', name: 'GLM-4V', company: '智谱AI', desc: '智谱多模态，图文理解', pros: '免费、中文好、快速', cons: '细节一般', context: '8K' },
-  { id: 'gpt-4v', name: 'GPT-4V', company: 'OpenAI', desc: 'OpenAI视觉模型，识别精准', pros: '识别准、细节好', cons: '收费、慢', context: '128K' },
-  { id: 'claude-3-opus-vision', name: 'Claude-3-Opus-Vision', company: 'Anthropic', desc: 'Anthropic视觉，文档理解强', pros: '文档强、分析深', cons: '贵、国内访问难', context: '200K' },
-  { id: 'qwen-vl-max', name: 'Qwen-VL-Max', company: '阿里通义', desc: '阿里视觉，中文OCR最强', pros: 'OCR强、中文好、便宜', cons: '推理一般', context: '32K' },
-  { id: 'deepseek-vl', name: 'DeepSeek-VL', company: '深度求索', desc: '开源视觉模型', pros: '开源、可本地部署', cons: '能力一般', context: '4K' },
-  { id: 'gemini-pro-vision', name: 'Gemini-Pro-Vision', company: 'Google', desc: 'Google多模态，实时性强', pros: '实时、多模态、免费额度', cons: '国内访问难、中文一般', context: '32K' },
-  { id: 'llava-1.6', name: 'LLaVA-1.6', company: '开源社区', desc: '最流行开源视觉模型', pros: '开源、免费、可部署', cons: '能力有限', context: '4K' },
-  { id: 'internvl2', name: 'InternVL2', company: '上海AI实验室', desc: '国产开源视觉，性能接近闭源', pros: '开源、性能强、中文好', cons: '部署要求高', context: '8K' }
-];
+
 
 // 功能列表（分类）
-const FEATURE_CATEGORIES = [
-  { name: '🤖 AI功能', features: [
-    { id: 'ai_chat', name: 'AI对话', desc: '@机器人对话' },
-    { id: 'image_recognition', name: '图片识别', desc: 'AI识别图片内容' }
-  ]},
-  { name: '📋 日常工具', features: [
-    { id: 'checkin', name: '签到', desc: '每日签到运势' },
-    { id: 'weather', name: '天气', desc: '查询天气' },
-    { id: 'music', name: '音乐播放', desc: '搜索播放音乐' },
-    { id: 'draw', name: 'AI绘图', desc: 'AI生成图片' }
-  ]},
-  { name: '🎮 游戏娱乐', features: [
-    { id: 'vote', name: '投票', desc: '发起投票' },
-    { id: 'werewolf', name: '狼人杀', desc: '狼人杀游戏' },
-    { id: 'telepathy', name: '心灵感应', desc: '默契度游戏' },
-    { id: 'undercover', name: '谁是卧底', desc: '卧底游戏' },
-    { id: 'story', name: '故事接龙', desc: 'AI故事接龙' },
-    { id: 'fate', name: '命运抉择', desc: '互动剧情冒险' },
-    { id: 'diy', name: 'DIY自制指令', desc: '自定义指令' }
-  ]},
-  { name: '🔧 群管理', features: [
-    { id: 'forbidden', name: '违禁词', desc: '违禁词检测' },
-    { id: 'blacklist', name: '黑名单', desc: '黑名单管理' },
-    { id: 'mute', name: '禁言', desc: '禁言管理' },
-    { id: 'welcome', name: '进群欢迎', desc: '新人欢迎' },
-    { id: 'activity', name: '群活跃统计', desc: '活跃度统计' },
-    { id: 'broadcast', name: '全局推送', desc: '全局消息推送' }
-  ]}
-];
+
 
 // AI调用辅助函数（供创意游戏使用）
 async function callAI(prompt, systemPrompt) {
