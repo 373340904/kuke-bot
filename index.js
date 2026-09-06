@@ -489,24 +489,24 @@ function getDefaultSetData() {
 }
 
 const CHAT_MODELS = [
-  { id: 'glm-4-flash', name: 'GLM-4-Flash', company: '智谱AI', desc: '免费高速，128K上下文', pros: '✅ 内置key，免费', context: '128K', api: 'zhipu', hasKey: true },
-  { id: 'glm-4-air', name: 'GLM-4-Air', company: '智谱AI', desc: '高性价比，性能强', pros: '✅ 内置key，免费额度', context: '128K', api: 'zhipu', hasKey: true },
-  { id: 'glm-3-turbo', name: 'GLM-3-Turbo', company: '智谱AI', desc: '经典稳定，便宜', pros: '✅ 内置key，免费额度', context: '128K', api: 'zhipu', hasKey: true },
-  { id: 'pollinations-openai', name: 'Pollinations-GPT', company: 'Pollinations', desc: '✅ 完全免费，无需key，OpenAI模型', pros: '✅ 免费、无需key、直接用', context: '128K', api: 'pollinations', hasKey: true },
-  { id: 'pollinations-mistral', name: 'Pollinations-Mistral', company: 'Pollinations', desc: '✅ 完全免费，无需key，Mistral模型', pros: '✅ 免费、无需key、直接用', context: '128K', api: 'pollinations', hasKey: true },
-  { id: 'gpt-4o-mini', name: 'GPT-4o-Mini', company: 'OpenAI', desc: '轻量旗舰，免费额度', pros: '需输入key，免费额度', context: '128K', api: 'openai', hasKey: false },
-  { id: 'claude-3-5-sonnet', name: 'Claude-3.5', company: 'Anthropic', desc: '写作分析最强', pros: '需输入key', context: '200K', api: 'anthropic', hasKey: false },
-  { id: 'qwen-turbo', name: 'Qwen-Turbo', company: '阿里通义', desc: '极速，免费额度', pros: '需输入key，免费额度', context: '128K', api: 'qwen', hasKey: false },
-  { id: 'qwen-plus', name: 'Qwen-Plus', company: '阿里通义', desc: '性价比，免费额度', pros: '需输入key，免费额度', context: '128K', api: 'qwen', hasKey: false },
-  { id: 'doubao-lite', name: 'Doubao-Lite', company: '字节豆包', desc: '轻量，免费额度', pros: '需输入key，免费额度', context: '32K', api: 'doubao', hasKey: false },
-  { id: 'spark-lite', name: 'Spark-Lite', company: '讯飞星火', desc: '轻量，免费额度', pros: '需输入key，免费额度', context: '16K', api: 'xfyun', hasKey: false },
-  { id: 'deepseek-chat', name: 'DeepSeek-V2', company: '深度求索', desc: '代码数学强，便宜', pros: '需输入key，便宜', context: '128K', api: 'deepseek', hasKey: false }
+  { id: 'glm-4-flash', name: 'GLM-4-Flash', company: '智谱AI', desc: '免费高速，128K上下文', pros: '免费、响应快、中文好', cons: '复杂推理一般', context: '128K', api: 'zhipu', hasKey: true },
+  { id: 'glm-4-air', name: 'GLM-4-Air', company: '智谱AI', desc: '高性价比，性能强', pros: '性价比高、速度快', cons: '比Flash贵', context: '128K', api: 'zhipu', hasKey: true },
+  { id: 'glm-3-turbo', name: 'GLM-3-Turbo', company: '智谱AI', desc: '经典稳定，便宜', pros: '稳定、便宜、成熟', cons: '能力不如GLM-4', context: '128K', api: 'zhipu', hasKey: true },
+  { id: 'pollinations-openai', name: 'Pollinations-GPT', company: 'Pollinations', desc: '完全免费，无需key，OpenAI模型', pros: '免费、无需key、直接用', cons: '速度较慢、偶有限流', context: '128K', api: 'pollinations', hasKey: true },
+  { id: 'pollinations-mistral', name: 'Pollinations-Mistral', company: 'Pollinations', desc: '完全免费，无需key，Mistral模型', pros: '免费、无需key、欧洲模型', cons: '速度较慢、中文一般', context: '128K', api: 'pollinations', hasKey: true },
+  { id: 'gpt-4o-mini', name: 'GPT-4o-Mini', company: 'OpenAI', desc: '轻量旗舰，免费额度', pros: '速度快、能力强、多模态', cons: '需输入key、收费', context: '128K', api: 'openai', hasKey: false },
+  { id: 'claude-3-5-sonnet', name: 'Claude-3.5', company: 'Anthropic', desc: '写作分析最强', pros: '写作好、分析强、200K上下文', cons: '需输入key、国内访问难', context: '200K', api: 'anthropic', hasKey: false },
+  { id: 'qwen-turbo', name: 'Qwen-Turbo', company: '阿里通义', desc: '极速，免费额度', pros: '速度快、中文好、免费额度', cons: '需输入key', context: '128K', api: 'qwen', hasKey: false },
+  { id: 'qwen-plus', name: 'Qwen-Plus', company: '阿里通义', desc: '性价比，免费额度', pros: '性价比高、能力强', cons: '需输入key', context: '128K', api: 'qwen', hasKey: false },
+  { id: 'doubao-lite', name: 'Doubao-Lite', company: '字节豆包', desc: '轻量，免费额度', pros: '字节生态、免费额度', cons: '需输入key', context: '32K', api: 'doubao', hasKey: false },
+  { id: 'spark-lite', name: 'Spark-Lite', company: '讯飞星火', desc: '轻量，免费额度', pros: '语音强、免费额度', cons: '需输入key', context: '16K', api: 'xfyun', hasKey: false },
+  { id: 'deepseek-chat', name: 'DeepSeek-V2', company: '深度求索', desc: '代码数学强，便宜', pros: '代码强、数学好、便宜', cons: '需输入key', context: '128K', api: 'deepseek', hasKey: false }
 ];
 
 const VISION_MODELS = [
-  { id: 'glm-4v-flash', name: 'GLM-4V-Flash', company: '智谱AI', desc: '免费多模态', pros: '✅ 内置key，免费', context: '8K', api: 'zhipu', hasKey: true },
-  { id: 'glm-4v', name: 'GLM-4V', company: '智谱AI', desc: '旗舰多模态', pros: '✅ 内置key', context: '8K', api: 'zhipu', hasKey: true },
-  { id: 'qwen-vl-max', name: 'Qwen-VL-Max', company: '阿里通义', desc: 'OCR最强', pros: '需输入key', context: '32K', api: 'qwen', hasKey: false }
+  { id: 'glm-4v-flash', name: 'GLM-4V-Flash', company: '智谱AI', desc: '免费多模态', pros: '免费、快速', cons: '细节一般', context: '8K', api: 'zhipu', hasKey: true },
+  { id: 'glm-4v', name: 'GLM-4V', company: '智谱AI', desc: '旗舰多模态', pros: '视觉强、综合好', cons: '收费', context: '8K', api: 'zhipu', hasKey: true },
+  { id: 'qwen-vl-max', name: 'Qwen-VL-Max', company: '阿里通义', desc: 'OCR最强', pros: 'OCR强、中文好', cons: '需输入key', context: '32K', api: 'qwen', hasKey: false }
 ];
 
 const FEATURE_CATEGORIES = [
