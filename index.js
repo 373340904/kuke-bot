@@ -489,20 +489,40 @@ function getDefaultSetData() {
 }
 
 const CHAT_MODELS = [
-  { id: 'glm-4-flash', name: 'GLM-4-Flash（免费）', company: '智谱AI', desc: '完全免费！高速响应，适合日常对话，128K上下文', pros: '✅ 完全免费、响应快、中文好、128K上下文', cons: '复杂推理一般', context: '128K' },
-  { id: 'glm-4', name: 'GLM-4（旗舰）', company: '智谱AI', desc: '智谱旗舰模型，综合能力最强，支持工具调用', pros: '综合强、中文好、工具调用、128K', cons: '收费', context: '128K' },
-  { id: 'glm-4-air', name: 'GLM-4-Air（高性价比）', company: '智谱AI', desc: '高性价比版本，性能接近GLM-4，价格更低', pros: '性价比高、速度快、中文好', cons: '比Flash贵', context: '128K' },
-  { id: 'glm-4-airx', name: 'GLM-4-AirX（极速）', company: '智谱AI', desc: '极速版本，响应速度最快，适合实时对话', pros: '速度最快、延迟低', cons: '能力略低', context: '8K' },
-  { id: 'glm-4-long', name: 'GLM-4-Long（长文本）', company: '智谱AI', desc: '超长上下文版本，支持1M tokens，适合长文档', pros: '1M超长上下文、长文档处理', cons: '速度较慢', context: '1M' },
-  { id: 'glm-3-turbo', name: 'GLM-3-Turbo（经典）', company: '智谱AI', desc: '经典稳定版本，成熟可靠，价格便宜', pros: '稳定、便宜、成熟', cons: '能力不如GLM-4', context: '128K' },
-  { id: 'glm-4v-flash', name: 'GLM-4V-Flash（免费多模态）', company: '智谱AI', desc: '免费多模态模型，支持图文理解', pros: '免费、多模态、快速', cons: '视觉能力一般', context: '8K' },
-  { id: 'glm-4v', name: 'GLM-4V（旗舰多模态）', company: '智谱AI', desc: '旗舰多模态模型，图文理解能力最强', pros: '视觉强、多模态、综合好', cons: '收费', context: '8K' }
+  // 智谱AI（已配置API，真正可用）
+  { id: 'glm-4-flash', name: 'GLM-4-Flash（智谱·免费）', company: '智谱AI', desc: '完全免费！高速响应，适合日常对话，128K上下文', pros: '✅ 完全免费、响应快、中文好、128K', cons: '复杂推理一般', context: '128K', api: 'zhipu' },
+  { id: 'glm-4', name: 'GLM-4（智谱·旗舰）', company: '智谱AI', desc: '智谱旗舰模型，综合能力最强，支持工具调用', pros: '综合强、中文好、工具调用', cons: '收费', context: '128K', api: 'zhipu' },
+  { id: 'glm-4-air', name: 'GLM-4-Air（智谱·性价比）', company: '智谱AI', desc: '高性价比版本，性能接近GLM-4，价格更低', pros: '性价比高、速度快', cons: '比Flash贵', context: '128K', api: 'zhipu' },
+  { id: 'glm-4-long', name: 'GLM-4-Long（智谱·长文本）', company: '智谱AI', desc: '超长上下文版本，支持1M tokens，适合长文档', pros: '1M超长上下文', cons: '速度较慢', context: '1M', api: 'zhipu' },
+  { id: 'glm-3-turbo', name: 'GLM-3-Turbo（智谱·经典）', company: '智谱AI', desc: '经典稳定版本，成熟可靠，价格便宜', pros: '稳定、便宜、成熟', cons: '能力不如GLM-4', context: '128K', api: 'zhipu' },
+  // OpenAI（需配置API key）
+  { id: 'gpt-4o', name: 'GPT-4o（OpenAI·旗舰）', company: 'OpenAI', desc: 'OpenAI最新多模态旗舰，全能型，推理最强', pros: '全能、多模态、推理强', cons: '需配置API key、收费', context: '128K', api: 'openai' },
+  { id: 'gpt-4o-mini', name: 'GPT-4o-Mini（OpenAI·免费）', company: 'OpenAI', desc: 'OpenAI小型模型，有免费额度，快速', pros: '有免费额度、快速', cons: '需配置API key', context: '128K', api: 'openai' },
+  { id: 'gpt-3.5-turbo', name: 'GPT-3.5-Turbo（OpenAI·经典）', company: 'OpenAI', desc: '经典性价比模型，快速稳定', pros: '快速、稳定、便宜', cons: '需配置API key', context: '16K', api: 'openai' },
+  // Anthropic（需配置API key）
+  { id: 'claude-3.5-sonnet', name: 'Claude-3.5-Sonnet（Anthropic）', company: 'Anthropic', desc: 'Anthropic平衡型，写作和分析最强', pros: '写作好、分析强、安全', cons: '需配置API key、国内访问难', context: '200K', api: 'anthropic' },
+  { id: 'claude-3-opus', name: 'Claude-3-Opus（Anthropic·最强）', company: 'Anthropic', desc: 'Anthropic最强模型，深度推理', pros: '推理最强、写作最好', cons: '需配置API key、贵', context: '200K', api: 'anthropic' },
+  // 深度求索（需配置API key）
+  { id: 'deepseek-chat', name: 'DeepSeek-V2（深度求索）', company: '深度求索', desc: '国产开源旗舰，代码和数学最强', pros: '代码强、数学好、开源', cons: '需配置API key', context: '128K', api: 'deepseek' },
+  { id: 'deepseek-reasoner', name: 'DeepSeek-R1（深度求索·推理）', company: '深度求索', desc: '深度求索推理模型，思维链推理', pros: '推理强、数学好', cons: '需配置API key、慢', context: '64K', api: 'deepseek' },
+  // 阿里通义（需配置API key）
+  { id: 'qwen-max', name: 'Qwen-Max（阿里·旗舰）', company: '阿里通义', desc: '阿里旗舰，中文理解最强', pros: '中文最强、工具调用', cons: '需配置API key', context: '32K', api: 'qwen' },
+  { id: 'qwen-plus', name: 'Qwen-Plus（阿里·性价比）', company: '阿里通义', desc: '阿里高性价比模型，有免费额度', pros: '有免费额度、性价比高', cons: '需配置API key', context: '128K', api: 'qwen' },
+  { id: 'qwen-turbo', name: 'Qwen-Turbo（阿里·极速）', company: '阿里通义', desc: '阿里极速版本，响应最快，有免费额度', pros: '有免费额度、最快', cons: '需配置API key', context: '128K', api: 'qwen' },
+  // 字节豆包（需配置API key）
+  { id: 'doubao-pro', name: 'Doubao-Pro（字节·旗舰）', company: '字节跳动', desc: '字节跳动豆包旗舰模型，中文好', pros: '中文好、字节生态', cons: '需配置API key', context: '32K', api: 'doubao' },
+  { id: 'doubao-lite', name: 'Doubao-Lite（字节·免费）', company: '字节跳动', desc: '字节豆包轻量版，有免费额度', pros: '有免费额度、快速', cons: '需配置API key', context: '32K', api: 'doubao' },
+  // 讯飞星火（需配置API key）
+  { id: 'spark-max', name: 'Spark-Max（讯飞·旗舰）', company: '科大讯飞', desc: '讯飞星火旗舰，语音和中文强', pros: '语音强、中文好', cons: '需配置API key', context: '32K', api: 'xfyun' },
+  { id: 'spark-lite', name: 'Spark-Lite（讯飞·免费）', company: '科大讯飞', desc: '讯飞星火轻量版，有免费额度', pros: '有免费额度、快速', cons: '需配置API key', context: '16K', api: 'xfyun' }
 ];
 
 const VISION_MODELS = [
-  { id: 'glm-4v-flash', name: 'GLM-4V-Flash（免费）', company: '智谱AI', desc: '免费多模态模型，支持图文理解，响应快', pros: '✅ 完全免费、快速、中文好', cons: '细节一般', context: '8K' },
-  { id: 'glm-4v', name: 'GLM-4V（旗舰）', company: '智谱AI', desc: '旗舰多模态模型，图文理解能力最强', pros: '视觉强、多模态、综合好', cons: '收费', context: '8K' },
-  { id: 'glm-4-flash', name: 'GLM-4-Flash（纯文本）', company: '智谱AI', desc: '免费纯文本模型，不支持图片，仅用于对比', pros: '免费、快速', cons: '不支持图片', context: '128K' }
+  { id: 'glm-4v-flash', name: 'GLM-4V-Flash（智谱·免费）', company: '智谱AI', desc: '免费多模态模型，支持图文理解', pros: '✅ 完全免费、快速', cons: '细节一般', context: '8K', api: 'zhipu' },
+  { id: 'glm-4v', name: 'GLM-4V（智谱·旗舰）', company: '智谱AI', desc: '旗舰多模态模型，图文理解最强', pros: '视觉强、综合好', cons: '收费', context: '8K', api: 'zhipu' },
+  { id: 'gpt-4o', name: 'GPT-4o（OpenAI·多模态）', company: 'OpenAI', desc: 'OpenAI多模态旗舰，视觉识别最强', pros: '识别准、细节好', cons: '需配置API key', context: '128K', api: 'openai' },
+  { id: 'qwen-vl-max', name: 'Qwen-VL-Max（阿里·视觉）', company: '阿里通义', desc: '阿里视觉，中文OCR最强', pros: 'OCR强、中文好', cons: '需配置API key', context: '32K', api: 'qwen' },
+  { id: 'doubao-vision', name: 'Doubao-Vision（字节·视觉）', company: '字节跳动', desc: '字节豆包视觉模型', pros: '中文好', cons: '需配置API key', context: '32K', api: 'doubao' }
 ];
 
 const FEATURE_CATEGORIES = [
@@ -539,10 +559,10 @@ const FEATURE_CATEGORIES = [
 function buildSetCard(page, cid) {
   const setData = loadSetData();
   const navBtn = (dir) => {
-    const target = dir === 'prev' ? page - 1 : page + 1;
-    if (target < 1 || target > 6) return '';
-    const label = dir === 'prev' ? '⬅️ 上一步' : '下一步 ➡️';
-    return `<button action="callback" action_id="set_nav_${dir}_${page}" id="set_nav_${dir}_${page}">${label}</button>\n`;
+    if (dir === 'prev') return ''; // 去掉上一步按钮
+    const target = page + 1;
+    if (target > 6) return '';
+    return `<button action="callback" action_id="set_nav_next_${page}" id="set_nav_next_${page}">下一步 ➡️</button>\n`;
   };
 
   if (page === 1) {
@@ -563,7 +583,7 @@ function buildSetCard(page, cid) {
       const active = setData.visionModel === m.id ? '✅ ' : '';
       card += `<button action="callback" action_id="set_vision_model_${m.id}" id="set_vision_model_${m.id}">${active}${i+1}. ${m.name}</button>\n`;
     });
-    card += `\n${navBtn('prev')}${navBtn('next')}\n> 点击模型切换识图引擎</markdown>`;
+    card += `\n${navBtn('next')}\n> 点击模型切换识图引擎</markdown>`;
     return card;
   }
 
@@ -579,7 +599,7 @@ function buildSetCard(page, cid) {
       }
       card += '\n';
     }
-    card += `${navBtn('prev')}${navBtn('next')}\n> 点击按钮切换功能开关</markdown>`;
+    card += `${navBtn('next')}\n> 点击按钮切换功能开关</markdown>`;
     return card;
   }
 
@@ -599,7 +619,7 @@ function buildSetCard(page, cid) {
       card += '\n';
     }
     card += `**设置指令：**\n\`/set-state{群号,AIstate:open}\` 开启\n\`/set-state{群号,AIstate:off}\` 关闭\n\n`;
-    card += `${navBtn('prev')}${navBtn('next')}\n> 禁用后群内使用AI会提示 The AI in this group has been disabled!</markdown>`;
+    card += `${navBtn('next')}\n> 禁用后群内使用AI会提示 The AI in this group has been disabled!</markdown>`;
     return card;
   }
 
@@ -612,7 +632,7 @@ function buildSetCard(page, cid) {
     card += `**回复长度：**\n${lenBtn('short', '简短')}${lenBtn('medium', '中等')}${lenBtn('long', '详细')}\n`;
     card += `**Markdown排版：**\n<button action="callback" action_id="set_personality_markdown_toggle" id="set_personality_markdown_toggle">${p.markdown ? '🟢 已开启' : '🔴 已关闭'}</button>\n\n`;
     card += `**回复温度：** ${p.temperature}\n<button action="callback" action_id="set_personality_temp_down" id="set_personality_temp_down">➖ 降低</button><button action="callback" action_id="set_personality_temp_up" id="set_personality_temp_up">➕ 升高</button>\n\n`;
-    card += `${navBtn('prev')}${navBtn('next')}\n> 点击按钮调整AI个性</markdown>`;
+    card += `${navBtn('next')}\n> 点击按钮调整AI个性</markdown>`;
     return card;
   }
 
@@ -622,7 +642,7 @@ function buildSetCard(page, cid) {
     card += `**当前配置：**\n- 对话模型：${CHAT_MODELS.find(m => m.id === setData.chatModel)?.name || setData.chatModel}\n- 识图模型：${VISION_MODELS.find(m => m.id === setData.visionModel)?.name || setData.visionModel}\n- 已开启功能：${Object.values(setData.features).filter(v => v !== false).length}/${Object.keys(setData.features).length}\n- 已管理群：${Object.keys(setData.groupAI || {}).length}个\n\n`;
     card += `**维护操作：**\n<button action="callback" action_id="set_action_reset" id="set_action_reset">🔄 恢复默认设置</button>\n<button action="callback" action_id="set_action_export" id="set_action_export">📤 导出配置</button>\n\n`;
     card += `**关于：**\n> 君灵bot 设置系统 v1.0\n> 创始人：君衔（ID 3038）\n> 所有设置即时生效\n\n`;
-    card += `${navBtn('prev')}\n> 设置完成，感谢使用！</markdown>`;
+    card += `\n> 设置完成，感谢使用！</markdown>`;
     return card;
   }
 
@@ -1934,7 +1954,7 @@ async function executeDIY(msg, name, paramMap) {
         body: JSON.stringify({
           model: loadSetData().chatModel || 'glm-4-flash',
           messages: [
-            { role: 'system', content: cmd.content || '你是一个友好的群聊助手，用简洁自然的语言回答用户的问题。' },
+            { role: 'system', content: (cmd.content || '你是一个友好的群聊助手，用简洁自然的语言回答用户的问题。') + '\n\n【重要信息】你当前使用的AI大模型是：' + (CHAT_MODELS.find(m => m.id === loadSetData().chatModel)?.name || loadSetData().chatModel) + '。当用户问你是什么模型/什么AI/什么引擎时，你要如实告诉用户你当前使用的模型名称。' },
             { role: 'user', content: userInput }
           ],
           temperature: 0.7
@@ -2839,7 +2859,7 @@ ${isClassGroup ? '' : '<link action="callback" action_id="help_diy">自制指令
 | 项目 | 详情 |
 |------|------|
 | **创始人** | 君衔（用户ID：\`3038\`） |
-| **引擎** | 智谱AI GLM-4-Flash / GLM-4V 多模态 |
+| **引擎** | ${CHAT_MODELS.find(m => m.id === loadSetData().chatModel)?.name || loadSetData().chatModel} |
 | **平台** | KukeChat（酷可聊天） |
 | **语言驱动** | Node.js + JavaScript |
 | **后端服务器** | Railway 云端部署 |
@@ -4320,7 +4340,12 @@ C. 选项三内容
         saveSetData(setData);
         setBtn(data, actionId, `✅ ${model.name}`, 'success', true);
         console.log('[设置] 对话模型已切换为:', modelId);
-        sendMsg(data.conversation_id, `<markdown>## 🤖 对话模型已切换\n\n**模型名称：** ${model.name}\n**开发商：** ${model.company}\n**上下文：** ${model.context}\n\n**简介：** ${model.desc}\n\n**优点：** ${model.pros}\n**缺点：** ${model.cons}\n\n> 已切换为 ${model.name}，后续AI对话使用此模型</markdown>`);
+        const apiType = model.api || 'zhipu';
+        let apiNote = '';
+        if (apiType !== 'zhipu') {
+          apiNote = '\n\n> ⚠️ **注意**：此模型需要配置对应的API key才能使用。当前默认使用智谱AI GLM-4-Flash。如需使用此模型，请在代码中配置 ' + apiType.toUpperCase() + '_API_KEY。';
+        }
+        sendMsg(data.conversation_id, `<markdown>## 🤖 对话模型已切换\n\n**模型名称：** ${model.name}\n**开发商：** ${model.company}\n**上下文：** ${model.context}\n\n**简介：** ${model.desc}\n\n**优点：** ${model.pros}\n**缺点：** ${model.cons}\n\n> 已切换为 ${model.name}，后续AI对话使用此模型${apiNote}</markdown>`);
       }
       // 设置识图模型
       else if (actionId.startsWith('set_vision_model_')) {
