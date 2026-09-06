@@ -492,8 +492,8 @@ const CHAT_MODELS = [
   { id: 'glm-4-flash', name: 'GLM-4-Flash', company: '智谱AI', desc: '免费高速，适合日常对话，响应极快', pros: '免费、快速、中文好', cons: '复杂推理一般', context: '128K' },
   { id: 'glm-4', name: 'GLM-4', company: '智谱AI', desc: '智谱旗舰模型，综合能力强', pros: '综合强、中文好、工具调用', cons: '收费', context: '128K' },
   { id: 'gpt-4o', name: 'GPT-4o', company: 'OpenAI', desc: 'OpenAI最新多模态旗舰，全能型', pros: '全能、多模态、推理强', cons: '收费、较慢', context: '128K' },
-  { id: 'gpt-3.5-turbo', name: 'GPT-3.5-Turbo', company: 'OpenAI', desc: '经典性价比模型，快速稳定', pros: '快速、稳定、便宜', cons: '能力一般', context: '16K' },
-  { id: 'claude-3.5-sonnet', name: 'Claude-3.5-Sonnet', company: 'Anthropic', desc: 'Anthropic平衡型，写作和分析强', pros: '写作好、分析强、安全', cons: '收费、国内访问难', context: '200K' },
+  { id: 'gpt-3-5-turbo', name: 'GPT-3.5-Turbo', company: 'OpenAI', desc: '经典性价比模型，快速稳定', pros: '快速、稳定、便宜', cons: '能力一般', context: '16K' },
+  { id: 'claude-3-5-sonnet', name: 'Claude-3.5-Sonnet', company: 'Anthropic', desc: 'Anthropic平衡型，写作和分析强', pros: '写作好、分析强、安全', cons: '收费、国内访问难', context: '200K' },
   { id: 'claude-3-opus', name: 'Claude-3-Opus', company: 'Anthropic', desc: 'Anthropic最强模型，深度推理', pros: '推理最强、写作最好', cons: '贵、慢、国内访问难', context: '200K' },
   { id: 'deepseek-v2', name: 'DeepSeek-V2', company: '深度求索', desc: '国产开源旗舰，代码和数学强', pros: '开源、代码强、数学好', cons: '中文一般', context: '128K' },
   { id: 'qwen-max', name: 'Qwen-Max', company: '阿里通义', desc: '阿里旗舰，中文理解最强', pros: '中文最强、工具调用、便宜', cons: '推理一般', context: '32K' }
@@ -506,7 +506,7 @@ const VISION_MODELS = [
   { id: 'qwen-vl-max', name: 'Qwen-VL-Max', company: '阿里通义', desc: '阿里视觉，中文OCR最强', pros: 'OCR强、中文好、便宜', cons: '推理一般', context: '32K' },
   { id: 'deepseek-vl', name: 'DeepSeek-VL', company: '深度求索', desc: '开源视觉模型', pros: '开源、可本地部署', cons: '能力一般', context: '4K' },
   { id: 'gemini-pro-vision', name: 'Gemini-Pro-Vision', company: 'Google', desc: 'Google多模态，实时性强', pros: '实时、多模态、免费额度', cons: '国内访问难、中文一般', context: '32K' },
-  { id: 'llava-1.6', name: 'LLaVA-1.6', company: '开源社区', desc: '最流行开源视觉模型', pros: '开源、免费、可部署', cons: '能力有限', context: '4K' },
+  { id: 'llava-1-6', name: 'LLaVA-1.6', company: '开源社区', desc: '最流行开源视觉模型', pros: '开源、免费、可部署', cons: '能力有限', context: '4K' },
   { id: 'internvl2', name: 'InternVL2', company: '上海AI实验室', desc: '国产开源视觉，性能接近闭源', pros: '开源、性能强、中文好', cons: '部署要求高', context: '8K' }
 ];
 
