@@ -489,40 +489,20 @@ function getDefaultSetData() {
 }
 
 const CHAT_MODELS = [
-  // 智谱AI（已配置API，真正可用）
-  { id: 'glm-4-flash', name: 'GLM-4-Flash（智谱·免费）', company: '智谱AI', desc: '完全免费！高速响应，适合日常对话，128K上下文', pros: '✅ 完全免费、响应快、中文好、128K', cons: '复杂推理一般', context: '128K', api: 'zhipu' },
-  { id: 'glm-4', name: 'GLM-4（智谱·旗舰）', company: '智谱AI', desc: '智谱旗舰模型，综合能力最强，支持工具调用', pros: '综合强、中文好、工具调用', cons: '收费', context: '128K', api: 'zhipu' },
-  { id: 'glm-4-air', name: 'GLM-4-Air（智谱·性价比）', company: '智谱AI', desc: '高性价比版本，性能接近GLM-4，价格更低', pros: '性价比高、速度快', cons: '比Flash贵', context: '128K', api: 'zhipu' },
-  { id: 'glm-4-long', name: 'GLM-4-Long（智谱·长文本）', company: '智谱AI', desc: '超长上下文版本，支持1M tokens，适合长文档', pros: '1M超长上下文', cons: '速度较慢', context: '1M', api: 'zhipu' },
-  { id: 'glm-3-turbo', name: 'GLM-3-Turbo（智谱·经典）', company: '智谱AI', desc: '经典稳定版本，成熟可靠，价格便宜', pros: '稳定、便宜、成熟', cons: '能力不如GLM-4', context: '128K', api: 'zhipu' },
-  // OpenAI（需配置API key）
-  { id: 'gpt-4o', name: 'GPT-4o（OpenAI·旗舰）', company: 'OpenAI', desc: 'OpenAI最新多模态旗舰，全能型，推理最强', pros: '全能、多模态、推理强', cons: '需配置API key、收费', context: '128K', api: 'openai' },
-  { id: 'gpt-4o-mini', name: 'GPT-4o-Mini（OpenAI·免费）', company: 'OpenAI', desc: 'OpenAI小型模型，有免费额度，快速', pros: '有免费额度、快速', cons: '需配置API key', context: '128K', api: 'openai' },
-  { id: 'gpt-3-5-turbo', name: 'gpt-3-5-turbo（OpenAI·经典）', company: 'OpenAI', desc: '经典性价比模型，快速稳定', pros: '快速、稳定、便宜', cons: '需配置API key', context: '16K', api: 'openai' },
-  // Anthropic（需配置API key）
-  { id: 'claude-3-5-sonnet', name: 'claude-3-5-sonnet（Anthropic）', company: 'Anthropic', desc: 'Anthropic平衡型，写作和分析最强', pros: '写作好、分析强、安全', cons: '需配置API key、国内访问难', context: '200K', api: 'anthropic' },
-  { id: 'claude-3-opus', name: 'Claude-3-Opus（Anthropic·最强）', company: 'Anthropic', desc: 'Anthropic最强模型，深度推理', pros: '推理最强、写作最好', cons: '需配置API key、贵', context: '200K', api: 'anthropic' },
-  // 深度求索（需配置API key）
-  { id: 'deepseek-chat', name: 'DeepSeek-V2（深度求索）', company: '深度求索', desc: '国产开源旗舰，代码和数学最强', pros: '代码强、数学好、开源', cons: '需配置API key', context: '128K', api: 'deepseek' },
-  { id: 'deepseek-reasoner', name: 'DeepSeek-R1（深度求索·推理）', company: '深度求索', desc: '深度求索推理模型，思维链推理', pros: '推理强、数学好', cons: '需配置API key、慢', context: '64K', api: 'deepseek' },
-  // 阿里通义（需配置API key）
-  { id: 'qwen-max', name: 'Qwen-Max（阿里·旗舰）', company: '阿里通义', desc: '阿里旗舰，中文理解最强', pros: '中文最强、工具调用', cons: '需配置API key', context: '32K', api: 'qwen' },
-  { id: 'qwen-plus', name: 'Qwen-Plus（阿里·性价比）', company: '阿里通义', desc: '阿里高性价比模型，有免费额度', pros: '有免费额度、性价比高', cons: '需配置API key', context: '128K', api: 'qwen' },
-  { id: 'qwen-turbo', name: 'Qwen-Turbo（阿里·极速）', company: '阿里通义', desc: '阿里极速版本，响应最快，有免费额度', pros: '有免费额度、最快', cons: '需配置API key', context: '128K', api: 'qwen' },
-  // 字节豆包（需配置API key）
-  { id: 'doubao-pro', name: 'Doubao-Pro（字节·旗舰）', company: '字节跳动', desc: '字节跳动豆包旗舰模型，中文好', pros: '中文好、字节生态', cons: '需配置API key', context: '32K', api: 'doubao' },
-  { id: 'doubao-lite', name: 'Doubao-Lite（字节·免费）', company: '字节跳动', desc: '字节豆包轻量版，有免费额度', pros: '有免费额度、快速', cons: '需配置API key', context: '32K', api: 'doubao' },
-  // 讯飞星火（需配置API key）
-  { id: 'spark-max', name: 'Spark-Max（讯飞·旗舰）', company: '科大讯飞', desc: '讯飞星火旗舰，语音和中文强', pros: '语音强、中文好', cons: '需配置API key', context: '32K', api: 'xfyun' },
-  { id: 'spark-lite', name: 'Spark-Lite（讯飞·免费）', company: '科大讯飞', desc: '讯飞星火轻量版，有免费额度', pros: '有免费额度、快速', cons: '需配置API key', context: '16K', api: 'xfyun' }
+  { id: 'glm-4-flash', name: 'GLM-4-Flash', company: '智谱AI', desc: '免费高速，128K上下文', pros: '✅ 内置key，免费', context: '128K', api: 'zhipu', hasKey: true },
+  { id: 'glm-4-air', name: 'GLM-4-Air', company: '智谱AI', desc: '高性价比，性能强', pros: '✅ 内置key，免费额度', context: '128K', api: 'zhipu', hasKey: true },
+  { id: 'glm-3-turbo', name: 'GLM-3-Turbo', company: '智谱AI', desc: '经典稳定，便宜', pros: '✅ 内置key，免费额度', context: '128K', api: 'zhipu', hasKey: true },
+  { id: 'qwen-turbo', name: 'Qwen-Turbo', company: '阿里通义', desc: '极速，免费额度', pros: '需输入key，免费额度', context: '128K', api: 'qwen', hasKey: false },
+  { id: 'qwen-plus', name: 'Qwen-Plus', company: '阿里通义', desc: '性价比，免费额度', pros: '需输入key，免费额度', context: '128K', api: 'qwen', hasKey: false },
+  { id: 'doubao-lite', name: 'Doubao-Lite', company: '字节豆包', desc: '轻量，免费额度', pros: '需输入key，免费额度', context: '32K', api: 'doubao', hasKey: false },
+  { id: 'spark-lite', name: 'Spark-Lite', company: '讯飞星火', desc: '轻量，免费额度', pros: '需输入key，免费额度', context: '16K', api: 'xfyun', hasKey: false },
+  { id: 'deepseek-chat', name: 'DeepSeek-V2', company: '深度求索', desc: '代码数学强，便宜', pros: '需输入key，便宜', context: '128K', api: 'deepseek', hasKey: false }
 ];
 
 const VISION_MODELS = [
-  { id: 'glm-4v-flash', name: 'GLM-4V-Flash（智谱·免费）', company: '智谱AI', desc: '免费多模态模型，支持图文理解', pros: '✅ 完全免费、快速', cons: '细节一般', context: '8K', api: 'zhipu' },
-  { id: 'glm-4v', name: 'GLM-4V（智谱·旗舰）', company: '智谱AI', desc: '旗舰多模态模型，图文理解最强', pros: '视觉强、综合好', cons: '收费', context: '8K', api: 'zhipu' },
-  { id: 'gpt-4o', name: 'GPT-4o（OpenAI·多模态）', company: 'OpenAI', desc: 'OpenAI多模态旗舰，视觉识别最强', pros: '识别准、细节好', cons: '需配置API key', context: '128K', api: 'openai' },
-  { id: 'qwen-vl-max', name: 'Qwen-VL-Max（阿里·视觉）', company: '阿里通义', desc: '阿里视觉，中文OCR最强', pros: 'OCR强、中文好', cons: '需配置API key', context: '32K', api: 'qwen' },
-  { id: 'doubao-vision', name: 'Doubao-Vision（字节·视觉）', company: '字节跳动', desc: '字节豆包视觉模型', pros: '中文好', cons: '需配置API key', context: '32K', api: 'doubao' }
+  { id: 'glm-4v-flash', name: 'GLM-4V-Flash', company: '智谱AI', desc: '免费多模态', pros: '✅ 内置key，免费', context: '8K', api: 'zhipu', hasKey: true },
+  { id: 'glm-4v', name: 'GLM-4V', company: '智谱AI', desc: '旗舰多模态', pros: '✅ 内置key', context: '8K', api: 'zhipu', hasKey: true },
+  { id: 'qwen-vl-max', name: 'Qwen-VL-Max', company: '阿里通义', desc: 'OCR最强', pros: '需输入key', context: '32K', api: 'qwen', hasKey: false }
 ];
 
 const FEATURE_CATEGORIES = [
@@ -566,24 +546,26 @@ function buildSetCard(page, cid) {
   };
 
   if (page === 1) {
-    // 对话大模型
-    let card = `<markdown>## ⚙️ 设置中心 - 第1/6页\n\n### 🤖 对话大模型\n\n**当前模型：** ${CHAT_MODELS.find(m => m.id === setData.chatModel)?.name || setData.chatModel}\n\n`;
+    let card = `<markdown>## ⚙️ 设置 - 1/6\n\n### 🤖 对话模型\n\n**当前：** ${CHAT_MODELS.find(m => m.id === setData.chatModel)?.name || setData.chatModel}\n\n`;
     CHAT_MODELS.forEach((m, i) => {
-      const active = setData.chatModel === m.id ? '✅ ' : '';
-      card += `<button action="callback" action_id="set_chat_model_${m.id}" id="set_chat_model_${m.id}">${active}${i+1}. ${m.name}</button>\n`;
+      const active = setData.chatModel === m.id ? '✅' : '';
+      const keyTag = m.hasKey ? '' : '🔑';
+      card += `<button action="callback" action_id="set_chat_model_${m.id}" id="set_chat_model_${m.id}">${active}${m.name}${keyTag}</button>`;
+      if ((i + 1) % 2 === 0) card += '\n';
     });
-    card += `\n${navBtn('next')}\n> 点击模型切换，切换后显示详细信息</markdown>`;
+    card += `\n\n${navBtn('next')}\n> 🔑=需输入key，/set-key{模型,key}</markdown>`;
     return card;
   }
 
   if (page === 2) {
-    // 识图大模型
-    let card = `<markdown>## ⚙️ 设置中心 - 第2/6页\n\n### 🖼️ 识图大模型\n\n**当前模型：** ${VISION_MODELS.find(m => m.id === setData.visionModel)?.name || setData.visionModel}\n\n`;
+    let card = `<markdown>## ⚙️ 设置 - 2/6\n\n### 🖼️ 识图模型\n\n**当前：** ${VISION_MODELS.find(m => m.id === setData.visionModel)?.name || setData.visionModel}\n\n`;
     VISION_MODELS.forEach((m, i) => {
-      const active = setData.visionModel === m.id ? '✅ ' : '';
-      card += `<button action="callback" action_id="set_vision_model_${m.id}" id="set_vision_model_${m.id}">${active}${i+1}. ${m.name}</button>\n`;
+      const active = setData.visionModel === m.id ? '✅' : '';
+      const keyTag = m.hasKey ? '' : '🔑';
+      card += `<button action="callback" action_id="set_vision_model_${m.id}" id="set_vision_model_${m.id}">${active}${m.name}${keyTag}</button>`;
+      if ((i + 1) % 2 === 0) card += '\n';
     });
-    card += `\n${navBtn('next')}\n> 点击模型切换识图引擎</markdown>`;
+    card += `\n\n${navBtn('next')}</markdown>`;
     return card;
   }
 
@@ -631,7 +613,7 @@ function buildSetCard(page, cid) {
     let card = `<markdown>## ⚙️ 设置中心 - 第5/6页\n\n### 🎭 AI个性设置\n\n**语气风格：**\n${toneBtn('normal', '😐 正常')}${toneBtn('friendly', '😊 友好')}${toneBtn('professional', '💼 专业')}${toneBtn('humorous', '😂 幽默')}\n`;
     card += `**回复长度：**\n${lenBtn('short', '简短')}${lenBtn('medium', '中等')}${lenBtn('long', '详细')}\n`;
     card += `**Markdown排版：**\n<button action="callback" action_id="set_personality_markdown_toggle" id="set_personality_markdown_toggle">${p.markdown ? '🟢 已开启' : '🔴 已关闭'}</button>\n\n`;
-    card += `**回复温度：** ${p.temperature}\n<button action="callback" action_id="set_personality_temp_down" id="set_personality_temp_down">➖ 降低</button><button action="callback" action_id="set_personality_temp_up" id="set_personality_temp_up">➕ 升高</button>\n\n`;
+
     card += `${navBtn('next')}\n> 点击按钮调整AI个性</markdown>`;
     return card;
   }
@@ -2914,6 +2896,20 @@ ${isClassGroup ? '' : '<link action="callback" action_id="help_diy">自制指令
         const stateText = state === 'open' ? '✅ 已开启' : '❌ 已关闭';
         sendMsg(msg.conversation_id, `<markdown>## ⚙️ 群AI状态已设置\n\n**群号：** \`${groupId}\`\n**AI状态：** ${stateText}\n\n> 格式：\`/set-state{群号,AIstate:open/off}\`</markdown>`);
       }
+      else if (content.startsWith('/set-key')) {
+        if (String(msg.sender_id) !== '3038') { sendMsg(msg.conversation_id, '❌ 只有创始人可以设置API key'); return; }
+        const match = content.match(/^\/set-key\{(.+?)\}/);
+        if (!match) { sendMsg(msg.conversation_id, '⚠️格式：/set-key{模型名,key}\n例如：/set-key{qwen-turbo,sk-xxx}'); return; }
+        const params = match[1].split(',').map(s => s.trim());
+        if (params.length < 2) { sendMsg(msg.conversation_id, '⚠️格式：/set-key{模型名,key}'); return; }
+        const modelName = params[0];
+        const apiKey = params[1];
+        const setData = loadSetData();
+        if (!setData.apiKeys) setData.apiKeys = {};
+        setData.apiKeys[modelName] = apiKey;
+        saveSetData(setData);
+        sendMsg(msg.conversation_id, `<markdown>## 🔑 API Key 已设置\n\n**模型：** ${modelName}\n**Key：** \`${apiKey.substring(0, 8)}...\`\n\n> 现在可以使用 ${modelName} 模型了！</markdown>`);
+      }
       else if (content === '/违禁词表格') {
         sendMsg(msg.conversation_id, buildForbiddenTable(msg.conversation_id, '📋 当前违禁词列表'));
       }
@@ -4341,9 +4337,10 @@ C. 选项三内容
         setBtn(data, actionId, `✅ ${model.name}`, 'success', true);
         console.log('[设置] 对话模型已切换为:', modelId);
         const apiType = model.api || 'zhipu';
+        const hasKey = model.hasKey || (loadSetData().apiKeys && loadSetData().apiKeys[model.id]);
         let apiNote = '';
-        if (apiType !== 'zhipu') {
-          apiNote = '\n\n> ⚠️ **注意**：此模型需要配置对应的API key才能使用。当前默认使用智谱AI GLM-4-Flash。如需使用此模型，请在代码中配置 ' + apiType.toUpperCase() + '_API_KEY。';
+        if (!hasKey) {
+          apiNote = '\n\n> 🔑 此模型需要API key。用 \`/set-key{' + model.id + ',你的key}\` 设置后即可使用。';
         }
         sendMsg(data.conversation_id, `<markdown>## 🤖 对话模型已切换\n\n**模型名称：** ${model.name}\n**开发商：** ${model.company}\n**上下文：** ${model.context}\n\n**简介：** ${model.desc}\n\n**优点：** ${model.pros}\n**缺点：** ${model.cons}\n\n> 已切换为 ${model.name}，后续AI对话使用此模型${apiNote}</markdown>`);
       }
@@ -4395,15 +4392,7 @@ C. 选项三内容
         setBtn(data, actionId, setData.personality.markdown ? '🟢 已开启' : '🔴 已关闭', setData.personality.markdown ? 'success' : 'danger', false);
         sendMsg(data.conversation_id, `✅ Markdown排版已${setData.personality.markdown ? '开启' : '关闭'}`);
       }
-      // 个性设置-温度调整
-      else if (actionId === 'set_personality_temp_up' || actionId === 'set_personality_temp_down') {
-        const setData = loadSetData();
-        const delta = actionId === 'set_personality_temp_up' ? 0.1 : -0.1;
-        setData.personality.temperature = Math.max(0, Math.min(2, Math.round((setData.personality.temperature + delta) * 10) / 10));
-        saveSetData(setData);
-        setBtn(data, actionId, `当前：${setData.personality.temperature}`, 'default', false);
-        sendMsg(data.conversation_id, `✅ 回复温度已调整为：${setData.personality.temperature}`);
-      }
+
       // 维护操作
       else if (actionId.startsWith('set_action_')) {
         const action = actionId.replace('set_action_', '');
