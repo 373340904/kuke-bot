@@ -3078,13 +3078,14 @@ ${isClassGroup ? '' : '<link action="callback" action_id="help_diy">自制指令
         sendMsg(msg.conversation_id, `<markdown># 💬 每日金句\n\n> **${quote.text}**\n> \n> —— ${quote.author}\n\n---\n\n**✨ 金句体验数：** ${quoteCount}\n**💰 消耗积分：** 10分\n**📊 当前积分：** ${currentPts}分\n\n> 感谢使用，愿这句话给你力量~</markdown>`);
       }
       else if (content === '/抽奖' || content === '/draw') {
+        const isAdmin = String(msg.sender_id) === '3038';
         const userPoints = getPoints(msg.sender_id);
-        if (userPoints < 50) {
+        if (!isAdmin && userPoints < 50) {
           sendMsg(msg.conversation_id, `<markdown>## 🎰 抽奖\n\n> ⚠️ 积分不足！\n\n**当前积分：** ${userPoints}分\n**需要：** 50分\n\n> 参与娱乐活动和签到可获得积分，每50分可抽一次奖</markdown>`);
           return;
         }
-        // 扣除积分
-        usePoints(msg.sender_id, 50);
+        // 扣除积分（ID3038无限抽奖，不扣除）
+        if (!isAdmin) usePoints(msg.sender_id, 50);
         // 抽奖
         const rand = Math.random() * 100;
         let result;
