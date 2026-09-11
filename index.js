@@ -389,13 +389,8 @@ function generateFortune() {
 }
 
 // 生成签到卡片（Markdown格式）
-function buildCheckinCard(userName, today, rank, fortuneLevel, fortuneDesc, star, luckyNum, color, yi, title) {
+function buildCheckinCard(userName, today, rank, fortuneLevel, fortuneDesc, star, luckyNum, color, yi, title, userId) {
   const cardTitle = title || '✅签到完成！';
-  // 签到获得积分
-  if (userId) {
-    const newPoints = addPoints(userId, 10, '每日签到');
-    reply += `\n\n> 🎁 签到奖励：+10积分（当前：${newPoints}分，每50分可抽一次奖）`;
-  }
   let reply = `<markdown># ${cardTitle}\n\n`;
   reply += `**用户：**${userName}\n`;
   reply += `**日期：**\`${today}\`\n`;
@@ -407,6 +402,11 @@ function buildCheckinCard(userName, today, rank, fortuneLevel, fortuneDesc, star
   reply += `- **幸运数字：**\`${luckyNum}\`\n`;
   reply += `- **幸运色：**${color}\n`;
   reply += `- **宜：**${yi}\n\n`;
+  // 签到获得积分
+  if (userId) {
+    const newPoints = addPoints(userId, 10, '每日签到');
+    reply += `> 🎁 签到奖励：+10积分（当前：${newPoints}分，每50分可抽一次奖）\n\n`;
+  }
   reply += `❤️今日签到已完成，明日再来吧~</markdown>`;
   return reply;
 }
@@ -3681,7 +3681,7 @@ C. 选项三内容
         saveCheckinData(data);
 
         // 输出签到卡片
-        const card = buildCheckinCard(userName, today, rank, fortune.level, fortune.desc, star, luckyNum, color, yi);
+        const card = buildCheckinCard(userName, today, rank, fortune.level, fortune.desc, star, luckyNum, color, yi, undefined, msg.sender_id);
         sendMsg(msg.conversation_id, card);
       }
       else if (content.startsWith('/天气')) {
