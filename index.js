@@ -291,6 +291,67 @@ function saveCheckinData(data) {
   fs.writeFileSync(CHECKIN_FILE, JSON.stringify(data, null, 2), 'utf-8');
 }
 
+// ========== 积分系统 ==========
+const POINTS_FILE = path.join(__dirname, 'points_data.json');
+function loadPointsData() {
+  try {
+    if (!fs.existsSync(POINTS_FILE)) return {};
+    return JSON.parse(fs.readFileSync(POINTS_FILE, 'utf-8'));
+  } catch { return {}; }
+}
+function savePointsData(data) {
+  try { fs.writeFileSync(POINTS_FILE, JSON.stringify(data, null, 2), 'utf-8'); } catch (e) { console.error('[积分]保存失败:', e.message); }
+}
+function addPoints(userId, points, reason) {
+  const data = loadPointsData();
+  const uid = String(userId);
+  if (!data[uid]) data[uid] = { points: 0, totalPoints: 0, drawCount: 0, quoteCount: 0 };
+  data[uid].points += points;
+  data[uid].totalPoints += points;
+  savePointsData(data);
+  console.log(`[积分] 用户${uid} +${points}分 (${reason})，当前: ${data[uid].points}`);
+  return data[uid].points;
+}
+function usePoints(userId, points) {
+  const data = loadPointsData();
+  const uid = String(userId);
+  if (!data[uid] || data[uid].points < points) return false;
+  data[uid].points -= points;
+  savePointsData(data);
+  return true;
+}
+function getPoints(userId) {
+  const data = loadPointsData();
+  return data[String(userId)]?.points || 0;
+}
+
+// 今日金句库
+const DAILY_QUOTES = [
+  { text: '生活不是等待风暴过去，而是学会在雨中翩翩起舞。', author: '维维安·格林' },
+  { text: '成功不是终点，失败也并非末日，最重要的是继续前进的勇气。', author: '丘吉尔' },
+  { text: '你今天的努力，是幸运的伏笔。当下的付出，是明日的花开。', author: '佚名' },
+  { text: '不要因为走得太远，而忘记为什么出发。', author: '纪伯伦' },
+  { text: '世界上只有一种真正的英雄主义，那就是在认清生活真相之后依然热爱生活。', author: '罗曼·罗兰' },
+  { text: '你若盛开，蝴蝶自来；你若精彩，天自安排。', author: '佚名' },
+  { text: '每一个不曾起舞的日子，都是对生命的辜负。', author: '尼采' },
+  { text: '愿你出走半生，归来仍是少年。', author: '苏轼' },
+  { text: '人生没有白走的路，每一步都算数。', author: '李宗盛' },
+  { text: '星光不问赶路人，时光不负有心人。', author: '佚名' },
+  { text: '山高水长，怕什么来不及，慌什么到不了。', author: '佚名' },
+  { text: '慢慢来，谁还没有一个努力的过程。', author: '佚名' },
+  { text: '你要悄悄拔尖，然后惊艳所有人。', author: '佚名' },
+  { text: '生活明朗，万物可爱，人间值得，未来可期。', author: '佚名' },
+  { text: '愿你以渺小启程，以伟大结束。', author: '闵玧其' },
+  { text: '所有的姗姗来迟，都是为了刚刚好的相遇。', author: '佚名' },
+  { text: '既然选择了远方，便只顾风雨兼程。', author: '汪国真' },
+  { text: '你逆光而来，配得上这世间所有的好。', author: '佚名' },
+  { text: '万物皆有裂痕，那是光照进来的地方。', author: '莱昂纳德·科恩' },
+  { text: '愿你成为自己的太阳，无需凭借谁的光。', author: '佚名' }
+];
+function getRandomQuote() {
+  return DAILY_QUOTES[Math.floor(Math.random() * DAILY_QUOTES.length)];
+}
+
 // 随机生成今日运势
 function generateFortune() {
   const fortunes = [
@@ -330,6 +391,11 @@ function generateFortune() {
 // 生成签到卡片（Markdown格式）
 function buildCheckinCard(userName, today, rank, fortuneLevel, fortuneDesc, star, luckyNum, color, yi, title) {
   const cardTitle = title || '✅签到完成！';
+  // 签到获得积分
+  if (userId) {
+    const newPoints = addPoints(userId, 10, '每日签到');
+    reply += `\n\n> 🎁 签到奖励：+10积分（当前：${newPoints}分，每50分可抽一次奖）`;
+  }
   let reply = `<markdown># ${cardTitle}\n\n`;
   reply += `**用户：**${userName}\n`;
   reply += `**日期：**\`${today}\`\n`;
@@ -2975,6 +3041,100 @@ ${isClassGroup ? '' : '<link action="callback" action_id="help_diy">自制指令
 </markdown>`;
         sendMsg(msg.conversation_id, helpText);
       }
+      else if (content.startsWith('/speak') || content.startsWith('/反馈')) {
+        const match = content.match(/^\/(?:speak|反馈)\[(.+?)\]/);
+        if (!match) { sendMsg(msg.conversation_id, '⚠️格式：/speak[反馈内容] 或 /反馈[内容]'); return; }
+        const feedback = match[1];
+        // 私信3038
+        try {
+          await fetch(`${BASE_URL}/bot-api/users/3038/messages`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${BOT_KEY}` },
+            body: JSON.stringify({ content: `📢 用户反馈\n\n**用户：** ${msg.sender_display_name}(ID:${msg.sender_id})\n**群ID：** ${msg.conversation_id}\n**时间：** ${new Date().toLocaleString('zh-CN')}\n\n**内容：**\n${feedback}` })
+          });
+          sendMsg(msg.conversation_id, `<markdown># ✅ 反馈已提交\n\n> 感谢你的反馈！已私信通知创始人\n\n**你的反馈：** ${feedback}\n\n> 创始人会尽快查看并处理~</markdown>`);
+        } catch (e) {
+          console.log('[反馈] 私信3038失败:', e.message);
+          sendMsg(msg.conversation_id, `❌ 反馈提交失败：${e.message}`);
+        }
+      }
+      else if (content === '/每日金句' || content === '/金句' || content === '/quote') {
+        const userPoints = getPoints(msg.sender_id);
+        if (userPoints < 50) {
+          sendMsg(msg.conversation_id, `<markdown># 💬 每日金句\n\n> ⚠️ 积分不足，无法使用！\n\n**当前积分：** ${userPoints}分\n**需要：** 50分\n\n> 参与签到、投票、游戏等可获得积分</markdown>`);
+          return;
+        }
+        // 消耗10积分
+        usePoints(msg.sender_id, 10);
+        // 金句体验数+1
+        const pData = loadPointsData();
+        if (pData[String(msg.sender_id)]) {
+          pData[String(msg.sender_id)].quoteCount = (pData[String(msg.sender_id)].quoteCount || 0) + 1;
+          savePointsData(pData);
+        }
+        const quote = getRandomQuote();
+        const currentPts = getPoints(msg.sender_id);
+        const quoteCount = pData[String(msg.sender_id)]?.quoteCount || 1;
+        sendMsg(msg.conversation_id, `<markdown># 💬 每日金句\n\n> **${quote.text}**\n> \n> —— ${quote.author}\n\n---\n\n**✨ 金句体验数：** ${quoteCount}\n**💰 消耗积分：** 10分\n**📊 当前积分：** ${currentPts}分\n\n> 感谢使用，愿这句话给你力量~</markdown>`);
+      }
+      else if (content === '/抽奖' || content === '/draw') {
+        const userPoints = getPoints(msg.sender_id);
+        if (userPoints < 50) {
+          sendMsg(msg.conversation_id, `<markdown>## 🎰 抽奖\n\n> ⚠️ 积分不足！\n\n**当前积分：** ${userPoints}分\n**需要：** 50分\n\n> 参与娱乐活动和签到可获得积分，每50分可抽一次奖</markdown>`);
+          return;
+        }
+        // 扣除积分
+        usePoints(msg.sender_id, 50);
+        // 抽奖
+        const rand = Math.random() * 100;
+        let result;
+        if (rand < 5) {
+          // 5% - 100积分
+          const bonus = addPoints(msg.sender_id, 100, '抽奖获得');
+          result = `<markdown># 🎰 抽奖结果\n\n## 🎉 大奖！获得100积分！\n\n**当前积分：** ${bonus}分\n\n> 运气爆棚！继续加油~</markdown>`;
+        } else if (rand < 15) {
+          // 10% - 10共创币
+          result = `<markdown># 🎰 抽奖结果\n\n## 🪙 恭喜获得10共创币！\n\n> 已私信通知创始人发放奖励\n\n> 感谢参与，下次好运~</markdown>`;
+          // 私信ID3038
+          try {
+            await fetch(`${BASE_URL}/bot-api/users/3038/messages`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${BOT_KEY}` },
+              body: JSON.stringify({ content: `🎁 抽奖奖励通知：用户 ${msg.sender_display_name}(ID:${msg.sender_id}) 抽到了10共创币，请及时发放！` })
+            });
+            console.log('[抽奖] 已私信ID3038发放共创币通知');
+          } catch (e) {
+            console.log('[抽奖] 私信ID3038失败:', e.message);
+          }
+        } else if (rand < 35) {
+          // 20% - 今日金句 +15积分 + 再来一次
+          const quote = getRandomQuote();
+          const bonus = addPoints(msg.sender_id, 15, '抽奖金句奖励');
+          result = `<markdown># 🎰 抽奖结果\n\n## 💬 今日金句\n\n> **${quote.text}**\n> —— ${quote.author}\n\n## 🎁 额外奖励\n\n- +15积分（当前：${bonus}分）\n- 🎉 再来一次！\n\n> 积分已返还，可立即再抽一次</markdown>`;
+          // 返还50积分（再来一次）
+          addPoints(msg.sender_id, 50, '抽奖再来一次返还');
+        } else {
+          // 65% - 谢谢参与
+          const currentPts = getPoints(msg.sender_id);
+          result = `<markdown># 🎰 抽奖结果\n\n## 😊 谢谢参与\n\n> 很遗憾没有中奖，下次好运！\n\n**当前积分：** ${currentPts}分\n\n> 参与娱乐活动和签到可获得更多积分</markdown>`;
+        }
+        // 记录抽奖次数
+        const pData = loadPointsData();
+        if (pData[String(msg.sender_id)]) {
+          pData[String(msg.sender_id)].drawCount = (pData[String(msg.sender_id)].drawCount || 0) + 1;
+          savePointsData(pData);
+        }
+        sendMsg(msg.conversation_id, result);
+      }
+      else if (content === '/积分' || content === '/points') {
+        const userPts = getPoints(msg.sender_id);
+        const pData = loadPointsData();
+        const drawCount = pData[String(msg.sender_id)]?.drawCount || 0;
+        const quoteCount = pData[String(msg.sender_id)]?.quoteCount || 0;
+        const totalPts = pData[String(msg.sender_id)]?.totalPoints || 0;
+        const canDraw = Math.floor(userPts / 50);
+        sendMsg(msg.conversation_id, `<markdown># 💰 我的积分\n\n| 项目 | 数值 |\n|------|------|\n| **当前积分** | ${userPts}分 |\n| **累计积分** | ${totalPts}分 |\n| **抽奖次数** | ${drawCount}次 |\n| **金句体验数** | ${quoteCount}次 |\n| **可抽奖次数** | ${canDraw}次 |\n\n> 每50积分可抽一次奖，发送 \`/抽奖\` 参与\n> 积分满50可使用 \`/每日金句\`（消耗10积分）\n> 参与签到、投票、游戏等可获得积分</markdown>`);
+      }
       else if (content === '/关于' || content === '/about') {
         const aboutText = `<markdown># 🤖 关于君灵bot
 
@@ -3772,6 +3932,7 @@ C. 选项三内容
       }
       else if (content.startsWith('/投票') || content.startsWith('/投票结果') || content.startsWith('/结束投票')) {
         if (!isFeatureEnabled(msg.conversation_id, '投票')) { sendMsg(msg.conversation_id, '投票功能已被管理员关闭'); return; }
+        addPoints(msg.sender_id, 5, '参与投票');
         const canUse = await canManage(msg.conversation_id, msg.sender_id, msg.sender);
         if (!canUse) { sendMsg(msg.conversation_id, '❌只有群主、管理员或指定用户才能使用投票功能'); return; }
         if (content.startsWith('/投票')) {
@@ -4683,6 +4844,10 @@ ${diyLink}> 点击分类查看详细指令</markdown>`;
 \`/help\`：查看本菜单
 \`/群内在线人数\`：查看当前群内在线人数和在线用户列表
 \`/今日群活跃\`：查看今日群活跃统计和发言榜
+\`/speak[内容]\`：反馈机器人问题（私信创始人）
+\`/积分\`：查看我的积分和抽奖次数
+\`/抽奖\`：积分抽奖（每50积分一次）
+\`/每日金句\`：每日金句（积分满50可用，消耗10积分）
 > 所有人可用</markdown>`;
         } else if (actionId === 'help_checkin') {
           detail = `<markdown>## 签到运势
