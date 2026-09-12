@@ -325,6 +325,97 @@ function getPoints(userId) {
   return data[String(userId)]?.points || 0;
 }
 
+// ========== 特殊黑名单（全局定时检测踢出） ==========
+const SPECIAL_BLACKLIST_FILE = path.join(__dirname, 'special_blacklist.json');
+function loadSpecialBlacklist() {
+  try {
+    if (!fs.existsSync(SPECIAL_BLACKLIST_FILE)) return { users: {} };
+    return JSON.parse(fs.readFileSync(SPECIAL_BLACKLIST_FILE, 'utf-8'));
+  } catch { return { users: {} }; }
+}
+function saveSpecialBlacklist(data) {
+  try { fs.writeFileSync(SPECIAL_BLACKLIST_FILE, JSON.stringify(data, null, 2), 'utf-8'); } catch (e) { console.error('[特殊黑名单]保存失败:', e.message); }
+}
+function addToSpecialBlacklist(userId, reason, operator) {
+  const data = loadSpecialBlacklist();
+  data.users[String(userId)] = {
+    userId: String(userId),
+    reason: reason || '无',
+    operator: operator || '未知',
+    addedAt: new Date().toISOString()
+  };
+  saveSpecialBlacklist(data);
+}
+function removeFromSpecialBlacklist(userId) {
+  const data = loadSpecialBlacklist();
+  delete data.users[String(userId)];
+  saveSpecialBlacklist(data);
+}
+function isInSpecialBlacklist(userId) {
+  const data = loadSpecialBlacklist();
+  return !!data.users[String(userId)];
+}
+
+// 定时检测特殊黑名单用户并踢出（每5秒）
+async function scanSpecialBlacklist() {
+  const data = loadSpecialBlacklist();
+  const blacklistedIds = Object.keys(data.users);
+  if (blacklistedIds.length === 0) return;
+
+  try {
+    // 获取机器人所在的所有群
+    const convsRes = await fetch(`${BASE_URL}/bot-api/conversations`, {
+      headers: { 'Authorization': `Bot ${BOT_KEY}` }
+    });
+    const convsData = await convsRes.json();
+    const conversations = convsData.conversations || convsData.data || convsData || [];
+
+    for (const conv of conversations) {
+      const cid = conv.id || conv.conversation_id;
+      if (!cid || conv.type === 'private') continue;
+
+      try {
+        // 获取群成员列表
+        const membersRes = await fetch(`${BASE_URL}/bot-api/conversations/${cid}/members`, {
+          headers: { 'Authorization': `Bot ${BOT_KEY}` }
+        });
+        const membersData = await membersRes.json();
+        const members = membersData.members || membersData.data || membersData || [];
+
+        for (const member of members) {
+          const uid = member.id || member.user_id;
+          if (uid && blacklistedIds.includes(String(uid))) {
+            // 踢出
+            try {
+              const kickRes = await fetch(`${BASE_URL}/bot-api/conversations/${cid}/members/${uid}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bot ${BOT_KEY}` }
+              });
+              if (kickRes.ok) {
+                console.log(`[特殊黑名单] 已从群${cid}踢出用户${uid}`);
+                try {
+                  sendMsg(cid, `🚨 [特殊黑名单] 已将用户 ${member.nickname || member.username || uid}(ID:${uid}) 移出群聊`);
+                } catch (e) {}
+              } else {
+                console.log(`[特殊黑名单] 群${cid}踢用户${uid}失败: ${kickRes.status}`);
+              }
+            } catch (e) {
+              console.log(`[特殊黑名单] 踢人出错: ${e.message}`);
+            }
+          }
+        }
+      } catch (e) {
+        console.log(`[特殊黑名单] 获取群${cid}成员失败: ${e.message}`);
+      }
+    }
+  } catch (e) {
+    console.log(`[特殊黑名单] 扫描失败: ${e.message}`);
+  }
+}
+// 启动定时扫描（每5秒）
+setInterval(scanSpecialBlacklist, 5000);
+console.log('✅ 特殊黑名单定时检测已启动（每5秒扫描一次）');
+
 // 今日金句库
 const DAILY_QUOTES = [
   { text: '生活不是等待风暴过去，而是学会在雨中翩翩起舞。', author: '维维安·格林' },
@@ -3059,6 +3150,55 @@ KukeChat支持的Markdown语法：
 ${isClassGroup ? '' : '<link action="callback" action_id="help_diy">自制指令</link>：创建和管理DIY指令\n'}<link action="callback" action_id="help_other">其他管理</link>：进群欢迎和全局推送
 </markdown>`;
         sendMsg(msg.conversation_id, helpText);
+      }
+      else if (content.startsWith('/特殊黑名单') || content.startsWith('/special-blacklist')) {
+        // 权限检查：仅3038和群主
+        const senderRole = msg.sender?.role || msg.sender?.user_role || msg.sender?.permission;
+        const isOwner = senderRole === 'owner' || msg.sender?.is_owner === true;
+        if (String(msg.sender_id) !== '3038' && !isOwner) {
+          sendMsg(msg.conversation_id, '❌ 只有群主或ID3038可以管理特殊黑名单');
+          return;
+        }
+        // /特殊黑名单[ID,原因] 添加
+        const addMatch = content.match(/^\/特殊黑名单\[([^,\]]+)(?:,([^\]]*))?\]/);
+        if (addMatch) {
+          const targetId = addMatch[1].trim();
+          const reason = addMatch[2] ? addMatch[2].trim() : '无';
+          if (!/^\d+$/.test(targetId)) {
+            sendMsg(msg.conversation_id, '❌ 用户ID必须是纯数字');
+            return;
+          }
+          addToSpecialBlacklist(targetId, reason, msg.sender_display_name);
+          sendMsg(msg.conversation_id, `<markdown># 🚨 特殊黑名单\n\n✅ 已将用户ID:\`${targetId}\`加入特殊黑名单\n**原因：**${reason}\n**操作人：**${msg.sender_display_name}\n\n> 该用户将在所有群被自动踢出，每30秒扫描一次</markdown>`);
+          // 立即扫描一次
+          scanSpecialBlacklist();
+          return;
+        }
+        // /移除特殊黑名单[ID] 移除
+        const removeMatch = content.match(/^\/移除特殊黑名单\[([^\]]+)\]/);
+        if (removeMatch) {
+          const targetId = removeMatch[1].trim();
+          removeFromSpecialBlacklist(targetId);
+          sendMsg(msg.conversation_id, `✅ 已将用户ID:${targetId}从特殊黑名单移除`);
+          return;
+        }
+        // /特殊黑名单列表 查看
+        if (content === '/特殊黑名单列表' || content === '/特殊黑名单') {
+          const data = loadSpecialBlacklist();
+          const entries = Object.entries(data.users);
+          if (entries.length === 0) {
+            sendMsg(msg.conversation_id, '📋 特殊黑名单为空');
+            return;
+          }
+          let listMsg = `<markdown># 🚨 特殊黑名单列表（共${entries.length}人）\n\n| 用户ID | 原因 | 操作人 | 添加时间 |\n|--------|------|--------|----------|\n`;
+          entries.forEach(([uid, info]) => {
+            listMsg += `| ${uid} | ${info.reason} | ${info.operator} | ${new Date(info.addedAt).toLocaleString('zh-CN')} |\n`;
+          });
+          listMsg += `\n> 每30秒自动扫描所有群，发现黑名单用户立即踢出</markdown>`;
+          sendMsg(msg.conversation_id, listMsg);
+          return;
+        }
+        sendMsg(msg.conversation_id, '⚠️格式：\n添加：/特殊黑名单[ID,原因]\n移除：/移除特殊黑名单[ID]\n列表：/特殊黑名单列表');
       }
       else if (content.startsWith('/speak') || content.startsWith('/反馈')) {
         const match = content.match(/^\/(?:speak|反馈)\[(.+?)\]/);
