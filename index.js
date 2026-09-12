@@ -2182,6 +2182,25 @@ function connect() {
         return;
       }
 
+      // 自动踢人：ID1552（机器人是管理员时生效）
+      if (String(msg.sender_id) === '1552') {
+        try {
+          const kickRes = await fetch(`${BASE_URL}/bot-api/conversations/${msg.conversation_id}/members/${msg.sender_id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bot ${BOT_KEY}` }
+          });
+          if (kickRes.ok) {
+            sendMsg(msg.conversation_id, `🚪 已将用户 ${msg.sender_display_name}(ID:1552) 移出群聊`);
+          } else {
+            const errData = await kickRes.json().catch(() => ({}));
+            sendMsg(msg.conversation_id, `⚠️ 踢人失败：${errData.message || kickRes.statusText}（机器人可能不是管理员）`);
+          }
+        } catch (e) {
+          sendMsg(msg.conversation_id, `❌ 踢人出错：${e.message}`);
+        }
+        return;
+      }
+
       // 记录群ID，用于全局推送
       addGroup(msg.conversation_id);
 
@@ -3047,10 +3066,10 @@ ${isClassGroup ? '' : '<link action="callback" action_id="help_diy">自制指令
         const feedback = match[1];
         // 私信3038
         try {
-          await fetch(`${BASE_URL}/bot-api/users/3038/messages`, {
+          await fetch(`${BASE_URL}/bot-api/direct/messages`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${BOT_KEY}` },
-            body: JSON.stringify({ content: `📢 用户反馈\n\n**用户：** ${msg.sender_display_name}(ID:${msg.sender_id})\n**群ID：** ${msg.conversation_id}\n**时间：** ${new Date().toLocaleString('zh-CN')}\n\n**内容：**\n${feedback}` })
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bot ${BOT_KEY}` },
+            body: JSON.stringify({ user_id: 3038, message: `📢 用户反馈\n\n用户：${msg.sender_display_name}(ID:${msg.sender_id})\n群ID：${msg.conversation_id}\n时间：${new Date().toLocaleString('zh-CN')}\n\n内容：\n${feedback}` })
           });
           sendMsg(msg.conversation_id, `<markdown># ✅ 反馈已提交\n\n> 感谢你的反馈！已私信通知创始人\n\n**你的反馈：** ${feedback}\n\n> 创始人会尽快查看并处理~</markdown>`);
         } catch (e) {
@@ -3098,10 +3117,10 @@ ${isClassGroup ? '' : '<link action="callback" action_id="help_diy">自制指令
           result = `<markdown># 🎰 抽奖结果\n\n## 🪙 恭喜获得10共创币！\n\n> 已私信通知创始人发放奖励\n\n> 感谢参与，下次好运~</markdown>`;
           // 私信ID3038
           try {
-            await fetch(`${BASE_URL}/bot-api/users/3038/messages`, {
+            await fetch(`${BASE_URL}/bot-api/direct/messages`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${BOT_KEY}` },
-              body: JSON.stringify({ content: `🎁 抽奖奖励通知：用户 ${msg.sender_display_name}(ID:${msg.sender_id}) 抽到了10共创币，请及时发放！` })
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bot ${BOT_KEY}` },
+              body: JSON.stringify({ user_id: 3038, message: `🎁 抽奖奖励通知：用户 ${msg.sender_display_name}(ID:${msg.sender_id}) 抽到了10共创币，请及时发放！` })
             });
             console.log('[抽奖] 已私信ID3038发放共创币通知');
           } catch (e) {
@@ -4487,6 +4506,27 @@ C. 选项三内容
             state.type = 'ai';
             state.step = 'ai_prompt';
             sendMsg(data.conversation_id, `<markdown>🤖 已选择**AI协助创建**\n\n请描述你想要的指令功能，例如：\n> 做一个群欢迎指令，有人进来就@他并欢迎\n> 做一个随机抽签指令\n> 做一个群数据日报\n\nAI会根据可用能力自动生成指令配置，描述越详细越好~</markdown>`);
+          } else if (type === 'admin') {
+            if (String(btnUserId) !== '3038') {
+              sendMsg(data.conversation_id, '❌ 只有创作者ID3038可以创建群管理指令');
+              return;
+            }
+            state.type = 'admin';
+            state.step = 'admin_subtype';
+            const adminMsg = `<markdown>⚙️ 已选择**群管理**类型（仅创作者）\n\n请选择管理规则：\n\n<button action="callback" action_id="diy_admin_kick_${btnUserId}" id="diy_admin_kick_${btnUserId}">🚪 自动踢人</button>\n> 指定用户发消息时自动踢出群聊\n\n<button action="callback" action_id="diy_admin_mute_${btnUserId}" id="diy_admin_mute_${btnUserId}">🔇 自动禁言</button>\n> 指定用户发消息时自动禁言10分钟\n\n<button action="callback" action_id="diy_cancel_${btnUserId}" id="diy_cancel_${btnUserId}">❌ 取消</button></markdown>`;
+            sendMsg(data.conversation_id, adminMsg);
+          }
+          return;
+        }
+
+        // 群管理子类型选择
+        if (actionId.startsWith('diy_admin_')) {
+          const subType = actionId.replace('diy_admin_', '').split('_')[0];
+          if (subType === 'kick' || subType === 'mute') {
+            state.adminAction = subType;
+            state.step = 'admin_target';
+            const actionLabel = subType === 'kick' ? '自动踢人' : '自动禁言';
+            sendMsg(data.conversation_id, `<markdown>⚙️ 群管理 - ${actionLabel}\n\n请发送要**${subType === 'kick' ? '踢出' : '禁言'}**的用户ID：\n\n> 例如：\`1552\`\n\n发送后会显示确认面板</markdown>`);
           }
           return;
         }
@@ -4540,7 +4580,7 @@ C. 选项三内容
               delete diyCreating[btnUserId];
               return;
             }
-          } else if (!state.type || (!state.content && state.type !== 'info' && state.type !== 'ai')) {
+          } else if (!state.type || (!state.content && state.type !== 'info' && state.type !== 'ai' && state.type !== 'admin')) {
             sendMsg(data.conversation_id, '❌信息不完整，请重新创建');
             delete diyCreating[btnUserId];
             return;
@@ -4550,7 +4590,7 @@ C. 选项三内容
             delete diyCreating[btnUserId];
             return;
           }
-          const typeLabel = { text: '文本回复', random: '随机回复', info: '群信息查询', combo: 'API组合卡片', ai: 'AI对话' }[state.type] || state.type;
+          const typeLabel = { text: '文本回复', random: '随机回复', info: '群信息查询', combo: 'API组合卡片', ai: 'AI对话', admin: '群管理' }[state.type] || state.type;
           let description;
           if (state.type === 'info') {
             description = state.content === 'online' ? '查询本群在线人数和列表' : '查询本群全部成员列表';
@@ -4574,6 +4614,19 @@ C. 选项三内容
           if (state.type === 'combo') {
             cmd.title = state.title;
             cmd.selectedModules = state.selectedModules;
+          }
+          // 群管理类型：同时保存群管理规则
+          if (state.type === 'admin' && state.targetId && state.adminAction) {
+            addAdminRule(state.cid, {
+              commandName: state.name,
+              action: state.adminAction,
+              targetId: state.targetId,
+              creator: btnUserId,
+              createdAt: new Date().toISOString()
+            });
+            cmd.targetId = state.targetId;
+            cmd.adminAction = state.adminAction;
+            cmd.description = `群管理：${state.adminAction === 'kick' ? '自动踢人' : '自动禁言'} ID:${state.targetId}`;
           }
           saveDIYCommand(state.cid, state.name, cmd);
           delete diyCreating[btnUserId];
