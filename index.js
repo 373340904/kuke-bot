@@ -362,42 +362,93 @@ async function scanSpecialBlacklist() {
   const blacklistedIds = Object.keys(data.users);
   if (blacklistedIds.length === 0) return;
 
+  console.log(`[特殊黑名单] 开始扫描，黑名单人数: ${blacklistedIds.length}`);
+
   try {
     // 获取机器人所在的所有群
     const convsRes = await fetch(`${BASE_URL}/bot-api/conversations`, {
       headers: { 'Authorization': `Bot ${BOT_KEY}` }
     });
-    const convsData = await convsRes.json();
-    const conversations = convsData.conversations || convsData.data || convsData || [];
+    const convsText = await convsRes.text();
+    let convsData;
+    try { convsData = JSON.parse(convsText); } catch { convsData = {}; }
+    console.log(`[特殊黑名单] 获取群列表响应: ${convsRes.status}, 数据keys: ${Object.keys(convsData).join(',')}`);
+    
+    // 兼容多种返回格式
+    let conversations = [];
+    if (Array.isArray(convsData)) conversations = convsData;
+    else if (convsData.conversations) conversations = convsData.conversations;
+    else if (convsData.data) conversations = convsData.data;
+    else if (convsData.items) conversations = convsData.items;
+    else if (convsData.list) conversations = convsData.list;
+    else if (convsData.groups) conversations = convsData.groups;
+    
+    console.log(`[特殊黑名单] 解析到会话数: ${conversations.length}`);
 
     for (const conv of conversations) {
-      const cid = conv.id || conv.conversation_id;
-      if (!cid || conv.type === 'private') continue;
+      const cid = conv.id || conv.conversation_id || conv.group_id;
+      const convType = conv.type || conv.conversation_type;
+      if (!cid) continue;
+      // 跳过私聊
+      if (convType === 'private' || conv.is_private || String(cid).length <= 6) {
+        console.log(`[特殊黑名单] 跳过私聊: ${cid}`);
+        continue;
+      }
 
       try {
         // 获取群成员列表
         const membersRes = await fetch(`${BASE_URL}/bot-api/conversations/${cid}/members`, {
           headers: { 'Authorization': `Bot ${BOT_KEY}` }
         });
-        const membersData = await membersRes.json();
-        const members = membersData.members || membersData.data || membersData || [];
+        const membersText = await membersRes.text();
+        let membersData;
+        try { membersData = JSON.parse(membersText); } catch { membersData = {}; }
+        
+        // 递归查找数组（兼容各种嵌套格式）
+        function findArray(obj, depth) {
+          if (depth > 5) return null;
+          if (Array.isArray(obj)) return obj;
+          if (obj && typeof obj === 'object') {
+            for (const key of ['members', 'data', 'items', 'list', 'users', 'results', 'rows']) {
+              if (obj[key]) {
+                const found = findArray(obj[key], depth + 1);
+                if (found) return found;
+              }
+            }
+            // 遍历所有值找数组
+            for (const val of Object.values(obj)) {
+              const found = findArray(val, depth + 1);
+              if (found) return found;
+            }
+          }
+          return null;
+        }
+        let members = findArray(membersData, 0) || [];
+        console.log(`[特殊黑名单] 群${cid}成员数: ${members.length}, 原始keys: ${Object.keys(membersData).join(',')}`);
+        if (members.length === 0 && Object.keys(membersData).length > 0) {
+          console.log(`[特殊黑名单] 群${cid}成员原始数据: ${JSON.stringify(membersData).substring(0, 300)}`);
+        }
 
         for (const member of members) {
-          const uid = member.id || member.user_id;
+          const uid = member.id || member.user_id || member.userId;
+          const uname = member.nickname || member.username || member.user?.nickname || uid;
           if (uid && blacklistedIds.includes(String(uid))) {
+            console.log(`[特殊黑名单] 发现黑名单用户: ${uname}(ID:${uid}) 在群${cid}，准备踢出`);
             // 踢出
             try {
               const kickRes = await fetch(`${BASE_URL}/bot-api/conversations/${cid}/members/${uid}`, {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bot ${BOT_KEY}` }
               });
+              const kickText = await kickRes.text();
+              console.log(`[特殊黑名单] 踢人响应: ${kickRes.status}, ${kickText.substring(0, 200)}`);
               if (kickRes.ok) {
-                console.log(`[特殊黑名单] 已从群${cid}踢出用户${uid}`);
+                console.log(`[特殊黑名单] ✅ 已从群${cid}踢出用户${uid}`);
                 try {
-                  sendMsg(cid, `🚨 [特殊黑名单] 已将用户 ${member.nickname || member.username || uid}(ID:${uid}) 移出群聊`);
-                } catch (e) {}
+                  sendMsg(cid, `🚨 [特殊黑名单] 已将用户 ${uname}(ID:${uid}) 移出群聊`);
+                } catch (e) { console.log('[特殊黑名单] 发送提示失败:', e.message); }
               } else {
-                console.log(`[特殊黑名单] 群${cid}踢用户${uid}失败: ${kickRes.status}`);
+                console.log(`[特殊黑名单] ❌ 踢人失败: ${kickRes.status}`);
               }
             } catch (e) {
               console.log(`[特殊黑名单] 踢人出错: ${e.message}`);
@@ -413,8 +464,8 @@ async function scanSpecialBlacklist() {
   }
 }
 // 启动定时扫描（每5秒）
-setInterval(scanSpecialBlacklist, 5000);
-console.log('✅ 特殊黑名单定时检测已启动（每5秒扫描一次）');
+setInterval(scanSpecialBlacklist, 2000);
+console.log('✅ 特殊黑名单定时检测已启动（每2秒扫描一次）');
 
 // 今日金句库
 const DAILY_QUOTES = [
