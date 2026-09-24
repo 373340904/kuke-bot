@@ -11,14 +11,24 @@ process.on('uncaughtException', (err) => {
   console.error(err.stack);
 });
 
-// 日志写入文件
+// 日志写入文件 + 统一日志系统
 const logFile = path.join(__dirname, 'bot_debug.log');
 const origLog = console.log;
+const origError = console.error;
 console.log = function(...args) {
   const line = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
-  fs.appendFileSync(logFile, `[${new Date().toISOString()}] ${line}\n`);
+  try { fs.appendFileSync(logFile, `[${new Date().toISOString()}] ${line}\n`); } catch(e) {}
   origLog.apply(console, args);
 };
+console.error = function(...args) {
+  const line = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+  try { fs.appendFileSync(logFile, `[${new Date().toISOString()}] [ERROR] ${line}\n`); } catch(e) {}
+  origError.apply(console, args);
+};
+// 统一日志函数
+function logInfo(module, msg) { console.log(`[INFO][${module}] ${msg}`); }
+function logWarn(module, msg) { console.log(`[WARN][${module}] ${msg}`); }
+function logError(module, msg) { console.error(`[ERROR][${module}] ${msg}`); }
 
 // ====== 配置区：把下面的引号里换成你自己的 Bot Key ======
 const BOT_KEY = 'kcb_live_421_nNLtaS1IDYmNmGbFk7HVwYj4H7gGDhyfKAbp9T0zyunYSro';
@@ -56,6 +66,28 @@ function cachedSave(key, filePath, data) {
   }, 2000);
   writeQueue.set(key, timer);
 }
+
+// ========== AI对话上下文记忆（每用户保留最近10轮） ==========
+const chatHistory = new Map(); // userId -> [{role, content}, ...]
+const MAX_HISTORY = 10; // 每个用户保留10轮对话（5问5答）
+
+function getChatHistory(userId) {
+  return chatHistory.get(String(userId)) || [];
+}
+
+function addChatHistory(userId, role, content) {
+  const uid = String(userId);
+  let history = chatHistory.get(uid) || [];
+  history.push({ role, content: String(content).slice(0, 500) }); // 限制单条长度
+  // 保留最近MAX_HISTORY*2条（问+答）
+  while (history.length > MAX_HISTORY * 2) history.shift();
+  chatHistory.set(uid, history);
+}
+
+function clearChatHistory(userId) {
+  chatHistory.delete(String(userId));
+}
+
 // 机器人信息缓存（从发消息返回数据中提取，避免依赖不可用的GET API）
 const botInfo = { nickname: null, userId: null, botId: null, username: null, bio: null, avatar: null, status: null };
 let botUserId = null; // 机器人自身的user_id，连接就绪时设置
@@ -404,18 +436,22 @@ async function scanSpecialBlacklist() {
         let membersData;
         try { membersData = JSON.parse(membersText); } catch { membersData = {}; }
         
-        // 递归查找数组（兼容各种嵌套格式）
+        // 最健壮的成员列表解析：打印原始数据 + 确保是数组
+        console.log(`[特殊黑名单] 群${cid}成员API原始响应类型: ${typeof membersData}, isArray: ${Array.isArray(membersData)}, keys: ${Array.isArray(membersData) ? 'N/A' : Object.keys(membersData).join(',')}`);
+        if (!Array.isArray(membersData) && typeof membersData === 'object') {
+          console.log(`[特殊黑名单] 群${cid}成员原始数据: ${JSON.stringify(membersData).substring(0, 500)}`);
+        }
+        // 递归查找数组
         function findArray(obj, depth) {
-          if (depth > 5) return null;
+          if (depth > 6) return null;
           if (Array.isArray(obj)) return obj;
           if (obj && typeof obj === 'object') {
-            for (const key of ['members', 'data', 'items', 'list', 'users', 'results', 'rows']) {
-              if (obj[key]) {
+            for (const key of ['members', 'data', 'items', 'list', 'users', 'results', 'rows', 'records']) {
+              if (obj[key] !== undefined && obj[key] !== null) {
                 const found = findArray(obj[key], depth + 1);
                 if (found) return found;
               }
             }
-            // 遍历所有值找数组
             for (const val of Object.values(obj)) {
               const found = findArray(val, depth + 1);
               if (found) return found;
@@ -423,12 +459,14 @@ async function scanSpecialBlacklist() {
           }
           return null;
         }
-        let members = findArray(membersData, 0) || [];
-        console.log(`[特殊黑名单] 群${cid}成员数: ${members.length}, 原始keys: ${Object.keys(membersData).join(',')}`);
-        if (members.length === 0 && Object.keys(membersData).length > 0) {
-          console.log(`[特殊黑名单] 群${cid}成员原始数据: ${JSON.stringify(membersData).substring(0, 300)}`);
+        let members = findArray(membersData, 0);
+        // 确保一定是数组
+        if (!Array.isArray(members)) {
+          console.log(`[特殊黑名单] 群${cid}未找到数组成员列表，跳过`);
+          continue;
         }
-
+        console.log(`[特殊黑名单] 群${cid}成员数: ${members.length}`);
+        
         for (const member of members) {
           const uid = member.id || member.user_id || member.userId;
           const uname = member.nickname || member.username || member.user?.nickname || uid;
@@ -438,7 +476,7 @@ async function scanSpecialBlacklist() {
             try {
               const kickRes = await fetch(`${BASE_URL}/bot-api/conversations/${cid}/members/${uid}`, {
                 method: 'DELETE',
-                headers: { 'Authorization': `Bot ${BOT_KEY}` }
+                headers: { 'Authorization': `Bot ${BOT_KEY}`, 'Content-Type': 'application/json' }
               });
               const kickText = await kickRes.text();
               console.log(`[特殊黑名单] 踢人响应: ${kickRes.status}, ${kickText.substring(0, 200)}`);
@@ -898,60 +936,143 @@ async function callAI(prompt, systemPrompt) {
   }
 }
 
-// 增强联网搜索（多源：百度百科 + DuckDuckGo）
+// ========== 增强联网搜索（多源全局搜索 + 缓存 + 链接） ==========
+const searchCache = new Map(); // 搜索缓存：query -> {results, time}
+const SEARCH_CACHE_TTL = 3600000; // 1小时缓存
+
 async function webSearch(query, maxResults) {
-  const results = [];
   const limit = maxResults || 5;
-
-  // 源1：百度百科
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 6000);
-    const res = await fetch(`https://baike.baidu.com/api/openapi/BaikeLemmaCardApi?scope=103&format=json&appid=379020&bk_key=${encodeURIComponent(query)}&bk_length=800`, { signal: controller.signal });
-    clearTimeout(timeout);
-    if (res.ok) {
-      const data = await res.json();
-      if (data?.abstract) {
-        results.push({ title: data.title || query, abstract: data.abstract, source: '百度百科' });
-      }
-    }
-  } catch (e) { console.log('[搜索] 百度百科失败:', e.message); }
-
-  // 源2：DuckDuckGo HTML 搜索
+  const cacheKey = query.toLowerCase().trim();
+  
+  // 检查缓存
+  const cached = searchCache.get(cacheKey);
+  if (cached && Date.now() - cached.time < SEARCH_CACHE_TTL) {
+    logInfo('搜索', `命中缓存: ${query.substring(0, 30)}`);
+    return cached.results.slice(0, limit);
+  }
+  
+  const results = [];
+  
+  // 源1：DuckDuckGo HTML（全局搜索，带链接）
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
     const res = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, {
       signal: controller.signal,
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' }
     });
     clearTimeout(timeout);
     if (res.ok) {
       const html = await res.text();
-      // 简单解析搜索结果
-      const resultRegex = /<a[^>]*class="result__a"[^>]*>(.*?)<\/a>[\s\S]*?<a[^>]*class="result__snippet"[^>]*>(.*?)<\/a>/g;
+      // 解析标题、链接、摘要
+      const resultRegex = /<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>(.*?)<\/a>[\s\S]*?<a[^>]*class="result__snippet"[^>]*>(.*?)<\/a>/g;
       let match;
       let count = 0;
       while ((match = resultRegex.exec(html)) !== null && count < limit) {
-        const title = match[1].replace(/<[^>]*>/g, '').trim();
-        const abstract = match[2].replace(/<[^>]*>/g, '').trim();
+        const title = match[2].replace(/<[^>]+>/g, '').trim();
+        let url = match[1];
+        // DuckDuckGo的链接是重定向链接，提取真实URL
+        if (url.includes('uddg=')) {
+          try { url = decodeURIComponent(url.split('uddg=')[1].split('&')[0]); } catch(e) {}
+        }
+        const abstract = match[3].replace(/<[^>]+>/g, '').trim();
         if (title && abstract) {
-          results.push({ title, abstract, source: 'DuckDuckGo' });
+          results.push({ title, abstract, url, source: 'DuckDuckGo' });
           count++;
         }
       }
+      logInfo('搜索', `DuckDuckGo返回 ${count} 条结果`);
     }
-  } catch (e) { console.log('[搜索] DuckDuckGo失败:', e.message); }
-
-  return results;
+  } catch (e) { logWarn('搜索', `DuckDuckGo失败: ${e.message}`); }
+  
+  // 源2：必应搜索（国内可访问，全局搜索，带链接）
+  if (results.length < limit) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
+      const res = await fetch(`https://www.bing.com/search?q=${encodeURIComponent(query)}&setlang=zh-CN`, {
+        signal: controller.signal,
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' }
+      });
+      clearTimeout(timeout);
+      if (res.ok) {
+        const html = await res.text();
+        const resultRegex = /<li class="b_algo">[\s\S]*?<h2><a[^>]*href="([^"]+)"[^>]*>(.*?)<\/a><\/h2>[\s\S]*?<p[^>]*>(.*?)<\/p>/g;
+        let match;
+        let count = 0;
+        while ((match = resultRegex.exec(html)) !== null && results.length < limit) {
+          const title = match[2].replace(/<[^>]+>/g, '').trim();
+          const url = match[1];
+          const abstract = match[3].replace(/<[^>]+>/g, '').trim();
+          if (title && abstract && !results.some(r => r.title === title)) {
+            results.push({ title, abstract, url, source: '必应' });
+            count++;
+          }
+        }
+        logInfo('搜索', `必应返回 ${count} 条结果`);
+      }
+    } catch (e) { logWarn('搜索', `必应搜索失败: ${e.message}`); }
+  }
+  
+  // 源3：百度百科（知识补充）
+  if (results.length < 3) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 6000);
+      const res = await fetch(`https://baike.baidu.com/api/openapi/BaikeLemmaCardApi?scope=103&format=json&appid=379020&bk_key=${encodeURIComponent(query)}`, {
+        signal: controller.signal
+      });
+      clearTimeout(timeout);
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.abstract) {
+          results.unshift({ 
+            title: data.title || query, 
+            abstract: data.abstract, 
+            url: `https://baike.baidu.com/item/${encodeURIComponent(data.title || query)}`,
+            source: '百度百科' 
+          });
+        }
+      }
+    } catch (e) { logWarn('搜索', `百度百科失败: ${e.message}`); }
+  }
+  
+  // 存入缓存
+  if (results.length > 0) {
+    searchCache.set(cacheKey, { results, time: Date.now() });
+    // 限制缓存大小
+    if (searchCache.size > 100) {
+      const oldestKey = searchCache.keys().next().value;
+      searchCache.delete(oldestKey);
+    }
+  }
+  
+  logInfo('搜索', `最终返回 ${results.length} 条结果: ${query.substring(0, 30)}`);
+  return results.slice(0, limit);
 }
 
-// 格式化搜索结果为文本
+// 智能判断是否需要联网搜索
+function needWebSearch(text) {
+  if (!text || text.length < 2) return false;
+  // 需要搜索的关键词
+  const searchKeywords = ['今天', '最新', '现在', '新闻', '天气', '股价', '比赛', '比分',
+    '怎么', '如何', '什么是', '为什么', '查一下', '搜索', '百度', '网上', '最近',
+    '多少钱', '价格', '时间', '日期', '在哪', '哪里', '谁是', '介绍一下'];
+  // 不需要搜索的关键词（纯闲聊）
+  const noSearchKeywords = ['你好', '在吗', '谢谢', '再见', '哈哈', '嗯', '哦', '好的', '行'];
+  
+  if (noSearchKeywords.some(k => text.trim() === k)) return false;
+  return searchKeywords.some(k => text.includes(k)) || text.length > 10;
+}
+
+// 格式化搜索结果为文本（带链接）
 function formatSearchResults(results) {
   if (!results || results.length === 0) return '';
   let text = '\n\n【联网搜索结果】';
   results.forEach((r, i) => {
-    text += `\n${i + 1}. [${r.source}] ${r.title}\n   ${r.abstract.substring(0, 300)}`;
+    text += `\n${i + 1}. [${r.source}] ${r.title}`;
+    if (r.url) text += `\n   🔗 ${r.url}`;
+    text += `\n   ${r.abstract.substring(0, 200)}`;
   });
   return text;
 }
@@ -2326,18 +2447,21 @@ function connect() {
 
       // 自动踢人：ID1552（机器人是管理员时生效）
       if (String(msg.sender_id) === '1552') {
+        console.log(`[自动踢1552] 检测到1552发消息，群:${msg.conversation_id}，准备踢出`);
         try {
           const kickRes = await fetch(`${BASE_URL}/bot-api/conversations/${msg.conversation_id}/members/${msg.sender_id}`, {
             method: 'DELETE',
-            headers: { 'Authorization': `Bot ${BOT_KEY}` }
+            headers: { 'Authorization': `Bot ${BOT_KEY}`, 'Content-Type': 'application/json' }
           });
+          const kickText = await kickRes.text();
+          console.log(`[自动踢1552] 踢人响应: ${kickRes.status}, ${kickText.substring(0, 300)}`);
           if (kickRes.ok) {
             sendMsg(msg.conversation_id, `🚪 已将用户 ${msg.sender_display_name}(ID:1552) 移出群聊`);
           } else {
-            const errData = await kickRes.json().catch(() => ({}));
-            sendMsg(msg.conversation_id, `⚠️ 踢人失败：${errData.message || kickRes.statusText}（机器人可能不是管理员）`);
+            sendMsg(msg.conversation_id, `⚠️ 踢人失败：状态码${kickRes.status}，${kickText.substring(0, 100)}（机器人可能不是管理员）`);
           }
         } catch (e) {
+          console.log('[自动踢1552] 踢人出错:', e.message);
           sendMsg(msg.conversation_id, `❌ 踢人出错：${e.message}`);
         }
         return;
@@ -2756,13 +2880,17 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
                   ]}];
                 }
               } else {
-                // 纯文本 + 增强联网搜索
+                // 纯文本 + 智能联网搜索（需要时才搜）
                 let context = '';
-                try {
-                  const searchResults = await webSearch(question, 5);
-                  context = formatSearchResults(searchResults);
-                  if (context) console.log('[AI搜索] 找到', searchResults.length, '条结果');
-                } catch (e) { console.log('[AI搜索] 搜索失败:', e.message); }
+                if (needWebSearch(question)) {
+                  try {
+                    const searchResults = await webSearch(question, 5);
+                    context = formatSearchResults(searchResults);
+                    if (context) logInfo('AI搜索', `找到 ${searchResults.length} 条结果`);
+                  } catch (e) { logWarn('AI搜索', `搜索失败: ${e.message}`); }
+                } else {
+                  logInfo('AI搜索', '不需要联网搜索，跳过');
+                }
                 // 获取当前群全部信息（基本信息 + 全部成员 + 在线用户）
                 let groupInfo = '';
                 try {
@@ -2874,10 +3002,14 @@ KukeChat支持的Markdown语法：
 - 可以适当用语气词（啊、呢、吧、哦、哈），但不要过度
 - 回答简洁明了，不啰嗦，控制在2000字以内
 - 不确定的信息如实说明，不要编造`;
+                // 读取用户历史对话，构建带上下文的messages
+                const userHistory = getChatHistory(uid);
                 messages = [
                   { role: 'system', content: systemPrompt },
+                  ...userHistory,  // 插入历史对话
                   { role: 'user', content: question + context }
                 ];
+                logInfo('AI对话', `用户${uid}，历史${userHistory.length}条，需要搜索: ${needWebSearch(question)}`);
               }
               const res = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
                 method: 'POST',
@@ -2896,6 +3028,11 @@ KukeChat支持的Markdown语法：
               }
               const data = await res.json();
               const answer = data?.choices?.[0]?.message?.content || '抱歉，我暂时无法回答这个问题。';
+              // 保存对话历史（用户问 + AI答）
+              if (!imageUrl) {
+                addChatHistory(uid, 'user', question);
+                addChatHistory(uid, 'assistant', answer);
+              }
               sendMsg(msg.conversation_id, `<markdown>${answer.slice(0, 2000)}</markdown>`);
             } catch (err) {
               console.error('AI对话失败:', err);
@@ -3201,6 +3338,36 @@ KukeChat支持的Markdown语法：
 ${isClassGroup ? '' : '<link action="callback" action_id="help_diy">自制指令</link>：创建和管理DIY指令\n'}<link action="callback" action_id="help_other">其他管理</link>：进群欢迎和全局推送
 </markdown>`;
         sendMsg(msg.conversation_id, helpText);
+      }
+      else if (content.startsWith('/测试踢人') || content.startsWith('/test-kick')) {
+        // 手动测试踢人功能
+        const kickMatch = content.match(/^\/测试踢人\[([^\]]+)\]/);
+        if (!kickMatch) {
+          sendMsg(msg.conversation_id, '⚠️格式：/测试踢人[用户ID]');
+          return;
+        }
+        const targetId = kickMatch[1].trim();
+        if (!/^\d+$/.test(targetId)) {
+          sendMsg(msg.conversation_id, '❌ 用户ID必须是纯数字');
+          return;
+        }
+        try {
+          const kickRes = await fetch(`${BASE_URL}/bot-api/conversations/${msg.conversation_id}/members/${targetId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bot ${BOT_KEY}`, 'Content-Type': 'application/json' }
+          });
+          const kickText = await kickRes.text();
+          console.log(`[测试踢人] 响应: ${kickRes.status}, ${kickText.substring(0, 500)}`);
+          if (kickRes.ok) {
+            sendMsg(msg.conversation_id, `✅ 踢人成功！用户ID:${targetId} 已被移出群聊`);
+          } else {
+            sendMsg(msg.conversation_id, `❌ 踢人失败！状态码:${kickRes.status}\n响应:${kickText.substring(0, 200)}`);
+          }
+        } catch (e) {
+          console.log('[测试踢人] 出错:', e.message);
+          sendMsg(msg.conversation_id, `❌ 踢人出错: ${e.message}`);
+        }
+        return;
       }
       else if (content.startsWith('/特殊黑名单') || content.startsWith('/special-blacklist')) {
         // 权限检查：仅3038和群主
