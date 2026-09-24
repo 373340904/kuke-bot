@@ -505,6 +505,127 @@ async function scanSpecialBlacklist() {
 setInterval(scanSpecialBlacklist, 2000);
 console.log('✅ 特殊黑名单定时检测已启动（每2秒扫描一次）');
 
+// ========== 群周报定时任务（每周一早上9点发送） ==========
+let lastWeeklyReportTime = 0; // 上次发送周报的时间戳
+async function sendWeeklyReport() {
+  try {
+    // 获取所有群
+    const convsRes = await fetch(`${BASE_URL}/bot-api/conversations`, {
+      headers: { 'Authorization': `Bot ${BOT_KEY}` }
+    });
+    const convsData = await convsRes.json();
+    const conversations = convsData.conversations || convsData.data || (Array.isArray(convsData) ? convsData : []);
+    
+    for (const conv of conversations) {
+      const cid = conv.id || conv.conversation_id;
+      if (!cid) continue;
+      // 跳过私聊和已作废群
+      if (conv.type === 'private' || String(cid) === '3900') continue;
+      
+      try {
+        // 统计本周数据（从activity_data.json读取）
+        const activityData = loadActivityData ? loadActivityData() : {};
+        const groupActivity = activityData[cid] || {};
+        const today = new Date();
+        const weekStart = new Date(today);
+        weekStart.setDate(today.getDate() - today.getDay() + 1); // 本周一
+        weekStart.setHours(0, 0, 0, 0);
+        
+        // 统计本周发言数
+        let weekMessages = 0;
+        let activeUsers = new Set();
+        if (groupActivity.daily) {
+          for (const [date, data] of Object.entries(groupActivity.daily)) {
+            const msgDate = new Date(date);
+            if (msgDate >= weekStart) {
+              weekMessages += data.count || 0;
+              if (data.users) Object.keys(data.users).forEach(u => activeUsers.add(u));
+            }
+          }
+        }
+        
+        // 获取群成员数
+        let memberCount = 0;
+        try {
+          const memRes = await fetch(`${BASE_URL}/bot-api/conversations/${cid}/members`, {
+            headers: { 'Authorization': `Bot ${BOT_KEY}` }
+          });
+          const memData = await memRes.json();
+          const members = memData.members || memData.data || memData.list || (Array.isArray(memData) ? memData : []);
+          memberCount = members.length;
+        } catch (e) {}
+        
+        // 获取在线人数
+        let onlineCount = 0;
+        try {
+          const onlineRes = await fetch(`${BASE_URL}/bot-api/users/online`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bot ${BOT_KEY}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+          });
+          const onlineData = await onlineRes.json();
+          const onlineUsers = onlineData.data || onlineData.users || (Array.isArray(onlineData) ? onlineData : []);
+          onlineCount = onlineUsers.length;
+        } catch (e) {}
+        
+        // 生成周报
+        const groupName = conv.title || conv.name || conv.display_title || '本群';
+        const weekNum = Math.ceil((today - new Date(today.getFullYear(), 0, 1)) / (7 * 24 * 60 * 60 * 1000));
+        
+        let report = `# 📊 ${groupName} 周报\n\n`;
+        report += `> **第 ${weekNum} 周**（${weekStart.getMonth()+1}/${weekStart.getDate()} - ${today.getMonth()+1}/${today.getDate()}）\n\n`;
+        report += `## 📈 本周数据\n\n`;
+        report += `| 指标 | 数据 |\n|------|------|\n`;
+        report += `| **群成员总数** | \`${memberCount}\` 人 |\n`;
+        report += `| **当前在线** | \`${onlineCount}\` 人 |\n`;
+        report += `| **本周发言数** | \`${weekMessages}\` 条 |\n`;
+        report += `| **本周活跃用户** | \`${activeUsers.size}\` 人 |\n`;
+        report += `| **活跃率** | \`${memberCount > 0 ? Math.round(activeUsers.size / memberCount * 100) : 0}\`% |\n\n`;
+        
+        if (activeUsers.size > 0) {
+          report += `## 🏆 活跃用户\n\n`;
+          report += `本周共有 \`${activeUsers.size}\` 位用户发言，感谢大家的活跃！\n\n`;
+        }
+        
+        report += `## 💡 温馨提示\n\n`;
+        report += `- 多发言可以获得积分，积分可以抽奖哦~\n`;
+        report += `- 输入 \`/积分\` 查看你的积分\n`;
+        report += `- 输入 \`/help\` 查看全部指令\n\n`;
+        report += `---\n*由君灵bot自动生成*`;
+        
+        sendMsg(cid, `<markdown>${report}</markdown>`);
+        logInfo('群周报', `已发送到群${cid} (${groupName})`);
+        
+        // 避免发送太频繁
+        await new Promise(r => setTimeout(r, 2000));
+      } catch (e) {
+        logError('群周报', `群${cid}发送失败: ${e.message}`);
+      }
+    }
+  } catch (e) {
+    logError('群周报', `生成失败: ${e.message}`);
+  }
+}
+
+// 每小时检查一次，如果是周一9点且今天没发过，就发送周报
+setInterval(() => {
+  const now = new Date();
+  const isMonday = now.getDay() === 1; // 周一
+  const is9am = now.getHours() === 9;
+  const todayStr = now.toDateString();
+  
+  if (isMonday && is9am) {
+    // 检查今天是否已经发过
+    const lastSend = new Date(lastWeeklyReportTime);
+    if (lastSend.toDateString() !== todayStr) {
+      lastWeeklyReportTime = Date.now();
+      logInfo('群周报', '触发每周报告发送');
+      sendWeeklyReport();
+    }
+  }
+}, 60 * 60 * 1000); // 每小时检查一次
+console.log('✅ 群周报定时任务已启动（每周一9点自动发送）');
+
 // 今日金句库
 const DAILY_QUOTES = [
   { text: '生活不是等待风暴过去，而是学会在雨中翩翩起舞。', author: '维维安·格林' },
@@ -661,6 +782,39 @@ function saveWelcomeData(data) {
   fs.writeFileSync(WELCOME_FILE, JSON.stringify(data, null, 2), 'utf-8');
 }
 
+// ========== 入群验证数据存储 ==========
+const VERIFY_FILE = path.join(__dirname, 'verify_data.json');
+// 内存中的验证状态：groupId_userId -> { answer, expireAt, attempts }
+const verifyCache = new Map();
+
+function loadVerifyData() {
+  try {
+    if (fs.existsSync(VERIFY_FILE)) {
+      return JSON.parse(fs.readFileSync(VERIFY_FILE, 'utf-8'));
+    }
+  } catch (e) {}
+  return { enabled: {} }; // enabled: {groupId: true/false}
+}
+
+function saveVerifyData(data) {
+  try {
+    fs.writeFileSync(VERIFY_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  } catch (e) {}
+}
+
+// 生成算术验证码
+function genVerifyCode() {
+  const a = Math.floor(Math.random() * 9) + 1;
+  const b = Math.floor(Math.random() * 9) + 1;
+  const ops = ['+', '-', 'x'];
+  const op = ops[Math.floor(Math.random() * ops.length)];
+  let answer;
+  if (op === '+') answer = a + b;
+  else if (op === '-') answer = a - b;
+  else answer = a * b;
+  return { question: `${a} ${op} ${b} = ?`, answer: String(answer) };
+}
+
 // ========== 群列表（用于全局推送）==========
 const GROUPS_FILE = path.join(__dirname, 'groups.json');
 
@@ -723,7 +877,7 @@ function getDefaultSetData() {
     chatModel: 'glm-4-flash',
     visionModel: 'glm-4v',
     features: {
-      ai_chat: true, checkin: true, weather: true, vote: true,
+      ai_chat: true, checkin: true, weather: true, express: true, vote: true,
       music: true, draw: true, werewolf: true, telepathy: true,
       undercover: true, story: true, fate: true, diy: true,
       forbidden: true, blacklist: true, mute: true, welcome: true,
@@ -2433,6 +2587,45 @@ function connect() {
 
       // 忽略自己发的消息
       if (msg.sender?.is_bot) return;
+      
+      // 入群验证答案检测
+      const verifyKey = `${msg.conversation_id}_${msg.sender_id}`;
+      const verifyState = verifyCache.get(verifyKey);
+      if (verifyState) {
+        // 检查是否过期
+        if (Date.now() > verifyState.expireAt) {
+          verifyCache.delete(verifyKey);
+          sendMsg(msg.conversation_id, `<markdown>⏰ <at id="${msg.sender_id}" /> 验证已过期，请重新进群获取验证码</markdown>`);
+          return;
+        }
+        // 检查答案
+        const userAnswer = content.trim();
+        if (userAnswer === verifyState.answer) {
+          // 验证通过
+          verifyCache.delete(verifyKey);
+          const welcomeData = loadWelcomeData();
+          let welcome = welcomeData[String(msg.conversation_id)];
+          if (!welcome) welcome = `<at id="${msg.sender_id}" />，验证通过！欢迎进群~/help查看全部指令`;
+          else {
+            welcome = welcome.replace(/<@成员>/g, `<at id="${msg.sender_id}" />`);
+            welcome = '✅ 验证通过！' + welcome;
+          }
+          const content = welcome.includes('<markdown>') ? welcome : `<markdown>${welcome}</markdown>`;
+          sendMsg(msg.conversation_id, content);
+          logInfo('入群验证', `用户${msg.sender_id} 验证通过`);
+          return;
+        } else {
+          // 答案错误
+          verifyState.attempts++;
+          if (verifyState.attempts >= 3) {
+            verifyCache.delete(verifyKey);
+            sendMsg(msg.conversation_id, `<markdown>❌ <at id="${msg.sender_id}" /> 验证失败次数过多，请重新进群获取验证码</markdown>`);
+          } else {
+            sendMsg(msg.conversation_id, `<markdown>❌ 答案错误，还有 ${3 - verifyState.attempts} 次机会，请重新回答</markdown>`);
+          }
+          return;
+        }
+      }
 
       // 去重（必须在所有处理之前）
       if (seenIds.has(msg.id)) return;
@@ -4062,6 +4255,120 @@ C. 选项三内容
         const card = buildCheckinCard(userName, today, rank, fortune.level, fortune.desc, star, luckyNum, color, yi, undefined, msg.sender_id);
         sendMsg(msg.conversation_id, card);
       }
+      else if (content === '/开启入群验证' || content === '/关闭入群验证') {
+        if (uid !== 3038 && !isOwner) {
+          sendMsg(msg.conversation_id, '⚠️ 只有群主和创作者可以设置入群验证');
+          return;
+        }
+        const verifyData = loadVerifyData();
+        if (!verifyData.enabled) verifyData.enabled = {};
+        if (content === '/开启入群验证') {
+          verifyData.enabled[String(msg.conversation_id)] = true;
+          sendMsg(msg.conversation_id, `<markdown>✅ **入群验证已开启**\n新人进群需要回答算术题才能正常发言</markdown>`);
+        } else {
+          delete verifyData.enabled[String(msg.conversation_id)];
+          sendMsg(msg.conversation_id, `<markdown>❌ **入群验证已关闭**</markdown>`);
+        }
+        saveVerifyData(verifyData);
+        return;
+      }
+      else if (content === '/周报' || content === '/weekly') {
+        if (uid !== 3038 && !isOwner) {
+          sendMsg(msg.conversation_id, '⚠️ 只有群主和创作者可以手动发送周报');
+          return;
+        }
+        sendMsg(msg.conversation_id, '📊 正在生成本周群报...');
+        sendWeeklyReport();
+        return;
+      }
+      else if (content.startsWith('/快递') || content.startsWith('/express')) {
+        if (!isFeatureEnabled(msg.conversation_id, '快递查询')) { sendMsg(msg.conversation_id, '快递查询功能已被管理员关闭'); return; }
+        const expressMatch = content.match(/^\/快递\s*\[(.+?)\]/);
+        if (!expressMatch) {
+          sendMsg(msg.conversation_id, `<markdown>⚠️ **格式错误**\n请使用：\`/快递[单号]\`\n例如：\`/快递[SF1234567890]\`</markdown>`);
+          return;
+        }
+        const trackingNum = expressMatch[1].trim();
+        if (!/^[A-Za-z0-9]{8,}$/.test(trackingNum)) {
+          sendMsg(msg.conversation_id, `<markdown>❌ **快递单号格式不正确**\n请输入正确的快递单号（字母+数字，至少8位）</markdown>`);
+          return;
+        }
+        sendMsg(msg.conversation_id, '📦 正在查询快递信息，请稍候...');
+        (async () => {
+          try {
+            // 第一步：智能识别快递公司
+            let companyCode = '';
+            let companyName = '';
+            try {
+              const autoRes = await fetch(`https://www.kuaidi100.com/autonumber/auto?num=${encodeURIComponent(trackingNum)}`, {
+                headers: {
+                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                  'Referer': 'https://www.kuaidi100.com/'
+                }
+              });
+              const autoData = await autoRes.json();
+              if (autoData && autoData.length > 0) {
+                companyCode = autoData[0].comCode;
+                companyName = autoData[0].name;
+              }
+            } catch (e) { logWarn('快递查询', `识别快递公司失败: ${e.message}`); }
+            
+            if (!companyCode) {
+              sendMsg(msg.conversation_id, `<markdown>❌ **无法识别快递公司**\n单号：\`${trackingNum}\`\n请确认单号是否正确，或手动指定快递公司</markdown>`);
+              return;
+            }
+            
+            // 第二步：查询物流信息
+            const queryRes = await fetch(`https://www.kuaidi100.com/query?type=${companyCode}&postid=${encodeURIComponent(trackingNum)}`, {
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Referer': 'https://www.kuaidi100.com/'
+              }
+            });
+            const queryData = await queryRes.json();
+            
+            if (queryData.status !== '200' || !queryData.data) {
+              sendMsg(msg.conversation_id, `<markdown>❌ **查询失败**\n${queryData.message || '暂无物流信息'}\n\n> 可能原因：单号错误、快递未揽收、接口暂时不可用</markdown>`);
+              return;
+            }
+            
+            // 状态映射
+            const statusMap = {
+              '0': '在途', '1': '揽收', '2': '疑难', '3': '签收', 
+              '4': '退签', '5': '派件', '6': '退回', '7': '转投', '8': '清关'
+            };
+            const statusText = statusMap[queryData.state] || '未知';
+            const latestInfo = queryData.data[0] || {};
+            
+            // 构建回复
+            let reply = `# 📦 快递查询结果\n\n`;
+            reply += `| 项目 | 信息 |\n|------|------|\n`;
+            reply += `| **快递单号** | \`${trackingNum}\` |\n`;
+            reply += `| **快递公司** | ${companyName} |\n`;
+            reply += `| **当前状态** | **${statusText}** |\n`;
+            reply += `| **最新更新** | ${latestInfo.time || '未知'} |\n\n`;
+            reply += `## 📍 物流轨迹\n\n`;
+            
+            // 显示最近5条物流信息
+            const tracks = queryData.data.slice(0, 5);
+            tracks.forEach((item, i) => {
+              const icon = i === 0 ? '🟢' : '⚪';
+              reply += `${icon} **${item.time}**\n> ${item.context}\n\n`;
+            });
+            
+            if (queryData.data.length > 5) {
+              reply += `*...还有 ${queryData.data.length - 5} 条物流记录*\n`;
+            }
+            
+            sendMsg(msg.conversation_id, `<markdown>${reply}</markdown>`);
+            logInfo('快递查询', `查询成功: ${trackingNum} (${companyName})`);
+          } catch (e) {
+            logError('快递查询', `查询异常: ${e.message}`);
+            sendMsg(msg.conversation_id, `<markdown>❌ **快递查询失败**\n错误信息：${e.message}\n\n> 请稍后重试，或检查网络连接</markdown>`);
+          }
+        })();
+        return;
+      }
       else if (content.startsWith('/天气')) {
         if (!isFeatureEnabled(msg.conversation_id, '天气')) { sendMsg(msg.conversation_id, '天气功能已被管理员关闭'); return; }
         const match = content.match(/^\/天气\s*\[(.+?)\]/);
@@ -5354,21 +5661,36 @@ ${diyLink}> 点击分类查看详细指令</markdown>`;
     if (joinEvents.includes(event.type)) {
       const convId = event.data.conversation_id;
       const newUserId = event.data.user_id || (event.data.user && event.data.user.id);
-      const welcomeData = loadWelcomeData();
-      let welcome = welcomeData[String(convId)];
-      if (isFeatureEnabled(convId, '进群欢迎')) {
-        // 没有自定义欢迎语时用默认的
-        if (!welcome) {
-          welcome = `<at id="${newUserId}" />，欢迎进群~/help查看全部指令`;
-        } else {
-          // 替换<@成员>为at新成员
-          if (newUserId) {
-            welcome = welcome.replace(/<@成员>/g, `<at id="${newUserId}" />`);
+      const verifyData = loadVerifyData();
+      
+      // 检查是否开启了入群验证
+      if (verifyData.enabled && verifyData.enabled[String(convId)] && newUserId) {
+        // 生成验证码
+        const verify = genVerifyCode();
+        const cacheKey = `${convId}_${newUserId}`;
+        verifyCache.set(cacheKey, {
+          answer: verify.answer,
+          expireAt: Date.now() + 5 * 60 * 1000, // 5分钟过期
+          attempts: 0
+        });
+        // 发送验证消息
+        sendMsg(convId, `<markdown>## 🔐 入群验证\n\n<at id="${newUserId}" /> 请回答以下问题完成验证：\n\n> # ${verify.question}\n\n直接发送答案即可，5分钟内有效\n*回答正确后自动欢迎入群*</markdown>`);
+        logInfo('入群验证', `群${convId} 用户${newUserId} 验证码: ${verify.question} = ${verify.answer}`);
+      } else {
+        // 未开启验证，正常欢迎
+        const welcomeData = loadWelcomeData();
+        let welcome = welcomeData[String(convId)];
+        if (isFeatureEnabled(convId, '进群欢迎')) {
+          if (!welcome) {
+            welcome = `<at id="${newUserId}" />，欢迎进群~/help查看全部指令`;
+          } else {
+            if (newUserId) {
+              welcome = welcome.replace(/<@成员>/g, `<at id="${newUserId}" />`);
+            }
           }
+          const content = welcome.includes('<markdown>') ? welcome : `<markdown>${welcome}</markdown>`;
+          sendMsg(convId, content);
         }
-        // 自动包裹markdown标签（如果用户内容本身没有）
-        const content = welcome.includes('<markdown>') ? welcome : `<markdown>${welcome}</markdown>`;
-        sendMsg(convId, content);
       }
       console.log('👋 进群事件:', event.type, event.data);
       return;
