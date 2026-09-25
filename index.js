@@ -2588,42 +2588,58 @@ function connect() {
       // 忽略自己发的消息
       if (msg.sender?.is_bot) return;
       
-      // 入群验证答案检测
+      // 入群验证答案检测（必须以"答案："开头，答错直接踢群）
       const verifyKey = `${msg.conversation_id}_${msg.sender_id}`;
       const verifyState = verifyCache.get(verifyKey);
       if (verifyState) {
-        // 检查是否过期
+        // 检查是否过期，过期直接踢群
         if (Date.now() > verifyState.expireAt) {
           verifyCache.delete(verifyKey);
-          sendMsg(msg.conversation_id, `<markdown>⏰ <at id="${msg.sender_id}" /> 验证已过期，请重新进群获取验证码</markdown>`);
+          try {
+            await fetch(`${BASE_URL}/bot-api/conversations/${msg.conversation_id}/members/${msg.sender_id}`, {
+              method: 'DELETE',
+              headers: { 'Authorization': `Bot ${BOT_KEY}`, 'Content-Type': 'application/json' }
+            });
+          } catch (e) {}
+          sendMsg(msg.conversation_id, `<markdown>⏰ <at id="${msg.sender_id}" /> 验证已过期，已移出群聊</markdown>`);
           return;
         }
-        // 检查答案
-        const userAnswer = content.trim();
-        if (userAnswer === verifyState.answer) {
-          // 验证通过
-          verifyCache.delete(verifyKey);
-          const welcomeData = loadWelcomeData();
-          let welcome = welcomeData[String(msg.conversation_id)];
-          if (!welcome) welcome = `<at id="${msg.sender_id}" />，验证通过！欢迎进群~/help查看全部指令`;
-          else {
-            welcome = welcome.replace(/<@成员>/g, `<at id="${msg.sender_id}" />`);
-            welcome = '✅ 验证通过！' + welcome;
-          }
-          const content = welcome.includes('<markdown>') ? welcome : `<markdown>${welcome}</markdown>`;
-          sendMsg(msg.conversation_id, content);
-          logInfo('入群验证', `用户${msg.sender_id} 验证通过`);
-          return;
-        } else {
-          // 答案错误
-          verifyState.attempts++;
-          if (verifyState.attempts >= 3) {
+        // 必须以"答案："开头才检测
+        if (content.startsWith('答案：') || content.startsWith('答案:')) {
+          const userAnswer = content.replace(/^答案[：:]\s*/, '').trim();
+          if (userAnswer === verifyState.answer) {
+            // 验证通过
             verifyCache.delete(verifyKey);
-            sendMsg(msg.conversation_id, `<markdown>❌ <at id="${msg.sender_id}" /> 验证失败次数过多，请重新进群获取验证码</markdown>`);
+            const welcomeData = loadWelcomeData();
+            let welcome = welcomeData[String(msg.conversation_id)];
+            if (!welcome) welcome = `<at id="${msg.sender_id}" />，验证通过！欢迎进群~/help查看全部指令`;
+            else {
+              welcome = welcome.replace(/<@成员>/g, `<at id="${msg.sender_id}" />`);
+              welcome = '✅ 验证通过！' + welcome;
+            }
+            const replyContent = welcome.includes('<markdown>') ? welcome : `<markdown>${welcome}</markdown>`;
+            sendMsg(msg.conversation_id, replyContent);
+            logInfo('入群验证', `用户${msg.sender_id} 验证通过`);
+            return;
           } else {
-            sendMsg(msg.conversation_id, `<markdown>❌ 答案错误，还有 ${3 - verifyState.attempts} 次机会，请重新回答</markdown>`);
+            // 答案错误，直接踢群
+            verifyCache.delete(verifyKey);
+            try {
+              const kickRes = await fetch(`${BASE_URL}/bot-api/conversations/${msg.conversation_id}/members/${msg.sender_id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bot ${BOT_KEY}`, 'Content-Type': 'application/json' }
+              });
+              if (kickRes.ok) {
+                sendMsg(msg.conversation_id, `<markdown>❌ <at id="${msg.sender_id}" /> 答案错误，已移出群聊</markdown>`);
+              } else {
+                sendMsg(msg.conversation_id, `<markdown>❌ <at id="${msg.sender_id}" /> 答案错误，踢人失败（机器人可能不是管理员）</markdown>`);
+              }
+            } catch (e) {
+              sendMsg(msg.conversation_id, `<markdown>❌ <at id="${msg.sender_id}" /> 答案错误，踢人出错</markdown>`);
+            }
+            logInfo('入群验证', `用户${msg.sender_id} 答案错误，已踢群`);
+            return;
           }
-          return;
         }
       }
 
@@ -5674,7 +5690,7 @@ ${diyLink}> 点击分类查看详细指令</markdown>`;
           attempts: 0
         });
         // 发送验证消息
-        sendMsg(convId, `<markdown>## 🔐 入群验证\n\n<at id="${newUserId}" /> 请回答以下问题完成验证：\n\n> # ${verify.question}\n\n直接发送答案即可，5分钟内有效\n*回答正确后自动欢迎入群*</markdown>`);
+        sendMsg(convId, `<markdown>## 🔐 入群验证\n\n<at id="${newUserId}" /> 请回答以下问题完成验证：\n\n> # ${verify.question}\n\n**回复格式：答案：你的答案**\n例如：\`答案：8\`\n\n5分钟内有效，答错直接移出群聊</markdown>`);
         logInfo('入群验证', `群${convId} 用户${newUserId} 验证码: ${verify.question} = ${verify.answer}`);
       } else {
         // 未开启验证，正常欢迎
