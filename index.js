@@ -4271,6 +4271,14 @@ C. 选项三内容
         const card = buildCheckinCard(userName, today, rank, fortune.level, fortune.desc, star, luckyNum, color, yi, undefined, msg.sender_id);
         sendMsg(msg.conversation_id, card);
       }
+      else if (content === '/事件调试' || content === '/debug-events') {
+        if (uid !== 3038 && !isOwner) {
+          sendMsg(msg.conversation_id, '⚠️ 只有群主和创作者可以使用');
+          return;
+        }
+        sendMsg(msg.conversation_id, `<markdown>## 🔧 事件调试模式\n\n已开启详细事件日志\n\n请让一个新人进群，然后查看Railway日志中 \`[事件调试]\` 和 \`[进群事件]\` 的输出，把日志发给我即可定位问题。</markdown>`);
+        return;
+      }
       else if (content === '/开启入群验证' || content === '/关闭入群验证') {
         if (uid !== 3038 && !isOwner) {
           sendMsg(msg.conversation_id, '⚠️ 只有群主和创作者可以设置入群验证');
@@ -5673,10 +5681,21 @@ ${diyLink}> 点击分类查看详细指令</markdown>`;
     }
 
     // 进群事件（兼容多种可能的事件名）
-    const joinEvents = ['member.joined', 'conversation.member.joined', 'user.joined', 'member.added', 'conversation.member_added', 'group.member.joined', 'conversation.user.joined'];
+    const joinEvents = [
+      'member.joined', 'conversation.member.joined', 'user.joined', 'member.added',
+      'conversation.member_added', 'group.member.joined', 'conversation.user.joined',
+      'group.member_added', 'conversation_member_joined', 'member_join', 'user.join',
+      'group.user.joined', 'conversation.member.join', 'bot.member.joined',
+      'message.system.join', 'system.member.join', 'member.join', 'group.join'
+    ];
+    // 调试：记录所有可能包含join/member/added的事件
+    if (event.type && (event.type.includes('join') || event.type.includes('member') || event.type.includes('added') || event.type.includes('user'))) {
+      console.log('[事件调试] 可能的进群相关事件:', event.type, JSON.stringify(event.data).substring(0, 200));
+    }
     if (joinEvents.includes(event.type)) {
-      const convId = event.data.conversation_id;
-      const newUserId = event.data.user_id || (event.data.user && event.data.user.id);
+      console.log('[进群事件] 触发! type=', event.type, 'data=', JSON.stringify(event.data).substring(0, 300));
+      const convId = event.data.conversation_id || event.data.conv_id || event.data.group_id || event.data.id;
+      const newUserId = event.data.user_id || event.data.uid || event.data.member_id || (event.data.user && event.data.user.id) || (event.data.member && event.data.member.id) || (event.data.invitee && event.data.invitee.id);
       const verifyData = loadVerifyData();
       
       // 检查是否开启了入群验证
