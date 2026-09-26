@@ -3156,6 +3156,106 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
                   groupInfo = parts.join('，');
                   console.log('[群信息] 成员数:', memberCount, '在线数:', onlineCount);
                 } catch (e) { console.error('获取群信息失败:', e.message); }
+
+                // 5. 获取当前用户详细信息
+                let userDetail = '';
+                try {
+                  const userRes = await fetch(`${BASE_URL}/bot-api/users/${uid}`, { headers: { 'Authorization': `Bot ${BOT_KEY}` } });
+                  if (userRes.ok) {
+                    const userData = await userRes.json();
+                    const u = userData.data || userData.user || userData;
+                    const uParts = [];
+                    if (u.nickname || u.display_name) uParts.push(`昵称：${u.nickname || u.display_name}`);
+                    if (u.username) uParts.push(`用户名：${u.username}`);
+                    uParts.push(`用户ID：${u.id || uid}`);
+                    if (u.bio) uParts.push(`个性签名：${u.bio}`);
+                    if (u.status) uParts.push(`账号状态：${u.status}`);
+                    if (u.presence_status) uParts.push(`在线状态：${u.presence_status}`);
+                    if (u.platform_role) uParts.push(`平台角色：${u.platform_role}`);
+                    if (u.created_at) uParts.push(`注册时间：${u.created_at}`);
+                    if (u.ccw_name) uParts.push(`CCW昵称：${u.ccw_name}`);
+                    if (u.ccw_follower_count) uParts.push(`CCW粉丝：${u.ccw_follower_count}`);
+                    userDetail = uParts.join('，');
+                  }
+                } catch (e) { console.error('获取用户信息失败:', e.message); }
+
+                // 6. 获取本地数据（签到、积分、黑名单等）
+                let localData = '';
+                try {
+                  const ldParts = [];
+                  // 签到数据
+                  try {
+                    const checkinData = loadCheckinData ? loadCheckinData() : {};
+                    const userCheckin = checkinData[String(uid)];
+                    if (userCheckin) {
+                      ldParts.push(`签到：连续${userCheckin.streak || 0}天，总${userCheckin.total || 0}天，最后签到${userCheckin.last_date || '未签到'}`);
+                    } else {
+                      ldParts.push('签到：未签到');
+                    }
+                  } catch (e) {}
+                  // 积分数据
+                  try {
+                    const pointsData = loadPointsData ? loadPointsData() : {};
+                    const userPoints = pointsData[String(uid)];
+                    if (userPoints) {
+                      ldParts.push(`积分：${userPoints.points || 0}分`);
+                    } else {
+                      ldParts.push('积分：0分');
+                    }
+                  } catch (e) {}
+                  // 黑名单
+                  try {
+                    const blacklist = loadBlacklistData ? loadBlacklistData() : [];
+                    const isBlacklisted = blacklist.some(b => String(b.user_id || b.id || b) === String(uid));
+                    ldParts.push(`黑名单状态：${isBlacklisted ? '在黑名单中' : '正常'}`);
+                  } catch (e) {}
+                  // 禁言状态
+                  try {
+                    const muteData = loadMuteData ? loadMuteData() : {};
+                    const userMute = muteData[String(msg.conversation_id)] && muteData[String(msg.conversation_id)][String(uid)];
+                    if (userMute && userMute.muted) {
+                      ldParts.push(`禁言状态：禁言中（到${userMute.until || '未知'}）`);
+                    } else {
+                      ldParts.push('禁言状态：正常');
+                    }
+                  } catch (e) {}
+                  localData = ldParts.join('；');
+                } catch (e) { console.error('获取本地数据失败:', e.message); }
+
+                // 7. 获取群管理数据（黑名单、违禁词等）
+                let groupManageData = '';
+                try {
+                  const gmParts = [];
+                  // 群黑名单
+                  try {
+                    const blacklist = loadBlacklistData ? loadBlacklistData() : [];
+                    const groupBlacklist = blacklist.filter(b => String(b.conversation_id || b.group_id || '') === String(msg.conversation_id) || !b.conversation_id);
+                    if (groupBlacklist.length > 0) {
+                      const blNames = groupBlacklist.slice(0, 5).map(b => b.nickname || b.user_id || b.id || '未知').join('、');
+                      gmParts.push(`群黑名单：${groupBlacklist.length}人（${blNames}${groupBlacklist.length > 5 ? '等' : ''}）`);
+                    } else {
+                      gmParts.push('群黑名单：无');
+                    }
+                  } catch (e) {}
+                  // 违禁词
+                  try {
+                    const forbidden = loadForbiddenWords ? loadForbiddenWords() : {};
+                    const groupForbidden = forbidden[String(msg.conversation_id)] || [];
+                    if (groupForbidden.length > 0) {
+                      gmParts.push(`违禁词：${groupForbidden.length}个（${groupForbidden.slice(0, 5).join('、')}${groupForbidden.length > 5 ? '等' : ''}）`);
+                    } else {
+                      gmParts.push('违禁词：无');
+                    }
+                  } catch (e) {}
+                  // DIY指令
+                  try {
+                    const diyData = loadDiyData ? loadDiyData() : {};
+                    const groupDiy = diyData[String(msg.conversation_id)] || [];
+                    gmParts.push(`自制指令：${groupDiy.length}个`);
+                  } catch (e) {}
+                  groupManageData = gmParts.join('；');
+                } catch (e) { console.error('获取群管理数据失败:', e.message); }
+
                 const contextInfo = `
 【实时上下文】
 当前时间：${new Date().toLocaleString('zh-CN')}
@@ -3166,8 +3266,19 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
 你的Bot ID：${botInfo.botId || '421'}
 你的个性签名：${botInfo.bio || '未知'}
 你的状态：${botInfo.status || '在线'}
+你的创作者：君衔（用户ID：3038）
 正在跟你说话的人：${uname}（用户ID：${uid}）
+用户详细信息：${userDetail || '未知'}
+用户本地数据：${localData || '未知'}
+群管理数据：${groupManageData || '未知'}
 消息内容：${question || '(图片)'}
+
+【可用指令列表】
+常用：/签到 /积分 /抽奖 /每日金句 /天气 /快递 /帮助 /关于
+游戏：/狼人杀 /谁是卧底 /命运抉择 /心灵感应 /猜数字 /成语接龙
+管理：/禁言 /解禁 /踢人 /黑名单 /违禁词 /投票 /全局推送 /周报
+设置：/set /开启入群验证 /关闭入群验证 /功能开关
+创作：/DIY /自制功能 /删除DIY /speak
 `;
                 const systemPrompt = contextInfo + `你是君灵AI，运行在KukeChat（酷可聊天）平台的智能机器人助手。
 
@@ -3210,7 +3321,15 @@ KukeChat支持的Markdown语法：
 - 不要用"好的，我来帮你""很高兴为您服务"这种客服腔，直接回答就行
 - 可以适当用语气词（啊、呢、吧、哦、哈），但不要过度
 - 回答简洁明了，不啰嗦，控制在2000字以内
-- 不确定的信息如实说明，不要编造`;
+- 不确定的信息如实说明，不要编造
+
+【智能指令引导】
+- 当用户表达想使用某个功能时（如"我想签到""怎么签到""我要抽奖"），主动告诉用户对应的指令，例如："想签到的话直接发 /签到 就可以啦~"
+- 当用户问自己的状态时（如"我签到了吗""我有多少积分""我在黑名单里吗"），基于【用户本地数据】里的信息如实回答
+- 当用户问群管理信息时（如"黑名单有谁""有哪些违禁词""有多少自制指令"），基于【群管理数据】里的信息如实回答
+- 当用户问机器人自己的信息时（如"你是谁""你叫什么""你的签名是什么""你在哪个群"），基于【实时上下文】里的信息如实回答
+- 所有信息都是实时获取的，不要编造，不知道就说不知道
+- 用户问任何关于群、用户、机器人的信息时，都要基于上下文里的实时数据回答`;
                 // 读取用户历史对话，构建带上下文的messages
                 const userHistory = getChatHistory(uid);
                 messages = [
