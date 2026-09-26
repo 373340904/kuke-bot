@@ -1046,6 +1046,151 @@ function buildSetCard(page, cid) {
 
 
 // AI调用辅助函数（供创意游戏使用）
+// ========== 意图识别+自动执行系统 ==========
+// 指令意图映射表：以后加新指令，只需要在这里添加关键词即可
+const INTENT_MAP = [
+  // 签到相关
+  { intent: '签到', keywords: ['签到', '签个到', '我要签到', '帮我签到', '打卡', '今日签到'], action: 'checkin' },
+  // 积分相关
+  { intent: '积分', keywords: ['积分', '我的积分', '多少积分', '查积分', '积分查询', '积分多少'], action: 'points' },
+  // 抽奖相关
+  { intent: '抽奖', keywords: ['抽奖', '我要抽奖', '帮我抽奖', '抽个奖', '来个抽奖'], action: 'lottery' },
+  // 每日金句
+  { intent: '每日金句', keywords: ['金句', '每日金句', '今日金句', '来个金句', '说个金句'], action: 'dailyquote' },
+  // 黑名单相关
+  { intent: '查看黑名单', keywords: ['黑名单', '黑名单有谁', '查看黑名单', '谁在黑名单', '黑名单列表'], action: 'blacklist' },
+  // 违禁词相关
+  { intent: '查看违禁词', keywords: ['违禁词', '违禁词有哪些', '查看违禁词', '违禁词列表'], action: 'forbidden' },
+  // 天气相关
+  { intent: '天气', keywords: ['天气', '今天天气', '天气预报', '多少度', '气温'], action: 'weather' },
+  // 快递相关
+  { intent: '快递', keywords: ['快递', '查快递', '物流', '快递到哪了', '包裹'], action: 'express' },
+  // 关于
+  { intent: '关于', keywords: ['关于', '你是谁', '介绍一下你', '机器人信息', '你的信息'], action: 'about' },
+  // 帮助
+  { intent: '帮助', keywords: ['帮助', 'help', '指令', '有什么功能', '怎么用', '功能列表'], action: 'help' },
+  // 群活跃
+  { intent: '群活跃', keywords: ['群活跃', '活跃统计', '今日活跃', '活跃度', '活跃榜'], action: 'activity' },
+  // 在线人数
+  { intent: '在线人数', keywords: ['在线', '多少人在线', '在线人数', '谁在线', '在线列表'], action: 'online' },
+  // 群信息
+  { intent: '群信息', keywords: ['群信息', '群资料', '群介绍', '这个群', '群详情'], action: 'groupinfo' },
+  // 用户信息
+  { intent: '用户信息', keywords: ['我的信息', '个人资料', '我的资料', '用户信息', '我是谁'], action: 'userinfo' },
+  // 投票
+  { intent: '投票', keywords: ['投票', '发起投票', '创建投票', '投票列表'], action: 'vote' },
+  // 周报
+  { intent: '周报', keywords: ['周报', '群周报', '本周总结', '周总结'], action: 'weekly' },
+  // DIY
+  { intent: 'DIY列表', keywords: ['自制指令', 'diy列表', '自制功能', '有哪些自制', 'diy有哪些'], action: 'diylist' },
+  // 清空对话
+  { intent: '清空对话', keywords: ['清空对话', '清除记忆', '忘记对话', '重置对话'], action: 'clearchat' },
+];
+
+function tryExecuteIntent(question, msg, uid, uname) {
+  if (!question) return null;
+  const q = question.toLowerCase().trim();
+
+  for (const item of INTENT_MAP) {
+    for (const kw of item.keywords) {
+      if (q.includes(kw.toLowerCase())) {
+        // 匹配到意图，执行对应动作
+        executeIntentAction(item.action, msg, uid, uname, question);
+        return { intent: item.intent, action: item.action };
+      }
+    }
+  }
+  return null; // 没有匹配到意图
+}
+
+async function executeIntentAction(action, msg, uid, uname, question) {
+  const cid = msg.conversation_id;
+  try {
+    switch (action) {
+      case 'checkin':
+        // 自动执行签到
+        await handleCheckin(msg, uid, uname);
+        break;
+      case 'points':
+        // 自动查询积分
+        await handlePointsQuery(msg, uid, uname);
+        break;
+      case 'lottery':
+        // 自动抽奖
+        await handleLottery(msg, uid, uname);
+        break;
+      case 'dailyquote':
+        // 自动每日金句
+        await handleDailyQuote(msg, uid, uname);
+        break;
+      case 'blacklist':
+        // 自动查看黑名单
+        await handleBlacklistView(msg, uid);
+        break;
+      case 'forbidden':
+        // 自动查看违禁词
+        await handleForbiddenView(msg, uid);
+        break;
+      case 'weather':
+        // 自动天气（默认城市，或从问题中提取）
+        sendMsg(cid, '🌤️ 请直接发送 /天气[城市] 查询天气，例如 /天气北京');
+        break;
+      case 'express':
+        // 自动快递提示
+        sendMsg(cid, '📦 请直接发送 /快递[单号] 查询物流，例如 /快递123456789');
+        break;
+      case 'about':
+        // 自动关于
+        await handleAbout(msg);
+        break;
+      case 'help':
+        // 自动帮助
+        await handleHelp(msg);
+        break;
+      case 'activity':
+        // 自动群活跃
+        await handleActivity(msg);
+        break;
+      case 'online':
+        // 自动在线人数
+        await handleOnlineCount(msg);
+        break;
+      case 'groupinfo':
+        // 自动群信息
+        await handleGroupInfo(msg);
+        break;
+      case 'userinfo':
+        // 自动用户信息
+        await handleUserInfo(msg, uid, uname);
+        break;
+      case 'vote':
+        // 投票提示
+        sendMsg(cid, '🗳️ 请发送 /投票[标题,选项1,选项2,...] 发起投票');
+        break;
+      case 'weekly':
+        // 自动周报
+        await handleWeeklyReport(msg, uid);
+        break;
+      case 'diylist':
+        // 自动DIY列表
+        await handleDiyList(msg);
+        break;
+      case 'clearchat':
+        // 自动清空对话
+        if (chatHistory && chatHistory.has) chatHistory.delete(String(uid));
+        sendMsg(cid, '✅ 已清空我们的对话记录~');
+        break;
+      default:
+        return null;
+    }
+  } catch (e) {
+    console.error('[意图执行失败]', action, e.message);
+    sendMsg(cid, `⚠️ 自动执行失败：${e.message}`);
+  }
+}
+
+// ========== 意图识别系统结束 ==========
+
 async function callAI(prompt, systemPrompt) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 60000);
@@ -3058,7 +3203,15 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
                 sendMsg(msg.conversation_id, '⚠️ AI功能未配置，请在 index.js 中填写 ZHIPU_API_KEY');
                 return;
               }
-              sendMsg(msg.conversation_id, imageUrl ? "🖼️ 正在深度思考图片..." : "🤔 正在深度思考...");
+              // ========== 意图识别：自动执行指令 ==========
+                const intentResult = tryExecuteIntent(question, msg, uid, uname);
+                if (intentResult) {
+                  logInfo('意图识别', `用户${uid} 意图: ${intentResult.intent}`);
+                  return;
+                }
+                // ========== 意图识别结束 ==========
+
+                sendMsg(msg.conversation_id, imageUrl ? "🖼️ 正在深度思考图片..." : "🤔 正在深度思考...");
               const controller = new AbortController();
               const timeout = setTimeout(() => controller.abort(), 30000);
               let messages;
@@ -5933,9 +6086,177 @@ setInterval(async () => {
   if (changed) saveWR(data);
 }, 10000);
 
+// ========== 意图识别辅助函数 ==========
+async function handlePointsQuery(msg, uid, uname) {
+  try {
+    const pointsData = loadPointsData ? loadPointsData() : {};
+    const userPoints = pointsData[String(uid)] || { points: 0 };
+    const p = userPoints.points || 0;
+    const canLottery = Math.floor(p / 50);
+    sendMsg(msg.conversation_id, `<markdown>## 💰 积分查询\n\n**${uname}** 的积分信息：\n\n> 当前积分：**\`${p}\`** 分\n> 可抽奖次数：**\`${canLottery}\`** 次（每50积分抽一次）\n\n- 发 /抽奖 进行抽奖\n- 签到、玩游戏可获得积分</markdown>`);
+  } catch (e) {
+    sendMsg(msg.conversation_id, `❌ 查询积分失败：${e.message}`);
+  }
+}
 
+async function handleLottery(msg, uid, uname) {
+  try {
+    const isAdmin = uid === 3038;
+    const pointsData = loadPointsData ? loadPointsData() : {};
+    const userPoints = pointsData[String(uid)] || { points: 0 };
+    const p = userPoints.points || 0;
+    if (!isAdmin && p < 50) {
+      sendMsg(msg.conversation_id, `<markdown>## 🎰 抽奖\n\n❌ 积分不足！\n\n> 当前积分：**\`${p}\`** 分\n> 需要：**\`50\`** 分\n\n签到、玩游戏可获得积分~</markdown>`);
+      return;
+    }
+    if (!isAdmin) {
+      userPoints.points = p - 50;
+      pointsData[String(uid)] = userPoints;
+      if (savePointsData) savePointsData(pointsData);
+    }
+    const rand = Math.random() * 100;
+    let result = '';
+    if (rand < 10) {
+      result = '🎉 恭喜获得 **10共创币**！';
+      try {
+        await fetch(`${BASE_URL}/bot-api/direct/messages`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bot ${BOT_KEY}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: 3038, message: `🎁 用户 ${uname}(${uid}) 抽奖获得了10共创币！` })
+        });
+      } catch (e) {}
+    } else if (rand < 25) {
+      result = '📜 获得 **每日金句体验** x1！';
+    } else if (rand < 45) {
+      result = '⭐ 获得 **15积分**！';
+      if (!isAdmin) {
+        userPoints.points = (userPoints.points || 0) + 15;
+        pointsData[String(uid)] = userPoints;
+        if (savePointsData) savePointsData(pointsData);
+      }
+    } else if (rand < 50) {
+      result = '🎊 获得 **100积分**大奖！';
+      if (!isAdmin) {
+        userPoints.points = (userPoints.points || 0) + 100;
+        pointsData[String(uid)] = userPoints;
+        if (savePointsData) savePointsData(pointsData);
+      }
+    } else if (rand < 60) {
+      result = '🔄 再来一次！';
+    } else {
+      result = '😅 谢谢参与，再接再厉！';
+    }
+    sendMsg(msg.conversation_id, `<markdown>## 🎰 抽奖结果\n\n**${uname}** 抽奖：\n\n${result}\n\n> 当前积分：**\`${userPoints.points || 0}\`** 分</markdown>`);
+  } catch (e) {
+    sendMsg(msg.conversation_id, `❌ 抽奖失败：${e.message}`);
+  }
+}
 
+async function handleDailyQuote(msg, uid, uname) {
+  const quotes = [
+    '生活不是等待风暴过去，而是学会在雨中翩翩起舞。',
+    '成功不是终点，失败也并非末日，最重要的是继续前进的勇气。',
+    '你今天的努力，是幸运的伏笔。',
+    '不要等待机会，而要创造机会。',
+    '每一个不曾起舞的日子，都是对生命的辜负。',
+    '世界上只有一种真正的英雄主义，那就是在认清生活的真相后依然热爱生活。',
+    '你的负担将变成礼物，你受的苦将照亮你的路。',
+    '愿你出走半生，归来仍是少年。',
+    '保持热爱，奔赴山海。',
+    '星光不问赶路人，时光不负有心人。'
+  ];
+  const quote = quotes[Math.floor(Math.random() * quotes.length)];
+  sendMsg(msg.conversation_id, `<markdown>## 📜 每日金句\n\n> ${quote}\n\n—— 与君共勉</markdown>`);
+}
 
+async function handleBlacklistView(msg, uid) {
+  try {
+    const blacklist = loadBlacklistData ? loadBlacklistData() : [];
+    if (blacklist.length === 0) {
+      sendMsg(msg.conversation_id, '<markdown>## 🚫 黑名单\n\n当前黑名单为空~</markdown>');
+      return;
+    }
+    const list = blacklist.map((b, i) => `${i + 1}. ${b.nickname || '未知'}（ID: \`${b.user_id || b.id || '未知'}\`）${b.reason ? ' - ' + b.reason : ''}`).join('\n');
+    sendMsg(msg.conversation_id, `<markdown>## 🚫 黑名单（共${blacklist.length}人）\n\n${list}</markdown>`);
+  } catch (e) {
+    sendMsg(msg.conversation_id, `❌ 查询黑名单失败：${e.message}`);
+  }
+}
 
+async function handleForbiddenView(msg, uid) {
+  try {
+    const forbidden = loadForbiddenWords ? loadForbiddenWords() : {};
+    const groupWords = forbidden[String(msg.conversation_id)] || [];
+    if (groupWords.length === 0) {
+      sendMsg(msg.conversation_id, '<markdown>## ⚠️ 违禁词\n\n当前群没有设置违禁词~</markdown>');
+      return;
+    }
+    sendMsg(msg.conversation_id, `<markdown>## ⚠️ 违禁词（共${groupWords.length}个）\n\n${groupWords.map(w => '\`' + w + '\`').join('、')}</markdown>`);
+  } catch (e) {
+    sendMsg(msg.conversation_id, `❌ 查询违禁词失败：${e.message}`);
+  }
+}
 
+async function handleOnlineCount(msg) {
+  try {
+    const res = await fetch(`${BASE_URL}/bot-api/users/online`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bot ${BOT_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const users = data.data || data.users || data.list || [];
+      const names = users.slice(0, 10).map(u => u.nickname || u.username || '未知').join('、');
+      sendMsg(msg.conversation_id, `<markdown>## 🟢 在线人数\n\n> 当前在线：**\`${users.length}\`** 人\n\n${users.length > 10 ? names + '等' : names}</markdown>`);
+    }
+  } catch (e) {
+    sendMsg(msg.conversation_id, `❌ 查询在线人数失败：${e.message}`);
+  }
+}
 
+async function handleGroupInfo(msg) {
+  try {
+    const res = await fetch(`${BASE_URL}/bot-api/conversations/${msg.conversation_id}`, {
+      headers: { 'Authorization': `Bot ${BOT_KEY}` }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const c = data.data || data.conversation || data;
+      sendMsg(msg.conversation_id, `<markdown>## 👥 群信息\n\n- 群ID：\`${c.id || msg.conversation_id}\`\n- 群名称：${c.name || '未设置'}\n- 群描述：${c.description || '无'}\n- 群主ID：\`${c.owner_id || '未知'}\`</markdown>`);
+    }
+  } catch (e) {
+    sendMsg(msg.conversation_id, `❌ 查询群信息失败：${e.message}`);
+  }
+}
+
+async function handleUserInfo(msg, uid, uname) {
+  try {
+    const res = await fetch(`${BASE_URL}/bot-api/users/${uid}`, {
+      headers: { 'Authorization': `Bot ${BOT_KEY}` }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const u = data.data || data.user || data;
+      sendMsg(msg.conversation_id, `<markdown>## 👤 用户信息\n\n- 昵称：${u.nickname || uname}\n- 用户名：${u.username || '未知'}\n- 用户ID：\`${u.id || uid}\`\n- 个性签名：${u.bio || '无'}\n- 状态：${u.status || '未知'}\n- 在线状态：${u.presence_status || '未知'}</markdown>`);
+    }
+  } catch (e) {
+    sendMsg(msg.conversation_id, `❌ 查询用户信息失败：${e.message}`);
+  }
+}
+
+async function handleDiyList(msg) {
+  try {
+    const diyData = loadDiyData ? loadDiyData() : {};
+    const groupDiy = diyData[String(msg.conversation_id)] || [];
+    if (groupDiy.length === 0) {
+      sendMsg(msg.conversation_id, '<markdown>## 🛠️ 自制指令\n\n本群还没有自制指令，用 /DIY[指令名] 创建一个吧~</markdown>');
+      return;
+    }
+    const list = groupDiy.map((d, i) => `${i + 1}. /${d.name || d.command || '未知'} - ${d.description || d.usage || '无描述'}`).join('\n');
+    sendMsg(msg.conversation_id, `<markdown>## 🛠️ 自制指令（共${groupDiy.length}个）\n\n${list}</markdown>`);
+  } catch (e) {
+    sendMsg(msg.conversation_id, `❌ 查询自制指令失败：${e.message}`);
+  }
+}
+// ========== 辅助函数结束 ==========
