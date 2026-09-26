@@ -1046,6 +1046,25 @@ function buildSetCard(page, cid) {
 
 
 // AI调用辅助函数（供创意游戏使用）
+// ========== /set 步骤锁定系统 ==========
+const userSetSteps = new Map(); // userId -> { step, messageId, time }
+function setUserStep(userId, step, messageId) {
+  userSetSteps.set(userId, { step, messageId, time: Date.now() });
+}
+function getUserStep(userId) {
+  return userSetSteps.get(userId);
+}
+function checkSetStepLock(userId, messageId) {
+  const userStep = userSetSteps.get(userId);
+  if (!userStep) return null; // 没有记录，允许操作
+  // 如果点击的消息ID不是最新的，说明在点旧卡片
+  if (userStep.messageId && messageId && String(userStep.messageId) !== String(messageId)) {
+    return '您已在下一个步骤里！请在最新的卡片上操作。';
+  }
+  return null; // 允许操作
+}
+// ========== 步骤锁定系统结束 ==========
+
 // ========== 意图识别+自动执行系统 ==========
 // 指令意图映射表：以后加新指令，只需要在这里添加关键词即可
 const INTENT_MAP = [
@@ -1087,20 +1106,48 @@ const INTENT_MAP = [
   { intent: '清空对话', keywords: ['清空对话', '清除记忆', '忘记对话', '重置对话'], action: 'clearchat' },
 ];
 
-function tryExecuteIntent(question, msg, uid, uname) {
+async function tryExecuteIntent(question, msg, uid, uname) {
   if (!question) return null;
+  // 先用AI智能识别意图
+  try {
+    const intentList = INTENT_MAP.map(item => `${item.action}: ${item.keywords.join('、')}`).join('\n');
+    const aiPrompt = `你是一个意图识别器。用户说："${question}"\n\n请判断用户想使用以下哪个功能，只返回功能的action名称（一个单词），不要其他内容：\n${intentList}\n\n如果都不是，返回 none`;
+    const aiRes = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${ZHIPU_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'glm-4-flash',
+        messages: [{ role: 'user', content: aiPrompt }],
+        max_tokens: 20
+      })
+    });
+    if (aiRes.ok) {
+      const aiData = await aiRes.json();
+      let aiIntent = (aiData?.choices?.[0]?.message?.content || '').trim().toLowerCase();
+      // 清理AI返回（可能有标点、空格等）
+      aiIntent = aiIntent.replace(/[。，、！？\n\s]/g, '');
+      console.log('[AI意图识别] 用户:', question, '-> AI识别:', aiIntent);
+      // 匹配意图
+      const matched = INTENT_MAP.find(item => item.action === aiIntent || aiIntent.includes(item.action));
+      if (matched && matched.action !== 'none') {
+        executeIntentAction(matched.action, msg, uid, uname, question);
+        return { intent: matched.intent, action: matched.action, source: 'ai' };
+      }
+    }
+  } catch (e) {
+    console.error('[AI意图识别失败]', e.message);
+  }
+  // AI识别失败，降级到关键词匹配
   const q = question.toLowerCase().trim();
-
   for (const item of INTENT_MAP) {
     for (const kw of item.keywords) {
       if (q.includes(kw.toLowerCase())) {
-        // 匹配到意图，执行对应动作
         executeIntentAction(item.action, msg, uid, uname, question);
-        return { intent: item.intent, action: item.action };
+        return { intent: item.intent, action: item.action, source: 'keyword' };
       }
     }
   }
-  return null; // 没有匹配到意图
+  return null;
 }
 
 async function executeIntentAction(action, msg, uid, uname, question) {
@@ -3204,7 +3251,7 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
                 return;
               }
               // ========== 意图识别：自动执行指令 ==========
-                const intentResult = tryExecuteIntent(question, msg, uid, uname);
+                const intentResult = await tryExecuteIntent(question, msg, uid, uname);
                 if (intentResult) {
                   logInfo('意图识别', `用户${uid} 意图: ${intentResult.intent}`);
                   return;
@@ -4031,9 +4078,11 @@ ${isClassGroup ? '' : '<link action="callback" action_id="help_diy">自制指令
         sendMsg(msg.conversation_id, aboutText);
       }
       else if (content === '/set' || content === '/设置') {
-        console.log('[设置调试] sender_id=', msg.sender_id, 'type=', typeof msg.sender_id);
         const isCreator = String(msg.sender_id) === '3038';
-        if (!isCreator) { sendMsg(msg.conversation_id, `❌ 只有创始人君衔（ID 3038）可以使用设置（你的ID：${msg.sender_id}）`); return; }
+        const isGroupOwner = isOwner;
+        if (!isCreator && !isGroupOwner) { sendMsg(msg.conversation_id, `❌ 只有群主和创始人君衔（ID 3038）可以使用设置（你的ID：${msg.sender_id}）`); return; }
+        // 记录用户当前set步骤，用于步骤锁定
+        setUserStep(String(msg.sender_id), 1, null);
         try {
           const card = buildSetCard(1, cid);
           sendMsg(msg.conversation_id, card);
@@ -5634,8 +5683,36 @@ C. 选项三内容
         setBtn(data, actionId, '▶️ 已开始', 'success', true);
         sendMsg(data.conversation_id, `<markdown>## 🧠 心灵感应开始！\n\n**主题：** ${game.theme}\n**参与者：** ${playerCount}人\n\n📢 请出题者 <at id="${game.creator}" /> **私聊机器人**发送3个答案（每行一个）\n\n> 参与者准备好猜答案了吗？</markdown>`);
       }
+      // 设置系统按钮 - 统一权限检查和步骤锁定
+      else if (actionId.startsWith('set_')) {
+        // 权限检查：只有群主和3038可以操作
+        const btnUserId = String(data.user_id);
+        const btnIsCreator = btnUserId === '3038';
+        // 获取群主ID（尝试从conversation信息获取，简化处理：如果不是3038，检查是否是群主）
+        let btnIsOwner = false;
+        try {
+          const convRes = await fetch(`${BASE_URL}/bot-api/conversations/${data.conversation_id}`, { headers: { 'Authorization': `Bot ${BOT_KEY}` } });
+          if (convRes.ok) {
+            const convData = await convRes.json();
+            const c = convData.data || convData.conversation || convData;
+            btnIsOwner = String(c.owner_id || c.owner || c.creator_id || '') === btnUserId;
+          }
+        } catch (e) {}
+        if (!btnIsCreator && !btnIsOwner) {
+          setBtn(data, actionId, '❌ 无权限', 'danger', true);
+          sendMsg(data.conversation_id, `❌ 只有群主和创始人（ID 3038）可以操作设置（你的ID：${data.user_id}）`);
+          return;
+        }
+        // 步骤锁定检查
+        const lockMsg = checkSetStepLock(btnUserId, data.message_id);
+        if (lockMsg) {
+          setBtn(data, actionId, '🚫 已过期', 'danger', true);
+          sendMsg(data.conversation_id, `🚫 ${lockMsg}`);
+          return;
+        }
+
       // 设置系统导航按钮
-      else if (actionId.startsWith('set_nav_')) {
+      if (actionId.startsWith('set_nav_')) {
         console.log('[设置导航] 点击:', actionId, 'conversation:', data.conversation_id);
         const parts = actionId.split('_');
         const dir = parts[2];
@@ -5645,8 +5722,12 @@ C. 选项三内容
         try {
           setBtn(data, actionId, dir === 'prev' ? '⬅️' : '➡️', 'default', true);
           const card = buildSetCard(targetPage, String(data.conversation_id));
-          sendMsg(data.conversation_id, card);
+          const navResult = await sendMsg(data.conversation_id, card);
           console.log('[设置导航] 已发送第', targetPage, '页');
+          // 更新用户步骤记录（记录新消息ID）
+          if (navResult && navResult.id) {
+            setUserStep(btnUserId, targetPage, navResult.id);
+          }
           // 撤回旧卡片，避免旧卡片按钮还能点
           const oldMsgId = data.message_id || data.messageId || data.msg_id || data.id;
           console.log('[设置导航] 尝试撤回旧卡片, message_id=', oldMsgId, 'data keys=', Object.keys(data));
@@ -5750,6 +5831,7 @@ C. 选项三内容
           sendMsg(data.conversation_id, `<markdown>## 📤 配置导出\n\n**对话模型：** ${setData.chatModel}\n**识图模型：** ${setData.visionModel}\n**已开启功能：** ${Object.values(setData.features).filter(v => v !== false).length}个\n\n> 完整配置已记录，可在 set_data.json 查看</markdown>`);
         }
       }
+      } // 结束set_统一权限检查块
       // 命运抉择投票按钮（单人模式）
       else if (actionId.startsWith('fate_')) {
         const parts = actionId.split('_');
