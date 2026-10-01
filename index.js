@@ -2864,7 +2864,7 @@ async function executeDIY(msg, name, paramMap) {
         });
       } else {
         // 智谱AI（默认）
-const __curModel = loadSetData().chatModel || 'deepseek-chat';
+const __curModel = loadSetData().chatModel || 'glm-4-flash';
             const __modelInfo = CHAT_MODELS.find(m => m.id === __curModel);
             const __diyApiType = __modelInfo?.api || 'junling';
             let __apiUrl, __apiKey;
@@ -3887,7 +3887,7 @@ KukeChat支持的Markdown语法：
                 }
               } else {
                 // 纯文本用当前设置的模型
-                const __curModel = loadSetData().chatModel || 'deepseek-chat';
+                const __curModel = loadSetData().chatModel || 'glm-4-flash';
                 const __modelInfo = CHAT_MODELS.find(m => m.id === __curModel);
                 const __apiType = __modelInfo?.api || 'junling';
                 if (__apiType === 'openai') {
