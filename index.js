@@ -32,7 +32,14 @@ function logError(module, msg) { console.error(`[ERROR][${module}] ${msg}`); }
 
 // ====== 配置区：把下面的引号里换成你自己的 Bot Key ======
 const BOT_KEY = 'kcb_live_421_nNLtaS1IDYmNmGbFk7HVwYj4H7gGDhyfKAbp9T0zyunYSro';
-// 智谱AI免费Key（glm-4-flash模型完全免费），申请地址：https://open.bigmodel.cn/usercenter/apikeys
+// 君灵AI（狼小嗷免费AI集合站，OpenAI兼容格式）
+const JUNLING_API_KEY = 'sk-feb9266213661bb8e80cb14db0137ce8776b08d1e828fba4';
+const JUNLING_API_BASE = 'https://ai.laolibuhuifei.com/v1';
+
+// ===== OpenAI 官方API =====
+const OPENAI_API_KEY = 'sk-68a4413a296e62a72b825b415199ad02e79eb78a4e28f833';
+const OPENAI_API_BASE = 'https://api.openai.com/v1';
+// 智谱AI免费Key（glm-4-flash模型完全免费，主要用于识图），申请地址：https://open.bigmodel.cn/usercenter/apikeys
 const ZHIPU_API_KEY = 'd9cd0300341d4ac1aed9260c715c1a8a.2aChFKD7pTs3j7Y4'; // 在这里填你的智谱AI API Key
 // ========================================================
 
@@ -102,6 +109,82 @@ function updateBotInfo(data) {
 }
 
 // 发群聊消息
+// 带超时的fetch工具函数
+async function fetchWithTimeout(url, options = {}, timeout = 8000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeout);
+  try {
+    const res = await fetch(url, { ...options, signal: controller.signal });
+    return res;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// 群信息缓存（5分钟）
+let groupInfoCache = {};
+async function getGroupInfoCached(cid) {
+  const cacheKey = String(cid);
+  const now = Date.now();
+  if (groupInfoCache[cacheKey] && now - groupInfoCache[cacheKey].time < 60 * 1000) {
+    return groupInfoCache[cacheKey].data;
+  }
+  const data = { groupName: '', groupDesc: '', groupOwner: '', memberCount: 0, allMembers: [], onlineCount: 0, onlineUsers: [] };
+  try {
+    // 1. 群基本信息（超时5秒）
+    try {
+      const convRes = await fetchWithTimeout(`${BASE_URL}/bot-api/conversations/${cid}`, { headers: { 'Authorization': `Bot ${BOT_KEY}` } }, 5000);
+      if (convRes.ok) {
+        const convData = await convRes.json();
+        const c = convData.data || convData.conversation || convData.group || convData;
+        data.groupName = c.name || c.title || c.group_name || c.nickname || c.display_name || '';
+        data.groupDesc = c.description || c.desc || c.bio || c.about || '';
+        data.groupOwner = c.owner_id || c.owner || c.creator_id || '';
+      }
+    } catch (e) { console.log('[群信息缓存] 获取群基本信息失败:', e.message); }
+    // 2. 成员列表（超时8秒）
+    try {
+      const memRes = await fetchWithTimeout(`${BASE_URL}/bot-api/conversations/${cid}/members`, { headers: { 'Authorization': `Bot ${BOT_KEY}` } }, 8000);
+      if (memRes.ok) {
+        const memData = await memRes.json();
+        // 兼容多种格式：data/members/list/items
+        let members = memData.data || memData.members || memData.list || memData.items;
+        if (!Array.isArray(members) && memData.items) members = memData.items;
+        if (Array.isArray(members)) {
+          data.allMembers = members;
+          data.memberCount = members.length;
+        }
+      }
+    } catch (e) { console.log('[群信息缓存] 获取成员列表失败:', e.message); }
+    // 3. 在线用户（超时5秒，用GET方法），然后筛选本群在线用户
+    try {
+      const onlineRes = await fetchWithTimeout(`${BASE_URL}/bot-api/users/online`, { headers: { 'Authorization': `Bot ${BOT_KEY}` } }, 5000);
+      if (onlineRes.ok) {
+        const onlineData = await onlineRes.json();
+        let globalOnline = onlineData.data || onlineData.users || onlineData.list || onlineData.items;
+        if (!Array.isArray(globalOnline)) globalOnline = [];
+        // 构建全局在线用户ID集合
+        const onlineIds = new Set(globalOnline.map(u => u.id || u.user_id || (u.user && u.user.id)).filter(id => id != null));
+        // 筛选本群在线用户（和/群内在线人数逻辑一致）
+        const onlineInGroup = data.allMembers.filter(m => {
+          const uid = m.user_id || m.id || (m.user && m.user.id);
+          if (uid == null) return false;
+          // 优先用成员自身的在线状态字段
+          if (m.status === 'online' || m.presence_status === 'online') return true;
+          if (m.status === 'offline' || m.presence_status === 'offline') return false;
+          // 否则用全局在线列表判断
+          return onlineIds.has(uid);
+        });
+        data.onlineUsers = onlineInGroup;
+        data.onlineCount = onlineInGroup.length;
+        data.globalOnlineCount = globalOnline.length;
+      }
+    } catch (e) { console.log('[群信息缓存] 获取在线用户失败:', e.message); }
+    groupInfoCache[cacheKey] = { data, time: now };
+  } catch (e) { console.log('[群信息缓存] 整体失败:', e.message); }
+  return data;
+}
+
 async function sendMsg(conversationId, text) {
   try {
     const body = { message: text };
@@ -323,6 +406,20 @@ function saveCheckinData(data) {
   fs.writeFileSync(CHECKIN_FILE, JSON.stringify(data, null, 2), 'utf-8');
 }
 
+// 用户签到统计（累计连续签到等，跨天保留）
+const CHECKIN_STATS_FILE = path.join(__dirname, 'checkin_stats.json');
+function loadCheckinStats() {
+  try {
+    if (fs.existsSync(CHECKIN_STATS_FILE)) {
+      return JSON.parse(fs.readFileSync(CHECKIN_STATS_FILE, 'utf-8'));
+    }
+  } catch (e) {}
+  return {};
+}
+function saveCheckinStats(data) {
+  try { fs.writeFileSync(CHECKIN_STATS_FILE, JSON.stringify(data, null, 2)); } catch (e) { console.error('保存签到统计失败:', e.message); }
+}
+
 // ========== 积分系统 ==========
 const POINTS_FILE = path.join(__dirname, 'points_data.json');
 function loadPointsData() {
@@ -331,7 +428,7 @@ function loadPointsData() {
     return JSON.parse(fs.readFileSync(POINTS_FILE, 'utf-8'));
   } catch { return {}; }
 }
-function savePointsData(data) {
+function savePoints(data) {
   try { fs.writeFileSync(POINTS_FILE, JSON.stringify(data, null, 2), 'utf-8'); } catch (e) { console.error('[积分]保存失败:', e.message); }
 }
 function addPoints(userId, points, reason) {
@@ -340,7 +437,7 @@ function addPoints(userId, points, reason) {
   if (!data[uid]) data[uid] = { points: 0, totalPoints: 0, drawCount: 0, quoteCount: 0 };
   data[uid].points += points;
   data[uid].totalPoints += points;
-  savePointsData(data);
+  savePoints(data);
   console.log(`[积分] 用户${uid} +${points}分 (${reason})，当前: ${data[uid].points}`);
   return data[uid].points;
 }
@@ -349,7 +446,7 @@ function usePoints(userId, points) {
   const uid = String(userId);
   if (!data[uid] || data[uid].points < points) return false;
   data[uid].points -= points;
-  savePointsData(data);
+  savePoints(data);
   return true;
 }
 function getPoints(userId) {
@@ -361,46 +458,68 @@ function getPoints(userId) {
 const SPECIAL_BLACKLIST_FILE = path.join(__dirname, 'special_blacklist.json');
 function loadSpecialBlacklist() {
   try {
-    if (!fs.existsSync(SPECIAL_BLACKLIST_FILE)) return { users: {} };
-    return JSON.parse(fs.readFileSync(SPECIAL_BLACKLIST_FILE, 'utf-8'));
-  } catch { return { users: {} }; }
+    if (!fs.existsSync(SPECIAL_BLACKLIST_FILE)) return { global: {}, groups: {} };
+    const raw = JSON.parse(fs.readFileSync(SPECIAL_BLACKLIST_FILE, 'utf-8'));
+    // 兼容旧格式：如果有users字段，迁移到global
+    if (raw.users && !raw.global) {
+      return { global: raw.users, groups: raw.groups || {} };
+    }
+    return { global: raw.global || {}, groups: raw.groups || {} };
+  } catch { return { global: {}, groups: {} }; }
 }
 function saveSpecialBlacklist(data) {
   try { fs.writeFileSync(SPECIAL_BLACKLIST_FILE, JSON.stringify(data, null, 2), 'utf-8'); } catch (e) { console.error('[特殊黑名单]保存失败:', e.message); }
 }
-function addToSpecialBlacklist(userId, reason, operator) {
+// cid为空则添加到全局黑名单，否则添加到本群黑名单
+function addToSpecialBlacklist(userId, reason, operator, cid) {
   const data = loadSpecialBlacklist();
-  data.users[String(userId)] = {
+  const entry = {
     userId: String(userId),
     reason: reason || '无',
     operator: operator || '未知',
     addedAt: new Date().toISOString()
   };
+  if (cid) {
+    if (!data.groups[String(cid)]) data.groups[String(cid)] = {};
+    data.groups[String(cid)][String(userId)] = entry;
+  } else {
+    data.global[String(userId)] = entry;
+  }
   saveSpecialBlacklist(data);
 }
-function removeFromSpecialBlacklist(userId) {
+// cid为空则移除全局黑名单，否则移除本群黑名单
+function removeFromSpecialBlacklist(userId, cid) {
   const data = loadSpecialBlacklist();
-  delete data.users[String(userId)];
+  if (cid) {
+    if (data.groups[String(cid)]) delete data.groups[String(cid)][String(userId)];
+  } else {
+    delete data.global[String(userId)];
+  }
   saveSpecialBlacklist(data);
 }
-function isInSpecialBlacklist(userId) {
+// 检查用户是否在全局或本群黑名单中
+function isInSpecialBlacklist(userId, cid) {
   const data = loadSpecialBlacklist();
-  return !!data.users[String(userId)];
+  if (data.global[String(userId)]) return true;
+  if (cid && data.groups[String(cid)] && data.groups[String(cid)][String(userId)]) return true;
+  return false;
 }
 
 // 定时检测特殊黑名单用户并踢出（每5秒）
 async function scanSpecialBlacklist() {
   const data = loadSpecialBlacklist();
-  const blacklistedIds = Object.keys(data.users);
-  if (blacklistedIds.length === 0) return;
+  const globalIds = Object.keys(data.global);
+  const groupCount = Object.keys(data.groups).length;
+  const totalGroupIds = Object.values(data.groups).reduce((sum, g) => sum + Object.keys(g).length, 0);
+  if (globalIds.length === 0 && totalGroupIds === 0) return;
 
-  console.log(`[特殊黑名单] 开始扫描，黑名单人数: ${blacklistedIds.length}`);
+  console.log(`[特殊黑名单] 开始扫描，全局黑名单: ${globalIds.length}人，群黑名单: ${groupCount}个群共${totalGroupIds}人`);
 
   try {
     // 获取机器人所在的所有群
-    const convsRes = await fetch(`${BASE_URL}/bot-api/conversations`, {
+    const convsRes = await fetchWithTimeout(`${BASE_URL}/bot-api/conversations`, {
       headers: { 'Authorization': `Bot ${BOT_KEY}` }
-    });
+    }, 8000);
     const convsText = await convsRes.text();
     let convsData;
     try { convsData = JSON.parse(convsText); } catch { convsData = {}; }
@@ -421,17 +540,17 @@ async function scanSpecialBlacklist() {
       const cid = conv.id || conv.conversation_id || conv.group_id;
       const convType = conv.type || conv.conversation_type;
       if (!cid) continue;
-      // 跳过私聊
-      if (convType === 'private' || conv.is_private || String(cid).length <= 6) {
+      // 跳过私聊（只按类型判断，不按长度，因为群号就是短数字）
+      if (convType === 'private' || conv.is_private || conv.type === 'direct') {
         console.log(`[特殊黑名单] 跳过私聊: ${cid}`);
         continue;
       }
 
       try {
         // 获取群成员列表
-        const membersRes = await fetch(`${BASE_URL}/bot-api/conversations/${cid}/members`, {
+        const membersRes = await fetchWithTimeout(`${BASE_URL}/bot-api/conversations/${cid}/members`, {
           headers: { 'Authorization': `Bot ${BOT_KEY}` }
-        });
+        }, 8000);
         const membersText = await membersRes.text();
         let membersData;
         try { membersData = JSON.parse(membersText); } catch { membersData = {}; }
@@ -468,10 +587,15 @@ async function scanSpecialBlacklist() {
         console.log(`[特殊黑名单] 群${cid}成员数: ${members.length}`);
         
         for (const member of members) {
-          const uid = member.id || member.user_id || member.userId;
-          const uname = member.nickname || member.username || member.user?.nickname || uid;
-          if (uid && blacklistedIds.includes(String(uid))) {
-            console.log(`[特殊黑名单] 发现黑名单用户: ${uname}(ID:${uid}) 在群${cid}，准备踢出`);
+          // 注意：member.id是成员关系ID，member.user_id才是用户ID！
+          const uid = member.user_id || member.user?.id || member.userId || member.id;
+          const uname = member.nickname || member.username || member.user?.nickname || member.user?.username || uid;
+          // 检查是否在全局黑名单或本群黑名单中
+          const inGlobal = globalIds.includes(String(uid));
+          const inGroup = data.groups[String(cid)] && data.groups[String(cid)][String(uid)];
+          if (uid && (inGlobal || inGroup)) {
+            const blacklistType = inGlobal ? '全局' : '本群';
+            console.log(`[特殊黑名单] 发现${blacklistType}黑名单用户: ${uname}(ID:${uid}) 在群${cid}，准备踢出`);
             // 踢出
             try {
               const kickRes = await fetch(`${BASE_URL}/bot-api/conversations/${cid}/members/${uid}`, {
@@ -505,126 +629,6 @@ async function scanSpecialBlacklist() {
 setInterval(scanSpecialBlacklist, 2000);
 console.log('✅ 特殊黑名单定时检测已启动（每2秒扫描一次）');
 
-// ========== 群周报定时任务（每周一早上9点发送） ==========
-let lastWeeklyReportTime = 0; // 上次发送周报的时间戳
-async function sendWeeklyReport() {
-  try {
-    // 获取所有群
-    const convsRes = await fetch(`${BASE_URL}/bot-api/conversations`, {
-      headers: { 'Authorization': `Bot ${BOT_KEY}` }
-    });
-    const convsData = await convsRes.json();
-    const conversations = convsData.conversations || convsData.data || (Array.isArray(convsData) ? convsData : []);
-    
-    for (const conv of conversations) {
-      const cid = conv.id || conv.conversation_id;
-      if (!cid) continue;
-      // 跳过私聊和已作废群
-      if (conv.type === 'private' || String(cid) === '3900') continue;
-      
-      try {
-        // 统计本周数据（从activity_data.json读取）
-        const activityData = loadActivityData ? loadActivityData() : {};
-        const groupActivity = activityData[cid] || {};
-        const today = new Date();
-        const weekStart = new Date(today);
-        weekStart.setDate(today.getDate() - today.getDay() + 1); // 本周一
-        weekStart.setHours(0, 0, 0, 0);
-        
-        // 统计本周发言数
-        let weekMessages = 0;
-        let activeUsers = new Set();
-        if (groupActivity.daily) {
-          for (const [date, data] of Object.entries(groupActivity.daily)) {
-            const msgDate = new Date(date);
-            if (msgDate >= weekStart) {
-              weekMessages += data.count || 0;
-              if (data.users) Object.keys(data.users).forEach(u => activeUsers.add(u));
-            }
-          }
-        }
-        
-        // 获取群成员数
-        let memberCount = 0;
-        try {
-          const memRes = await fetch(`${BASE_URL}/bot-api/conversations/${cid}/members`, {
-            headers: { 'Authorization': `Bot ${BOT_KEY}` }
-          });
-          const memData = await memRes.json();
-          const members = memData.members || memData.data || memData.list || (Array.isArray(memData) ? memData : []);
-          memberCount = members.length;
-        } catch (e) {}
-        
-        // 获取在线人数
-        let onlineCount = 0;
-        try {
-          const onlineRes = await fetch(`${BASE_URL}/bot-api/users/online`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bot ${BOT_KEY}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({})
-          });
-          const onlineData = await onlineRes.json();
-          const onlineUsers = onlineData.data || onlineData.users || (Array.isArray(onlineData) ? onlineData : []);
-          onlineCount = onlineUsers.length;
-        } catch (e) {}
-        
-        // 生成周报
-        const groupName = conv.title || conv.name || conv.display_title || '本群';
-        const weekNum = Math.ceil((today - new Date(today.getFullYear(), 0, 1)) / (7 * 24 * 60 * 60 * 1000));
-        
-        let report = `# 📊 ${groupName} 周报\n\n`;
-        report += `> **第 ${weekNum} 周**（${weekStart.getMonth()+1}/${weekStart.getDate()} - ${today.getMonth()+1}/${today.getDate()}）\n\n`;
-        report += `## 📈 本周数据\n\n`;
-        report += `| 指标 | 数据 |\n|------|------|\n`;
-        report += `| **群成员总数** | \`${memberCount}\` 人 |\n`;
-        report += `| **当前在线** | \`${onlineCount}\` 人 |\n`;
-        report += `| **本周发言数** | \`${weekMessages}\` 条 |\n`;
-        report += `| **本周活跃用户** | \`${activeUsers.size}\` 人 |\n`;
-        report += `| **活跃率** | \`${memberCount > 0 ? Math.round(activeUsers.size / memberCount * 100) : 0}\`% |\n\n`;
-        
-        if (activeUsers.size > 0) {
-          report += `## 🏆 活跃用户\n\n`;
-          report += `本周共有 \`${activeUsers.size}\` 位用户发言，感谢大家的活跃！\n\n`;
-        }
-        
-        report += `## 💡 温馨提示\n\n`;
-        report += `- 多发言可以获得积分，积分可以抽奖哦~\n`;
-        report += `- 输入 \`/积分\` 查看你的积分\n`;
-        report += `- 输入 \`/help\` 查看全部指令\n\n`;
-        report += `---\n*由君灵bot自动生成*`;
-        
-        sendMsg(cid, `<markdown>${report}</markdown>`);
-        logInfo('群周报', `已发送到群${cid} (${groupName})`);
-        
-        // 避免发送太频繁
-        await new Promise(r => setTimeout(r, 2000));
-      } catch (e) {
-        logError('群周报', `群${cid}发送失败: ${e.message}`);
-      }
-    }
-  } catch (e) {
-    logError('群周报', `生成失败: ${e.message}`);
-  }
-}
-
-// 每小时检查一次，如果是周一9点且今天没发过，就发送周报
-setInterval(() => {
-  const now = new Date();
-  const isMonday = now.getDay() === 1; // 周一
-  const is9am = now.getHours() === 9;
-  const todayStr = now.toDateString();
-  
-  if (isMonday && is9am) {
-    // 检查今天是否已经发过
-    const lastSend = new Date(lastWeeklyReportTime);
-    if (lastSend.toDateString() !== todayStr) {
-      lastWeeklyReportTime = Date.now();
-      logInfo('群周报', '触发每周报告发送');
-      sendWeeklyReport();
-    }
-  }
-}, 60 * 60 * 1000); // 每小时检查一次
-console.log('✅ 群周报定时任务已启动（每周一9点自动发送）');
 
 // 今日金句库
 const DAILY_QUOTES = [
@@ -761,7 +765,7 @@ function translateWindDir(dir) {
 
 // 获取城市天气（wttr.in 免费接口，无需key）
 async function getWeather(city) {
-  const res = await fetch(`https://wttr.in/${encodeURIComponent(city)}?format=j1&lang=zh`);
+  const res = await fetchWithTimeout(`https://wttr.in/${encodeURIComponent(city)}?format=j1&lang=zh`, {}, 10000);
   if (!res.ok) throw new Error(`天气接口返回 ${res.status}`);
   return res.json();
 }
@@ -864,24 +868,56 @@ function saveFateData(data) { cachedSave('fate', FATE_FILE, data); }
 
 // ========== 设置系统数据存储 ==========
 const SET_FILE = path.join(__dirname, 'set_data.json');
-function loadSetData() {
+function loadSetData(cid) {
   try {
     if (!fs.existsSync(SET_FILE)) return getDefaultSetData();
-    const data = JSON.parse(fs.readFileSync(SET_FILE, 'utf-8'));
-    return { ...getDefaultSetData(), ...data };
+    const raw = JSON.parse(fs.readFileSync(SET_FILE, 'utf-8'));
+    // 兼容旧格式：如果没有global字段，整个文件就是全局设置
+    const globalData = raw.global || raw;
+    const merged = { ...getDefaultSetData(), ...globalData };
+    // 如果指定了群号，且有群设置，就合并群设置（群设置优先）
+    if (cid && raw.groups && raw.groups[String(cid)]) {
+      const groupData = raw.groups[String(cid)];
+      if (groupData.chatModel) merged.chatModel = groupData.chatModel;
+      if (groupData.visionModel) merged.visionModel = groupData.visionModel;
+      if (groupData.features) merged.features = { ...merged.features, ...groupData.features };
+      if (groupData.personality) merged.personality = { ...merged.personality, ...groupData.personality };
+    }
+    return merged;
   } catch { return getDefaultSetData(); }
 }
-function saveSetData(data) { try { fs.writeFileSync(SET_FILE, JSON.stringify(data, null, 2), 'utf-8'); } catch (e) { console.error('[设置]保存失败:', e.message); } }
+function saveSetData(data, cid) {
+  try {
+    let raw = {};
+    if (fs.existsSync(SET_FILE)) {
+      raw = JSON.parse(fs.readFileSync(SET_FILE, 'utf-8'));
+    }
+    // 兼容旧格式
+    if (!raw.global) {
+      raw = { global: raw, groups: {} };
+    }
+    if (cid) {
+      // 保存到群设置
+      if (!raw.groups) raw.groups = {};
+      raw.groups[String(cid)] = data;
+    } else {
+      // 保存到全局设置
+      raw.global = data;
+    }
+    fs.writeFileSync(SET_FILE, JSON.stringify(raw, null, 2), 'utf-8');
+  } catch (e) { console.error('[设置]保存失败:', e.message); }
+}
 function getDefaultSetData() {
   return {
-    chatModel: 'glm-4-flash',
+    chatModel: 'deepseek-chat',
     visionModel: 'glm-4v',
     features: {
       ai_chat: true, checkin: true, weather: true, express: true, vote: true,
       music: true, draw: true, werewolf: true, telepathy: true,
       undercover: true, story: true, fate: true, diy: true,
       forbidden: true, blacklist: true, mute: true, welcome: true,
-      activity: true, broadcast: true, image_recognition: true
+      activity: true, broadcast: true, image_recognition: true,
+      points: true, special_blacklist: true, online: true
     },
     groupAI: {},
     personality: { tone: 'normal', length: 'medium', markdown: true, temperature: 0.7 }
@@ -889,24 +925,39 @@ function getDefaultSetData() {
 }
 
 const CHAT_MODELS = [
+  // ===== 君灵AI（狼小嗷免费AI集合站，默认推荐）=====
+  { id: 'deepseek-chat', name: 'DeepSeek-Chat', company: '君灵AI', desc: '默认模型，代码数学强', pros: '免费、速度快、代码强', cons: '暂无明显缺点', context: '128K', api: 'junling', hasKey: true },
+  { id: 'deepseek-v4.1-flash', name: 'DeepSeek-V4.1-Flash', company: '君灵AI', desc: '极速版DeepSeek', pros: '免费、极速、轻量', cons: '能力略低于标准版', context: '128K', api: 'junling', hasKey: true },
+  { id: 'qwen3-8-27b', name: 'Qwen3-8-27B', company: '君灵AI', desc: '通义千问3，27B参数', pros: '免费、中文好、通用强', cons: '参数中等', context: '128K', api: 'junling', hasKey: true },
+  { id: 'qwen3:14b', name: 'Qwen3-14B', company: '君灵AI', desc: '通义千问3，14B参数', pros: '免费、轻量、快速', cons: '参数较小', context: '128K', api: 'junling', hasKey: true },
+  { id: 'qwen/qwen2.5-coder-14b', name: 'Qwen2.5-Coder-14B', company: '君灵AI', desc: '代码专用模型', pros: '免费、代码能力强', cons: '通用对话一般', context: '128K', api: 'junling', hasKey: true },
+  { id: 'FiimeOPC-3.0-flash', name: 'FiimeOPC-3.0-Flash', company: '君灵AI', desc: 'Fiime轻量模型', pros: '免费、极速', cons: '能力一般', context: '128K', api: 'junling', hasKey: true },
+  { id: 'opc-txt-v1', name: 'OPC-TXT-V1', company: '君灵AI', desc: 'OPC文本模型', pros: '免费、稳定', cons: '能力一般', context: '128K', api: 'junling', hasKey: true },
+  // ===== 其他模型（可选）=====
   { id: 'glm-4-flash', name: 'GLM-4-Flash', company: '智谱AI', desc: '免费高速，128K上下文', pros: '免费、响应快、中文好', cons: '复杂推理一般', context: '128K', api: 'zhipu', hasKey: true },
   { id: 'glm-4-air', name: 'GLM-4-Air', company: '智谱AI', desc: '高性价比，性能强', pros: '性价比高、速度快', cons: '比Flash贵', context: '128K', api: 'zhipu', hasKey: true },
   { id: 'glm-3-turbo', name: 'GLM-3-Turbo', company: '智谱AI', desc: '经典稳定，便宜', pros: '稳定、便宜、成熟', cons: '能力不如GLM-4', context: '128K', api: 'zhipu', hasKey: true },
   { id: 'pollinations-openai', name: 'Pollinations-GPT', company: 'Pollinations', desc: '完全免费，无需key，OpenAI模型', pros: '免费、无需key、直接用', cons: '速度较慢、偶有限流', context: '128K', api: 'pollinations', hasKey: true },
   { id: 'pollinations-mistral', name: 'Pollinations-Mistral', company: 'Pollinations', desc: '完全免费，无需key，Mistral模型', pros: '免费、无需key、欧洲模型', cons: '速度较慢、中文一般', context: '128K', api: 'pollinations', hasKey: true },
-  { id: 'gpt-4o-mini', name: 'GPT-4o-Mini', company: 'OpenAI', desc: '轻量旗舰，免费额度', pros: '速度快、能力强、多模态', cons: '需输入key、收费', context: '128K', api: 'openai', hasKey: false },
-  { id: 'claude-3-5-sonnet', name: 'Claude-3.5', company: 'Anthropic', desc: '写作分析最强', pros: '写作好、分析强、200K上下文', cons: '需输入key、国内访问难', context: '200K', api: 'anthropic', hasKey: false },
-  { id: 'qwen-turbo', name: 'Qwen-Turbo', company: '阿里通义', desc: '极速，免费额度', pros: '速度快、中文好、免费额度', cons: '需输入key', context: '128K', api: 'qwen', hasKey: false },
-  { id: 'qwen-plus', name: 'Qwen-Plus', company: '阿里通义', desc: '性价比，免费额度', pros: '性价比高、能力强', cons: '需输入key', context: '128K', api: 'qwen', hasKey: false },
-  { id: 'doubao-lite', name: 'Doubao-Lite', company: '字节豆包', desc: '轻量，免费额度', pros: '字节生态、免费额度', cons: '需输入key', context: '32K', api: 'doubao', hasKey: false },
-  { id: 'spark-lite', name: 'Spark-Lite', company: '讯飞星火', desc: '轻量，免费额度', pros: '语音强、免费额度', cons: '需输入key', context: '16K', api: 'xfyun', hasKey: false },
-  { id: 'deepseek-chat', name: 'DeepSeek-V2', company: '深度求索', desc: '代码数学强，便宜', pros: '代码强、数学好、便宜', cons: '需输入key', context: '128K', api: 'deepseek', hasKey: false }
+  // ===== OpenAI 官方GPT系列 =====
+  { id: 'gpt-4o', name: 'GPT-4o', company: 'OpenAI', desc: 'OpenAI旗舰模型，多模态最强', pros: '能力最强、多模态、推理强', cons: '收费、速度一般', context: '128K', api: 'openai', hasKey: true, vendor: 'OpenAI', free: false },
+  { id: 'gpt-4o-mini', name: 'GPT-4o-Mini', company: 'OpenAI', desc: '轻量旗舰，性价比高', pros: '速度快、能力强、便宜', cons: '收费、能力略低于4o', context: '128K', api: 'openai', hasKey: true, vendor: 'OpenAI', free: false },
+  { id: 'gpt-4-turbo', name: 'GPT-4-Turbo', company: 'OpenAI', desc: 'GPT-4增强版', pros: '能力强、128K上下文', cons: '收费、速度一般', context: '128K', api: 'openai', hasKey: true, vendor: 'OpenAI', free: false },
+  { id: 'gpt-3.5-turbo', name: 'GPT-3.5-Turbo', company: 'OpenAI', desc: '经典高速模型', pros: '速度快、便宜、稳定', cons: '能力不如GPT-4', context: '16K', api: 'openai', hasKey: true, vendor: 'OpenAI', free: false },
+  { id: 'o1-mini', name: 'o1-Mini', company: 'OpenAI', desc: '推理模型，数学逻辑强', pros: '推理强、数学好', cons: '收费、速度慢', context: '128K', api: 'openai', hasKey: true, vendor: 'OpenAI', free: false },
 ];
 
 const VISION_MODELS = [
-  { id: 'glm-4v-flash', name: 'GLM-4V-Flash', company: '智谱AI', desc: '免费多模态', pros: '免费、快速', cons: '细节一般', context: '8K', api: 'zhipu', hasKey: true },
-  { id: 'glm-4v', name: 'GLM-4V', company: '智谱AI', desc: '旗舰多模态', pros: '视觉强、综合好', cons: '收费', context: '8K', api: 'zhipu', hasKey: true },
-  { id: 'qwen-vl-max', name: 'Qwen-VL-Max', company: '阿里通义', desc: 'OCR最强', pros: 'OCR强、中文好', cons: '需输入key', context: '32K', api: 'qwen', hasKey: false }
+  // ===== OpenAI 官方视觉模型 =====
+  { id: 'gpt-4o', name: 'GPT-4o', company: 'OpenAI', desc: 'OpenAI旗舰多模态，视觉最强', pros: '视觉最强、推理强、综合好', cons: '收费、国内访问慢', context: '128K', api: 'openai', hasKey: true },
+  { id: 'gpt-4o-mini', name: 'GPT-4o-Mini', company: 'OpenAI', desc: '轻量多模态，性价比高', pros: '速度快、便宜、视觉不错', cons: '收费、细节略逊', context: '128K', api: 'openai', hasKey: true },
+  // ===== 智谱AI 视觉模型 =====
+  { id: 'glm-4v-flash', name: 'GLM-4V-Flash', company: '智谱AI', desc: '免费多模态，速度快', pros: '免费、快速、中文好', cons: '细节一般', context: '8K', api: 'zhipu', hasKey: true },
+  { id: 'glm-4v', name: 'GLM-4V', company: '智谱AI', desc: '旗舰多模态，视觉强', pros: '视觉强、综合好、中文好', cons: '收费', context: '8K', api: 'zhipu', hasKey: true },
+  { id: 'glm-4v-plus', name: 'GLM-4V-Plus', company: '智谱AI', desc: '增强版多模态', pros: '视觉更强、细节好', cons: '收费、速度一般', context: '8K', api: 'zhipu', hasKey: true },
+  // ===== 阿里通义 视觉模型 =====
+  // ===== 字节豆包 视觉模型 =====
+  // ===== 讯飞星火 视觉模型 =====
 ];
 
 const FEATURE_CATEGORIES = [
@@ -918,7 +969,9 @@ const FEATURE_CATEGORIES = [
     { id: 'checkin', name: '签到', desc: '每日签到运势' },
     { id: 'weather', name: '天气', desc: '查询天气' },
     { id: 'music', name: '音乐播放', desc: '搜索播放音乐' },
-    { id: 'draw', name: 'AI绘图', desc: 'AI生成图片' }
+    { id: 'draw', name: 'AI绘图', desc: 'AI生成图片' },
+    { id: 'express', name: '快递查询', desc: '查询快递物流' },
+    { id: 'points', name: '积分抽奖', desc: '积分、抽奖、每日金句' }
   ]},
   { name: '🎮 游戏娱乐', features: [
     { id: 'vote', name: '投票', desc: '发起投票' },
@@ -932,21 +985,24 @@ const FEATURE_CATEGORIES = [
   { name: '🔧 群管理', features: [
     { id: 'forbidden', name: '违禁词', desc: '违禁词检测' },
     { id: 'blacklist', name: '黑名单', desc: '黑名单管理' },
+    { id: 'special_blacklist', name: '特殊黑名单', desc: '全局自动踢人' },
     { id: 'mute', name: '禁言', desc: '禁言管理' },
     { id: 'welcome', name: '进群欢迎', desc: '新人欢迎' },
     { id: 'activity', name: '群活跃统计', desc: '活跃度统计' },
-    { id: 'broadcast', name: '全局推送', desc: '全局消息推送' }
+    { id: 'broadcast', name: '全局推送', desc: '全局消息推送' },
+    { id: 'online', name: '在线人数', desc: '查看群在线人数' }
   ]}
 ];
 
 // 构建设置卡片
-function buildSetCard(page, cid) {
-  const setData = loadSetData();
+function buildSetCard(page, cid, scope, allGroups = []) {
+  const setData = loadSetData(cid);
+  const scopeLabel = scope === 'global' ? '🌐 全局设置（所有群生效）' : '👥 本群设置（仅本群生效）';
   const navBtn = (dir) => {
-    const target = dir === 'prev' ? page - 1 : page + 1;
-    if (target < 1 || target > 6) return '';
-    const label = dir === 'prev' ? '⬅️ 上一步' : '下一步 ➡️';
-    return `<button action="callback" action_id="set_nav_${dir}_${page}" id="set_nav_${dir}_${page}">${label}</button>`;
+    if (dir === 'prev') return ''; // 去掉上一步按钮
+    const target = page + 1;
+    if (target > 6) return '';
+    return `<button action="callback" action_id="set_nav_next_${page}" id="set_nav_next_${page}">下一步 ➡️</button>`;
   };
 
   if (page === 1) {
@@ -954,10 +1010,11 @@ function buildSetCard(page, cid) {
     CHAT_MODELS.forEach((m, i) => {
       const active = setData.chatModel === m.id ? '✅' : '';
       const keyTag = m.hasKey ? '' : '🔑';
-      card += `<button action="callback" action_id="set_chat_model_${m.id}" id="set_chat_model_${m.id}">${active}${m.name}${keyTag}</button>`;
+      const safeId = m.id.replace(/[^a-zA-Z0-9]/g, '_');
+      card += `<button action="callback" action_id="set_chat_model_${safeId}" id="set_chat_model_${safeId}">${active}${m.name}${keyTag}</button>`;
       if ((i + 1) % 2 === 0) card += '\n';
     });
-    card += `\n\n${navBtn('prev')} ${navBtn('next')}\n> 🔑=需输入key，/set-key{模型,key}</markdown>`;
+    card += `\n\n${navBtn('next')}\n> 🔑=需输入key，/set-key{模型,key}</markdown>`;
     return card;
   }
 
@@ -969,7 +1026,7 @@ function buildSetCard(page, cid) {
       card += `<button action="callback" action_id="set_vision_model_${m.id}" id="set_vision_model_${m.id}">${active}${m.name}${keyTag}</button>`;
       if ((i + 1) % 2 === 0) card += '\n';
     });
-    card += `\n\n${navBtn('prev')} ${navBtn('next')}</markdown>`;
+    card += `\n\n${navBtn('next')}</markdown>`;
     return card;
   }
 
@@ -988,27 +1045,31 @@ function buildSetCard(page, cid) {
       if (idx % 2 !== 0) card += '\n';
       card += '\n';
     }
-    card += `${navBtn('prev')} ${navBtn('next')}\n> 关闭后所有群都不能用该功能</markdown>`;
+    card += `${navBtn('next')}\n> 关闭后所有群都不能用该功能</markdown>`;
     return card;
   }
 
   if (page === 4) {
-    // 群AI状态管理
+    // 群AI状态管理：用传入的所有群列表，普通文本格式
     let card = `<markdown>## ⚙️ 设置 - 4/6\n\n### 👥 群AI状态管理\n\n`;
-    const groups = loadGroups();
-    if (groups.length === 0) {
+    // 合并传入的群列表和已设置的群
+    const setGroupIds = Object.keys(setData.groupAI || {});
+    const allIds = [...new Set([...(allGroups || []), ...setGroupIds])];
+    
+    if (allIds.length === 0) {
       card += '> 暂无群数据\n\n';
     } else {
-      card += '| 群号 | AI状态 | 操作 |\n|------|--------|------|\n';
-      for (const gid of groups.slice(0, 10)) {
-        const state = setData.groupAI?.[String(gid)] || 'open';
-        const stateText = state === 'open' ? '🟢 开启' : '🔴 关闭';
-        card += `| \`${gid}\` | ${stateText} | 查看 |\n`;
-      }
-      card += '\n';
+      let openCount = 0, offCount = 0;
+      const groupTexts = allIds.map(gid => {
+        const state = setData.groupAI?.[String(gid)] === 'off' ? '关' : '开';
+        if (state === '开') openCount++; else offCount++;
+        return `${gid}（${state}）`;
+      });
+      card += `**共${allIds.length}个群：** ${openCount}个开启，${offCount}个关闭\n\n`;
+      card += groupTexts.join('，') + '\n\n';
     }
     card += `**设置指令：**\n\`/set-state{群号,AIstate:open}\` 开启\n\`/set-state{群号,AIstate:off}\` 关闭\n\n`;
-    card += `${navBtn('prev')} ${navBtn('next')}\n> 禁用后群内使用AI会提示 The AI in this group has been disabled!</markdown>`;
+    card += `${navBtn('next')}\n> 禁用后群内使用AI会提示 The AI in this group has been disabled!</markdown>`;
     return card;
   }
 
@@ -1019,7 +1080,7 @@ function buildSetCard(page, cid) {
     let card = `<markdown>## ⚙️ 设置 - 5/6\n\n### 🎭 AI个性\n\n**语气：**\n${toneBtn('normal', '正常')}${toneBtn('friendly', '友好')}\n${toneBtn('professional', '专业')}${toneBtn('humorous', '幽默')}\n\n`;
     card += `**长度：**\n${lenBtn('short', '简短')}${lenBtn('medium', '中等')}${lenBtn('long', '详细')}\n\n`;
     card += `**Markdown：**\n<button action="callback" action_id="set_personality_markdown_toggle" id="set_personality_markdown_toggle">${p.markdown ? '🟢开启' : '🔴关闭'}</button>\n\n`;
-    card += `${navBtn('prev')} ${navBtn('next')}</markdown>`;
+    card += `${navBtn('next')}</markdown>`;
     return card;
   }
 
@@ -1077,7 +1138,7 @@ const INTENT_MAP = [
   // 每日金句
   { intent: '每日金句', keywords: ['金句', '每日金句', '今日金句', '来个金句', '说个金句'], action: 'dailyquote' },
   // 黑名单相关
-  { intent: '查看黑名单', keywords: ['黑名单', '黑名单有谁', '查看黑名单', '谁在黑名单', '黑名单列表'], action: 'blacklist' },
+  { intent: '查看黑名单', keywords: ['黑名单', '黑名单有谁', '查看黑名单', '谁在黑名单', '黑名单列表', '特殊黑名单'], action: 'blacklist' },
   // 违禁词相关
   { intent: '查看违禁词', keywords: ['违禁词', '违禁词有哪些', '查看违禁词', '违禁词列表'], action: 'forbidden' },
   // 天气相关
@@ -1098,8 +1159,6 @@ const INTENT_MAP = [
   { intent: '用户信息', keywords: ['我的信息', '个人资料', '我的资料', '用户信息', '我是谁'], action: 'userinfo' },
   // 投票
   { intent: '投票', keywords: ['投票', '发起投票', '创建投票', '投票列表'], action: 'vote' },
-  // 周报
-  { intent: '周报', keywords: ['周报', '群周报', '本周总结', '周总结'], action: 'weekly' },
   // DIY
   { intent: 'DIY列表', keywords: ['自制指令', 'diy列表', '自制功能', '有哪些自制', 'diy有哪些'], action: 'diylist' },
   // 清空对话
@@ -1108,28 +1167,67 @@ const INTENT_MAP = [
 
 async function tryExecuteIntent(question, msg, uid, uname) {
   if (!question) return null;
-  // 先用AI智能识别意图
+  // 太短的问题（如"在吗"、"你好"）不触发意图识别，直接走AI对话
+  if (question.length < 3) {
+    console.log('[意图识别] 问题太短，跳过:', question);
+    return null;
+  }
+  // 普通问候语不触发意图识别
+  const greetings = ['在吗', '你好', '您好', 'hi', 'hello', '哈喽', '嗨', '在不在', '有人吗', '在么', '在嘛'];
+  if (greetings.some(g => question.toLowerCase().includes(g.toLowerCase()))) {
+    console.log('[意图识别] 问候语，跳过:', question);
+    return null;
+  }
+  
+  // 只识别执行类意图（签到、抽奖、每日金句等），查询类完全靠AI自己根据上下文回答
+  const executeActions = ['checkin', 'lottery', 'dailyquote', 'clearchat'];
   try {
-    const intentList = INTENT_MAP.map(item => `${item.action}: ${item.keywords.join('、')}`).join('\n');
-    const aiPrompt = `你是一个意图识别器。用户说："${question}"\n\n请判断用户想使用以下哪个功能，只返回功能的action名称（一个单词），不要其他内容：\n${intentList}\n\n如果都不是，返回 none`;
-    const aiRes = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+    const intentList = INTENT_MAP.filter(item => executeActions.includes(item.action))
+      .map(item => `${item.action}: ${item.intent}（${item.keywords.join('、')}）`).join('\n');
+    const aiPrompt = `用户说："${question}"\n\n判断用户是否想执行以下操作（注意：是"执行"操作，不是"查询"）：\n${intentList}\n\n判断规则：\n- "帮我签到"、"我要签到"、"签个到" → checkin\n- "帮我抽奖"、"我要抽奖"、"抽个奖" → lottery\n- "每日金句"、"来个金句"、"金句" → dailyquote\n- "清空对话"、"清空记录" → clearchat\n- 只是问"签到了吗"、"有多少积分"、"黑名单有谁"等查询类 → none\n- 普通聊天 → none\n\n只返回action或none，不要其他内容。`;
+    const currentModel = loadSetData().chatModel || 'deepseek-chat';
+    const modelInfo = CHAT_MODELS.find(m => m.id === currentModel);
+    const apiType = modelInfo?.api || 'junling';
+    
+    let intentApiUrl, intentApiKey, intentModel;
+    if (apiType === 'openai') {
+      intentApiUrl = `${OPENAI_API_BASE}/chat/completions`;
+      intentApiKey = OPENAI_API_KEY;
+      intentModel = 'gpt-4o-mini';
+    } else if (apiType === 'junling') {
+      intentApiUrl = `${JUNLING_API_BASE}/chat/completions`;
+      intentApiKey = JUNLING_API_KEY;
+      intentModel = currentModel;
+    } else if (apiType === 'pollinations') {
+      console.log('[意图识别] Pollinations模型，跳过AI识别');
+      return null;
+    } else {
+      intentApiUrl = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
+      intentApiKey = ZHIPU_API_KEY;
+      intentModel = 'glm-4-flash';
+    }
+    
+    const aiRes = await fetchWithTimeout(intentApiUrl, {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${ZHIPU_API_KEY}`, 'Content-Type': 'application/json' },
+      headers: { 'Authorization': `Bearer ${intentApiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'glm-4-flash',
+        model: intentModel,
         messages: [{ role: 'user', content: aiPrompt }],
-        max_tokens: 20
+        max_tokens: 20,
+        temperature: 0.1
       })
-    });
+    }, 10000);
     if (aiRes.ok) {
       const aiData = await aiRes.json();
       let aiIntent = (aiData?.choices?.[0]?.message?.content || '').trim().toLowerCase();
-      // 清理AI返回（可能有标点、空格等）
-      aiIntent = aiIntent.replace(/[。，、！？\n\s]/g, '');
+      aiIntent = aiIntent.replace(/[。，、！？\n\s"'`]/g, '');
       console.log('[AI意图识别] 用户:', question, '-> AI识别:', aiIntent);
-      // 匹配意图
-      const matched = INTENT_MAP.find(item => item.action === aiIntent || aiIntent.includes(item.action));
-      if (matched && matched.action !== 'none') {
+      
+      // 识别到的都是执行类，直接执行
+      const matched = INTENT_MAP.find(item => item.action === aiIntent);
+      
+      if (matched && matched.action !== 'none' && executeActions.includes(matched.action)) {
+        console.log('[意图识别] 执行类意图，自动执行:', matched.intent);
         executeIntentAction(matched.action, msg, uid, uname, question);
         return { intent: matched.intent, action: matched.action, source: 'ai' };
       }
@@ -1137,16 +1235,36 @@ async function tryExecuteIntent(question, msg, uid, uname) {
   } catch (e) {
     console.error('[AI意图识别失败]', e.message);
   }
-  // AI识别失败，降级到关键词匹配
-  const q = question.toLowerCase().trim();
-  for (const item of INTENT_MAP) {
-    for (const kw of item.keywords) {
-      if (q.includes(kw.toLowerCase())) {
-        executeIntentAction(item.action, msg, uid, uname, question);
-        return { intent: item.intent, action: item.action, source: 'keyword' };
-      }
-    }
+  
+  // AI识别失败，用关键词兜底（只针对明确的执行请求，条件很严格）
+  // 注意：主要靠AI自己分析，关键词只是最后兜底
+  const q = question.toLowerCase();
+  const executeWords = ['帮我', '我要', '我想', '给我', '来一个', '来个', '帮', '请'];
+  const hasExecuteWord = executeWords.some(w => q.includes(w));
+  
+  if (q.includes('签到') && hasExecuteWord) {
+    console.log('[意图识别] 关键词兜底（AI失败后）：签到');
+    executeIntentAction('checkin', msg, uid, uname, question);
+    return { intent: '签到', action: 'checkin', source: 'keyword' };
   }
+  if (q.includes('抽奖') && hasExecuteWord) {
+    console.log('[意图识别] 关键词兜底（AI失败后）：抽奖');
+    executeIntentAction('lottery', msg, uid, uname, question);
+    return { intent: '抽奖', action: 'lottery', source: 'keyword' };
+  }
+  if ((q.includes('金句') || q.includes('每日金句')) && hasExecuteWord) {
+    console.log('[意图识别] 关键词兜底（AI失败后）：每日金句');
+    executeIntentAction('dailyquote', msg, uid, uname, question);
+    return { intent: '每日金句', action: 'dailyquote', source: 'keyword' };
+  }
+  if (q.includes('清空对话') || q.includes('清空记录') || q.includes('清除对话')) {
+    console.log('[意图识别] 关键词兜底：清空对话');
+    if (chatHistory && chatHistory.has) chatHistory.delete(String(uid));
+    sendMsg(msg.conversation_id, '✅ 已清空我们的对话记录~');
+    return { intent: '清空对话', action: 'clearchat', source: 'keyword' };
+  }
+  
+  console.log('[意图识别] 未匹配，走AI对话:', question);
   return null;
 }
 
@@ -1171,8 +1289,20 @@ async function executeIntentAction(action, msg, uid, uname, question) {
         await handleDailyQuote(msg, uid, uname);
         break;
       case 'blacklist':
-        // 自动查看黑名单
+        // 自动查看黑名单（包括特殊黑名单）
         await handleBlacklistView(msg, uid);
+        // 额外显示特殊黑名单
+        try {
+          const sbData = loadSpecialBlacklist ? loadSpecialBlacklist() : { global: {}, groups: {} };
+          const globalSB = Object.keys(sbData.global || {});
+          const groupSB = sbData.groups?.[String(msg.conversation_id)] ? Object.keys(sbData.groups[String(msg.conversation_id)]) : [];
+          if (globalSB.length > 0 || groupSB.length > 0) {
+            let sbMsg = '\n\n## 🚫 特殊黑名单\n';
+            if (globalSB.length > 0) sbMsg += `全局：${globalSB.join('、')}\n`;
+            if (groupSB.length > 0) sbMsg += `本群：${groupSB.join('、')}\n`;
+            sendMsg(msg.conversation_id, `<markdown>${sbMsg}</markdown>`);
+          }
+        } catch (e) {}
         break;
       case 'forbidden':
         // 自动查看违禁词
@@ -1214,10 +1344,6 @@ async function executeIntentAction(action, msg, uid, uname, question) {
         // 投票提示
         sendMsg(cid, '🗳️ 请发送 /投票[标题,选项1,选项2,...] 发起投票');
         break;
-      case 'weekly':
-        // 自动周报
-        await handleWeeklyReport(msg, uid);
-        break;
       case 'diylist':
         // 自动DIY列表
         await handleDiyList(msg);
@@ -1240,19 +1366,40 @@ async function executeIntentAction(action, msg, uid, uname, question) {
 
 async function callAI(prompt, systemPrompt) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 60000);
+  const timeout = setTimeout(() => controller.abort(), 30000);
   try {
-    const currentModel = loadSetData().chatModel || 'glm-4-flash';
+    const currentModel = loadSetData().chatModel || 'deepseek-chat';
     const modelInfo = CHAT_MODELS.find(m => m.id === currentModel);
-    const sys = systemPrompt || '你是一个创意游戏助手，用简洁生动的语言回答。';
+    const sys = systemPrompt || '你是君灵AI，一只乐于助人的AI助手，用简洁生动的语言回答。';
+    const apiType = modelInfo?.api || 'junling';
     
     let aiRes;
-    if (modelInfo?.api === 'pollinations') {
+    let resultText = '';
+    
+    if (apiType === 'junling') {
+      // 君灵AI（狼小嗷，OpenAI兼容格式）
+      if (!JUNLING_API_KEY) throw new Error('JUNLING_API_KEY 未配置');
+      aiRes = await fetch(`${JUNLING_API_BASE}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${JUNLING_API_KEY}` },
+        body: JSON.stringify({
+          model: currentModel,
+          messages: [
+            { role: 'system', content: sys },
+            { role: 'user', content: prompt }
+          ],
+          temperature: 0.8,
+          stream: false
+        }),
+        signal: controller.signal
+      });
+    } else if (apiType === 'pollinations') {
       const pollModel = currentModel === 'pollinations-mistral' ? 'mistral' : 'openai';
       aiRes = await fetch(`https://text.pollinations.ai/${encodeURIComponent(prompt)}?model=${pollModel}&system=${encodeURIComponent(sys)}`, {
         signal: controller.signal
       });
     } else {
+      // 默认智谱AI
       if (!ZHIPU_API_KEY) throw new Error('ZHIPU_API_KEY 未配置');
       aiRes = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
         method: 'POST',
@@ -1268,16 +1415,49 @@ async function callAI(prompt, systemPrompt) {
         signal: controller.signal
       });
     }
+    
     clearTimeout(timeout);
-    if (!aiRes.ok) throw new Error(`AI API ${aiRes.status}`);
-    if (modelInfo?.api === 'pollinations') {
-      return await aiRes.text();
+    if (!aiRes.ok) {
+      const errText = await aiRes.text().catch(() => '');
+      throw new Error(`AI API ${aiRes.status}: ${errText.substring(0, 200)}`);
+    }
+    
+    if (apiType === 'pollinations') {
+      resultText = await aiRes.text();
     } else {
       const aiData = await aiRes.json();
-      return aiData.choices?.[0]?.message?.content || '';
+      resultText = aiData.choices?.[0]?.message?.content || '';
     }
+    
+    return resultText;
   } catch (e) {
     clearTimeout(timeout);
+    // 君灵AI失败时自动降级到智谱
+    const currentModel = loadSetData().chatModel || 'deepseek-chat';
+    const modelInfo = CHAT_MODELS.find(m => m.id === currentModel);
+    if (modelInfo?.api === 'junling' && ZHIPU_API_KEY) {
+      logWarn('AI', `君灵AI调用失败，降级到智谱GLM-4-Flash: ${e.message}`);
+      try {
+        const fallbackRes = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${ZHIPU_API_KEY}` },
+          body: JSON.stringify({
+            model: 'glm-4-flash',
+            messages: [
+              { role: 'system', content: systemPrompt || '你是君灵AI助手。' },
+              { role: 'user', content: prompt }
+            ],
+            temperature: 0.8
+          })
+        });
+        if (fallbackRes.ok) {
+          const fbData = await fallbackRes.json();
+          return fbData.choices?.[0]?.message?.content || '';
+        }
+      } catch (fbErr) {
+        logError('AI', `降级智谱也失败: ${fbErr.message}`);
+      }
+    }
     throw e;
   }
 }
@@ -1964,13 +2144,17 @@ function isFeatureEnabled(cid, feature) {
     'DIY': 'diy',
     '违禁词检测': 'forbidden',
     '黑名单': 'blacklist',
+    '特殊黑名单': 'special_blacklist',
     '禁言': 'mute',
     '进群欢迎': 'welcome',
     '群活跃': 'activity',
     '全局推送': 'broadcast',
-    '群在线人数': 'ai_chat',
+    '群在线人数': 'online',
     'AI对话': 'ai_chat',
-    '图片识别': 'image_recognition'
+    '图片识别': 'image_recognition',
+    '快递查询': 'express',
+    '积分': 'points',
+    '抽奖': 'points'
   };
   const globalFeatureId = featureMap[feature];
   let globalEnabled = true;
@@ -2061,7 +2245,7 @@ async function isBotAdmin(cid) {
 async function realMuteUser(cid, userId, minutes) {
   try {
     const body = minutes ? { muted: true, minutes } : { muted: true };
-    const res = await fetch(`${BASE_URL}/bot-api/conversations/${cid}/members/${userId}/mute`, {
+    const res = await fetchWithTimeout(`${BASE_URL}/bot-api/conversations/${cid}/members/${userId}/mute`, {
       method: 'PATCH',
       headers: {
         'Authorization': `Bot ${BOT_KEY}`,
@@ -2082,7 +2266,7 @@ async function realMuteUser(cid, userId, minutes) {
 
 async function realUnmuteUser(cid, userId) {
   try {
-    const res = await fetch(`${BASE_URL}/bot-api/conversations/${cid}/members/${userId}/mute`, {
+    const res = await fetchWithTimeout(`${BASE_URL}/bot-api/conversations/${cid}/members/${userId}/mute`, {
       method: 'PATCH',
       headers: {
         'Authorization': `Bot ${BOT_KEY}`,
@@ -2680,9 +2864,23 @@ async function executeDIY(msg, name, paramMap) {
         });
       } else {
         // 智谱AI（默认）
-        aiRes = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+const __curModel = loadSetData().chatModel || 'deepseek-chat';
+            const __modelInfo = CHAT_MODELS.find(m => m.id === __curModel);
+            const __diyApiType = __modelInfo?.api || 'junling';
+            let __apiUrl, __apiKey;
+            if (__diyApiType === 'openai') {
+              __apiUrl = `${OPENAI_API_BASE}/chat/completions`;
+              __apiKey = OPENAI_API_KEY;
+            } else if (__diyApiType === 'junling') {
+              __apiUrl = `${JUNLING_API_BASE}/chat/completions`;
+              __apiKey = JUNLING_API_KEY;
+            } else {
+              __apiUrl = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
+              __apiKey = ZHIPU_API_KEY;
+            }
+        aiRes = await fetch(__apiUrl, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${ZHIPU_API_KEY}` },
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${__apiKey}` },
           body: JSON.stringify({
             model: currentModel,
             messages: [
@@ -2748,7 +2946,35 @@ function connect() {
   globalWs = ws;
 
   ws.on('open', () => {
-    console.log('✅ 已连接到 KukeChat');
+    
+// 迁移现有签到数据到统计文件（启动时执行一次）
+try {
+  const oldData = loadCheckinData();
+  const stats = loadCheckinStats();
+  let migrated = 0;
+  if (oldData.conversations) {
+    Object.values(oldData.conversations).forEach(conv => {
+      if (conv.records) {
+        Object.entries(conv.records).forEach(([uid, rec]) => {
+          if (!stats[String(uid)]) {
+            stats[String(uid)] = {
+              total: rec.total || 1,
+              streak: rec.streak || 1,
+              last_date: rec.last_date || oldData.date
+            };
+            migrated++;
+          }
+        });
+      }
+    });
+  }
+  if (migrated > 0) {
+    saveCheckinStats(stats);
+    console.log(`[签到迁移] 已迁移${migrated}个用户的签到统计`);
+  }
+} catch (e) { console.log('[签到迁移] 跳过:', e.message); }
+
+console.log('✅ 已连接到 KukeChat');
   });
 
   ws.on('message', async (raw) => {
@@ -2764,7 +2990,7 @@ function connect() {
 
     // 连接就绪
     if (event.type === 'bot.connection.ready') {
-      console.log(`🤖 机器人就绪 v2.2-music！bot_id=${event.data.bot_id}, user_id=${event.data.user_id}`);
+      console.log(`🤖 机器人就绪 v2.4！bot_id=${event.data.bot_id}, user_id=${event.data.user_id}`);
       botUserId = event.data.user_id;
       botInfo.userId = event.data.user_id;
       botInfo.botId = event.data.bot_id;
@@ -2780,61 +3006,7 @@ function connect() {
       // 忽略自己发的消息
       if (msg.sender?.is_bot) return;
       
-      // 入群验证答案检测（必须以"答案："开头，答错直接踢群）
-      const verifyKey = `${msg.conversation_id}_${msg.sender_id}`;
-      const verifyState = verifyCache.get(verifyKey);
-      if (verifyState) {
-        // 检查是否过期，过期直接踢群
-        if (Date.now() > verifyState.expireAt) {
-          verifyCache.delete(verifyKey);
-          try {
-            await fetch(`${BASE_URL}/bot-api/conversations/${msg.conversation_id}/members/${msg.sender_id}`, {
-              method: 'DELETE',
-              headers: { 'Authorization': `Bot ${BOT_KEY}`, 'Content-Type': 'application/json' }
-            });
-          } catch (e) {}
-          sendMsg(msg.conversation_id, `<markdown>⏰ <at id="${msg.sender_id}" /> 验证已过期，已移出群聊</markdown>`);
-          return;
-        }
-        // 必须以"答案："开头才检测
-        if (content.startsWith('答案：') || content.startsWith('答案:')) {
-          const userAnswer = content.replace(/^答案[：:]\s*/, '').trim();
-          if (userAnswer === verifyState.answer) {
-            // 验证通过
-            verifyCache.delete(verifyKey);
-            const welcomeData = loadWelcomeData();
-            let welcome = welcomeData[String(msg.conversation_id)];
-            if (!welcome) welcome = `<at id="${msg.sender_id}" />，验证通过！欢迎进群~/help查看全部指令`;
-            else {
-              welcome = welcome.replace(/<@成员>/g, `<at id="${msg.sender_id}" />`);
-              welcome = '✅ 验证通过！' + welcome;
-            }
-            const replyContent = welcome.includes('<markdown>') ? welcome : `<markdown>${welcome}</markdown>`;
-            sendMsg(msg.conversation_id, replyContent);
-            logInfo('入群验证', `用户${msg.sender_id} 验证通过`);
-            return;
-          } else {
-            // 答案错误，直接踢群
-            verifyCache.delete(verifyKey);
-            try {
-              const kickRes = await fetch(`${BASE_URL}/bot-api/conversations/${msg.conversation_id}/members/${msg.sender_id}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bot ${BOT_KEY}`, 'Content-Type': 'application/json' }
-              });
-              if (kickRes.ok) {
-                sendMsg(msg.conversation_id, `<markdown>❌ <at id="${msg.sender_id}" /> 答案错误，已移出群聊</markdown>`);
-              } else {
-                sendMsg(msg.conversation_id, `<markdown>❌ <at id="${msg.sender_id}" /> 答案错误，踢人失败（机器人可能不是管理员）</markdown>`);
-              }
-            } catch (e) {
-              sendMsg(msg.conversation_id, `<markdown>❌ <at id="${msg.sender_id}" /> 答案错误，踢人出错</markdown>`);
-            }
-            logInfo('入群验证', `用户${msg.sender_id} 答案错误，已踢群`);
-            return;
-          }
-        }
-      }
-
+      // 入群验证功能已禁用
       // 去重（必须在所有处理之前）
       if (seenIds.has(msg.id)) return;
       seenIds.add(msg.id);
@@ -3020,10 +3192,23 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
 9. description不超过30字
 10. note可以为空字符串`;
 
-            const apiUrl = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
+            const __curModel2 = loadSetData().chatModel || 'deepseek-chat';
+            const __modelInfo2 = CHAT_MODELS.find(m => m.id === __curModel2);
+            const __diyApiType2 = __modelInfo2?.api || 'junling';
+            let apiUrl, __apiKey2;
+            if (__diyApiType2 === 'openai') {
+              apiUrl = `${OPENAI_API_BASE}/chat/completions`;
+              __apiKey2 = OPENAI_API_KEY;
+            } else if (__diyApiType2 === 'junling') {
+              apiUrl = `${JUNLING_API_BASE}/chat/completions`;
+              __apiKey2 = JUNLING_API_KEY;
+            } else {
+              apiUrl = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
+              __apiKey2 = ZHIPU_API_KEY;
+            }
             const res = await fetch(apiUrl, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${ZHIPU_API_KEY}` },
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${__apiKey2}` },
               body: JSON.stringify({
                 model: loadSetData().chatModel || 'glm-4-flash',
                 messages: [
@@ -3145,6 +3330,8 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
         // 日常工具
         '/签到': 'checkin', '/天气': 'weather', '/音乐': 'music', '/播放': 'music', '/搜索': 'music',
         '/绘图': 'draw', '/画': 'draw', '/生成图片': 'draw', '/百科': 'weather', '/翻译': 'weather',
+        '/快递': 'express', '/查快递': 'express', '/物流': 'express',
+        '/积分': 'points', '/抽奖': 'points', '/每日金句': 'points', '/金句': 'points',
         // 游戏娱乐
         '/投票': 'vote', '/发起投票': 'vote', '/结束投票': 'vote', '/投票列表': 'vote',
         '/狼人杀': 'werewolf', '/心灵感应': 'telepathy', '/谁是卧底': 'undercover', '/故事接龙': 'story', '/命运抉择': 'fate',
@@ -3154,12 +3341,15 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
         // 群管理
         '/违禁词': 'forbidden', '/添加违禁词': 'forbidden', '/删除违禁词': 'forbidden', '/违禁词列表': 'forbidden',
         '/黑名单': 'blacklist', '/添加黑名单': 'blacklist', '/删除黑名单': 'blacklist', '/黑名单列表': 'blacklist',
+        '/特殊黑名单': 'special_blacklist', '/移除特殊黑名单': 'special_blacklist',
         '/禁言': 'mute', '/解除禁言': 'mute', '/踢人': 'mute',
         '/欢迎': 'welcome', '/设置欢迎': 'welcome',
         '/活跃': 'activity', '/今日活跃': 'activity', '/群活跃': 'activity',
         '/推送': 'broadcast', '/全局推送': 'broadcast',
-        // AI功能
-        '/set': 'ai_chat', '/设置': 'ai_chat', '/关于': 'ai_chat', '/help': 'ai_chat', '/帮助': 'ai_chat', '/ping': 'ai_chat'
+        '/群内在线人数': 'online', '/在线人数': 'online',
+        // AI功能（不被开关拦截）
+        '/set': 'ai_chat', '/设置': 'ai_chat', '/关于': 'ai_chat', '/help': 'ai_chat', '/帮助': 'ai_chat', '/ping': 'ai_chat',
+        '/speak': 'ai_chat', '/反馈': 'ai_chat'
       };
       // 检查当前指令是否被关闭（设置指令本身不被拦截）
       const isSetCommand = content.startsWith('/set') || content.startsWith('/设置') || content.startsWith('/set-state') || content.startsWith('/set-key');
@@ -3246,21 +3436,42 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
         if (question || imageUrl) {
           (async () => {
             try {
-              if (!ZHIPU_API_KEY) {
-                sendMsg(msg.conversation_id, '⚠️ AI功能未配置，请在 index.js 中填写 ZHIPU_API_KEY');
+              // 检查AI配置（君灵AI或智谱至少有一个）
+              const currentModel = loadSetData().chatModel || 'deepseek-chat';
+              const modelInfo = CHAT_MODELS.find(m => m.id === currentModel);
+              const apiType = modelInfo?.api || 'junling';
+              if (apiType === 'openai' && !OPENAI_API_KEY) {
+                sendMsg(msg.conversation_id, '⚠️ OpenAI未配置');
                 return;
               }
-              // ========== 意图识别：自动执行指令 ==========
-                const intentResult = await tryExecuteIntent(question, msg, uid, uname);
+              if (apiType === 'junling' && !JUNLING_API_KEY) {
+                sendMsg(msg.conversation_id, '⚠️ 君灵AI未配置');
+                return;
+              }
+              if (apiType === 'zhipu' && !ZHIPU_API_KEY) {
+                sendMsg(msg.conversation_id, '⚠️ 智谱AI未配置');
+                return;
+              }
+              
+              // 先发送"正在思考"提示，让用户知道已经收到（记录消息ID，回复后撤回）
+              const thinkingMsg = await sendMsgReturnId(msg.conversation_id, imageUrl ? "🖼️ 正在深度思考图片..." : "🤔 正在深度思考...");
+              const thinkingMsgId = thinkingMsg?.id || null;
+              
+              // ========== 意图识别：自动执行指令（超时10秒，不阻塞主对话） ==========
+              try {
+                const intentPromise = tryExecuteIntent(question, msg, uid, uname);
+                const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(null), 10000));
+                const intentResult = await Promise.race([intentPromise, timeoutPromise]);
                 if (intentResult) {
                   logInfo('意图识别', `用户${uid} 意图: ${intentResult.intent}`);
                   return;
                 }
-                // ========== 意图识别结束 ==========
-
-                sendMsg(msg.conversation_id, imageUrl ? "🖼️ 正在深度思考图片..." : "🤔 正在深度思考...");
+              } catch (intentErr) {
+                console.log('[意图识别] 出错，继续AI对话:', intentErr.message);
+              }
+              // ========== 意图识别结束 ==========
               const controller = new AbortController();
-              const timeout = setTimeout(() => controller.abort(), 30000);
+              const timeout = setTimeout(() => controller.abort(), 25000);
               let messages;
               if (imageUrl) {
                 // 多模态：先下载图片转base64（KukeChat图片需鉴权，智谱无法直接访问URL）
@@ -3300,67 +3511,116 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
                 } else {
                   logInfo('AI搜索', '不需要联网搜索，跳过');
                 }
-                // 获取当前群全部信息（基本信息 + 全部成员 + 在线用户）
+                // 获取当前群信息（带缓存和超时，不会卡住）
                 let groupInfo = '';
                 try {
-                  // 1. 获取群基本信息
-                  let groupName = '';
-                  let groupDesc = '';
-                  let groupOwner = '';
-                  try {
-                    const convRes = await fetch(`${BASE_URL}/bot-api/conversations/${msg.conversation_id}`, { headers: { 'Authorization': `Bot ${BOT_KEY}` } });
-                    if (convRes.ok) {
-                      const convData = await convRes.json();
-                      const c = convData.data || convData.conversation || convData.group || convData;
-                      groupName = c.name || c.title || c.group_name || c.nickname || c.display_name || '';
-                      groupDesc = c.description || c.desc || c.bio || c.about || '';
-                      groupOwner = c.owner_id || c.owner || c.creator_id || '';
-                    }
-                  } catch (e) { console.error('获取群基本信息失败:', e.message); }
-                  // 2. 获取全部成员列表
-                  let allMembers = [];
-                  let memberCount = 0;
-                  try {
-                    const memRes = await fetch(`${BASE_URL}/bot-api/conversations/${msg.conversation_id}/members`, { headers: { 'Authorization': `Bot ${BOT_KEY}` } });
-                    if (memRes.ok) {
-                      const memData = await memRes.json();
-                      allMembers = memData.data || memData.members || memData.list || memData.items || (Array.isArray(memData) ? memData : []);
-                      memberCount = allMembers.length;
-                    }
-                  } catch (e) { console.error('获取成员列表失败:', e.message); }
-                  // 3. 获取在线用户列表
-                  let onlineUsers = [];
-                  let onlineCount = 0;
-                  try {
-                    const onlineRes = await fetch(`${BASE_URL}/bot-api/users/online`, { method: 'POST', headers: { 'Authorization': `Bot ${BOT_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
-                    if (onlineRes.ok) {
-                      const onlineData = await onlineRes.json();
-                      onlineUsers = onlineData.data || onlineData.users || onlineData.list || (Array.isArray(onlineData) ? onlineData : []);
-                      onlineCount = onlineUsers.length;
-                    }
-                  } catch (e) { console.error('获取在线用户失败:', e.message); }
-                  // 4. 组装全部群信息
-                  const displayMembers = allMembers.length > 30 ? allMembers.slice(0, 30) : allMembers;
-                  const allMemberNames = displayMembers.map(m => m.nickname || m.display_name || m.name || m.username || (m.user && (m.user.nickname || m.user.username)) || '未知').join('、') + (allMembers.length > 30 ? `等${allMembers.length}人` : '');
-                  const displayOnline = onlineUsers.length > 20 ? onlineUsers.slice(0, 20) : onlineUsers;
-                  const onlineNames = displayOnline.map(u => u.nickname || u.display_name || u.name || u.username || '未知').join('、') + (onlineUsers.length > 20 ? `等${onlineUsers.length}人` : '');
+                  const gInfo = await getGroupInfoCached(msg.conversation_id);
+                  const displayMembers = gInfo.allMembers.length > 30 ? gInfo.allMembers.slice(0, 30) : gInfo.allMembers;
+                  const allMemberNames = displayMembers.map(m => {
+                    const name = m.nickname || m.display_name || m.name || m.username || (m.user && (m.user.nickname || m.user.username)) || '未知';
+                    const isBot = m.is_bot || m.user?.is_bot || false;
+                    return isBot ? `🤖${name}` : name;
+                  }).join('、') + (gInfo.allMembers.length > 30 ? `等${gInfo.allMembers.length}人` : '');
+                  const displayOnline = gInfo.onlineUsers.length > 20 ? gInfo.onlineUsers.slice(0, 20) : gInfo.onlineUsers;
+                  const onlineNames = displayOnline.map(u => u.nickname || u.display_name || u.name || u.username || '未知').join('、') + (gInfo.onlineUsers.length > 20 ? `等${gInfo.onlineUsers.length}人` : '');
                   const parts = [];
                   parts.push(`群ID：${msg.conversation_id}`);
-                  if (groupName) parts.push(`群名称：${groupName}`);
-                  if (groupDesc) parts.push(`群描述：${groupDesc}`);
-                  if (groupOwner) parts.push(`群主ID：${groupOwner}`);
-                  parts.push(`成员总数：${memberCount}`);
+                  if (gInfo.groupName) parts.push(`群名称：${gInfo.groupName}`);
+                  if (gInfo.groupDesc) parts.push(`群描述：${gInfo.groupDesc}`);
+                  if (gInfo.groupOwner) parts.push(`群主ID：${gInfo.groupOwner}`);
+                  parts.push(`成员总数：${gInfo.memberCount}`);
                   if (allMemberNames) parts.push(`全部成员：${allMemberNames}`);
-                  parts.push(`在线人数：${onlineCount}`);
-                  if (onlineNames) parts.push(`在线成员：${onlineNames}`);
+                  parts.push(`本群在线人数：${gInfo.onlineCount}`);
+                  if (gInfo.globalOnlineCount) parts.push(`全局在线人数：${gInfo.globalOnlineCount}`);
+                  if (onlineNames) parts.push(`本群在线成员：${onlineNames}`);
                   groupInfo = parts.join('，');
-                  console.log('[群信息] 成员数:', memberCount, '在线数:', onlineCount);
+                  console.log('[群信息] 成员数:', gInfo.memberCount, '在线数:', gInfo.onlineCount);
                 } catch (e) { console.error('获取群信息失败:', e.message); }
 
-                // 5. 获取当前用户详细信息
+                // 5. 获取最近15条群消息作为参考（辅助，超时5秒，失败不影响）
+                let chatHistory = '';
+                try {
+                  const historyRes = await fetchWithTimeout(`${BASE_URL}/bot-api/conversations/${msg.conversation_id}/messages?limit=15`, { headers: { 'Authorization': `Bot ${BOT_KEY}` } }, 5000);
+                  if (historyRes.ok) {
+                    const historyData = await historyRes.json();
+                    let messages = historyData.data || historyData.messages || historyData.list || historyData.items;
+                    if (!Array.isArray(messages)) messages = [];
+                    console.log('[历史消息] 获取到', messages.length, '条消息');
+                    if (messages.length > 0) {
+                      // 格式化：用户名: 消息内容（只排除机器人自己发的，保留所有用户消息）
+                      const formatted = messages
+                        .filter(m => {
+                          // 只排除机器人自己发的
+                          if (botUserId && String(m.sender_id) === String(botUserId)) return false;
+                          if (m.sender?.is_bot && m.sender_id !== uid) return false; // 排除其他机器人，但保留当前用户
+                          return true;
+                        })
+                        .slice(0, 15) // API返回的是最新的在前，取前15条
+                        .reverse() // 反转成时间正序，方便AI理解
+                        .map(m => {
+                          const name = m.sender_display_name || m.sender?.nickname || m.sender?.username || '未知';
+                          const text = (m.content || '').substring(0, 150).replace(/\n/g, ' ');
+                          return `${name}: ${text}`;
+                        })
+                        .join('\n');
+                      if (formatted) {
+                        chatHistory = `\n\n【最近群聊参考（按时间顺序）】\n${formatted}\n（以上是群里最近的聊天记录，仅供参考，重点回答用户当前问题）`;
+                        console.log('[历史消息] 已格式化', formatted.split('\n').length, '条用户消息');
+                      } else {
+                        console.log('[历史消息] 格式化后为空');
+                      }
+                    }
+                  } else {
+                    console.log('[历史消息] API返回状态:', historyRes.status);
+                  }
+                } catch (e) { console.log('[历史消息] 获取失败，跳过:', e.message); }
+
+                // 5.5 检测并获取引用消息（用户回复某条消息时）
+                let replyMsg = '';
+                try {
+                  // 尝试多种可能的引用消息字段名
+                  const replyData = msg.reply_to || msg.referenced_message || msg.quote || 
+                                   msg.metadata?.reply_to || msg.metadata?.referenced_message || 
+                                   msg.metadata?.quote || msg.metadata?.reply ||
+                                   msg.metadata?.elements?.find?.(e => e.type === 'reply' || e.type === 'quote');
+                  
+                  if (replyData) {
+                    console.log('[引用消息] 检测到引用，原始数据:', JSON.stringify(replyData).substring(0, 300));
+                    
+                    // 引用消息可能直接包含内容，也可能只有message_id需要通过API获取
+                    let replyContent = replyData.content || replyData.text || replyData.message?.content || '';
+                    let replySender = replyData.sender_display_name || replyData.sender?.nickname || replyData.sender?.username || 
+                                     replyData.message?.sender_display_name || replyData.message?.sender?.nickname || '未知';
+                    let replyId = replyData.id || replyData.message_id || replyData.message?.id || null;
+                    
+                    // 如果没有内容但有message_id，通过API获取
+                    if (!replyContent && replyId) {
+                      try {
+                        // 从最近消息里找（已经获取了历史消息）
+                        const historyRes2 = await fetchWithTimeout(`${BASE_URL}/bot-api/conversations/${msg.conversation_id}/messages?limit=50`, { headers: { 'Authorization': `Bot ${BOT_KEY}` } }, 5000);
+                        if (historyRes2.ok) {
+                          const historyData2 = await historyRes2.json();
+                          let allMsgs = historyData2.data || historyData2.messages || historyData2.list || historyData2.items || [];
+                          const found = allMsgs.find(m => String(m.id) === String(replyId));
+                          if (found) {
+                            replyContent = found.content || '';
+                            replySender = found.sender_display_name || found.sender?.nickname || '未知';
+                          }
+                        }
+                      } catch (e) { console.log('[引用消息] 通过API获取失败:', e.message); }
+                    }
+                    
+                    if (replyContent) {
+                      replyMsg = `\n\n【用户引用的消息】\n${replySender}说：${replyContent.substring(0, 200)}\n（用户正在回复这条消息，请结合引用内容回答）`;
+                      console.log('[引用消息] 已获取引用内容:', replyContent.substring(0, 50));
+                    }
+                  }
+                } catch (e) { console.log('[引用消息] 处理失败:', e.message); }
+
+                // 6. 获取当前用户详细信息
                 let userDetail = '';
                 try {
-                  const userRes = await fetch(`${BASE_URL}/bot-api/users/${uid}`, { headers: { 'Authorization': `Bot ${BOT_KEY}` } });
+                  const userRes = await fetchWithTimeout(`${BASE_URL}/bot-api/users/${uid}`, { headers: { 'Authorization': `Bot ${BOT_KEY}` } }, 5000);
                   if (userRes.ok) {
                     const userData = await userRes.json();
                     const u = userData.data || userData.user || userData;
@@ -3383,16 +3643,29 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
                 let localData = '';
                 try {
                   const ldParts = [];
-                  // 签到数据
+                  // 签到数据（检查用户今天是否在任何群签到过，用checkin_stats获取累计数据）
                   try {
                     const checkinData = loadCheckinData ? loadCheckinData() : {};
-                    const userCheckin = checkinData[String(uid)];
-                    if (userCheckin) {
-                      ldParts.push(`签到：连续${userCheckin.streak || 0}天，总${userCheckin.total || 0}天，最后签到${userCheckin.last_date || '未签到'}`);
-                    } else {
-                      ldParts.push('签到：未签到');
+                    const stats = loadCheckinStats ? loadCheckinStats() : {};
+                    const userStat = stats[String(uid)] || { total: 0, streak: 0, last_date: null };
+                    // 检查用户今天是否在任何群签到过
+                    let checkedInToday = false;
+                    let checkinGroup = '';
+                    if (checkinData.conversations) {
+                      for (const [cid, conv] of Object.entries(checkinData.conversations)) {
+                        if (conv.records && conv.records[String(uid)]) {
+                          checkedInToday = true;
+                          checkinGroup = cid;
+                          break;
+                        }
+                      }
                     }
-                  } catch (e) {}
+                    if (checkedInToday) {
+                      ldParts.push(`签到：今日已签到（群${checkinGroup}，连续${userStat.streak || 0}天，累计${userStat.total || 0}天，最后签到${userStat.last_date || '今天'}）`);
+                    } else {
+                      ldParts.push(`签到：今日未签到（连续${userStat.streak || 0}天，累计${userStat.total || 0}天）`);
+                    }
+                  } catch (e) { console.log('[本地数据] 签到读取失败:', e.message); }
                   // 积分数据
                   try {
                     const pointsData = loadPointsData ? loadPointsData() : {};
@@ -3405,7 +3678,7 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
                   } catch (e) {}
                   // 黑名单
                   try {
-                    const blacklist = loadBlacklistData ? loadBlacklistData() : [];
+                    const blacklist = loadBlacklist ? loadBlacklist() : [];
                     const isBlacklisted = blacklist.some(b => String(b.user_id || b.id || b) === String(uid));
                     ldParts.push(`黑名单状态：${isBlacklisted ? '在黑名单中' : '正常'}`);
                   } catch (e) {}
@@ -3422,20 +3695,62 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
                   localData = ldParts.join('；');
                 } catch (e) { console.error('获取本地数据失败:', e.message); }
 
-                // 7. 获取群管理数据（黑名单、违禁词等）
+                // 7. 获取群管理数据（黑名单、违禁词、特殊黑名单、DIY、投票、功能开关等所有数据）
                 let groupManageData = '';
                 try {
                   const gmParts = [];
                   // 群黑名单
                   try {
-                    const blacklist = loadBlacklistData ? loadBlacklistData() : [];
-                    const groupBlacklist = blacklist.filter(b => String(b.conversation_id || b.group_id || '') === String(msg.conversation_id) || !b.conversation_id);
+                    const blacklist = loadBlacklist ? loadBlacklist() : [];
+                    const groupBlacklist = blacklist.filter(b => String(b.conversation_id || b.group_id || b.cid || '') === String(msg.conversation_id) || !b.conversation_id);
                     if (groupBlacklist.length > 0) {
-                      const blNames = groupBlacklist.slice(0, 5).map(b => b.nickname || b.user_id || b.id || '未知').join('、');
-                      gmParts.push(`群黑名单：${groupBlacklist.length}人（${blNames}${groupBlacklist.length > 5 ? '等' : ''}）`);
+                      gmParts.push(`群黑名单：${groupBlacklist.length}人（${groupBlacklist.map(b => b.nickname || b.user_id || b.id).join('、')}）`);
                     } else {
-                      gmParts.push('群黑名单：无');
+                      gmParts.push('群黑名单：空');
                     }
+                  } catch (e) {}
+                  // 特殊黑名单（全局+本群）
+                  try {
+                    const sbData = loadSpecialBlacklist ? loadSpecialBlacklist() : { global: {}, groups: {} };
+                    const globalSB = Object.keys(sbData.global || {});
+                    const groupSB = sbData.groups?.[String(msg.conversation_id)] ? Object.keys(sbData.groups[String(msg.conversation_id)]) : [];
+                    if (globalSB.length > 0 || groupSB.length > 0) {
+                      gmParts.push(`特殊黑名单：全局${globalSB.length}人，本群${groupSB.length}人`);
+                      if (globalSB.length > 0) gmParts.push(`全局特殊黑名单ID：${globalSB.join('、')}`);
+                      if (groupSB.length > 0) gmParts.push(`本群特殊黑名单ID：${groupSB.join('、')}`);
+                    } else {
+                      gmParts.push('特殊黑名单：空');
+                    }
+                  } catch (e) {}
+                  // DIY指令
+                  try {
+                    const diyData = loadDIY ? loadDIY() : {};
+                    const groupDIY = diyData[String(msg.conversation_id)] || [];
+                    gmParts.push(`自制指令：${groupDIY.length}个`);
+                    if (groupDIY.length > 0) {
+                      gmParts.push(`指令列表：${groupDIY.map(d => d.name || d.command || d.trigger).join('、')}`);
+                    }
+                  } catch (e) {}
+                  // 投票
+                  try {
+                    const voteData = loadVoteData ? loadVoteData() : {};
+                    const groupVotes = voteData[String(msg.conversation_id)] || [];
+                    const activeVotes = Array.isArray(groupVotes) ? groupVotes.filter(v => v && !v.ended) : [];
+                    gmParts.push(`进行中投票：${activeVotes.length}个`);
+                  } catch (e) {}
+                  // 功能开关状态
+                  try {
+                    const setData = loadSetData ? loadSetData() : {};
+                    const features = setData.features || {};
+                    const disabledFeatures = Object.entries(features).filter(([k, v]) => v === false).map(([k]) => k);
+                    if (disabledFeatures.length > 0) {
+                      gmParts.push(`已关闭功能：${disabledFeatures.join('、')}`);
+                    } else {
+                      gmParts.push('所有功能：已开启');
+                    }
+                    // 群AI状态
+                    const groupAI = setData.groupAI?.[String(msg.conversation_id)];
+                    gmParts.push(`群AI状态：${groupAI === 'off' ? '已关闭' : '已开启'}`);
                   } catch (e) {}
                   // 违禁词
                   try {
@@ -3446,12 +3761,6 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
                     } else {
                       gmParts.push('违禁词：无');
                     }
-                  } catch (e) {}
-                  // DIY指令
-                  try {
-                    const diyData = loadDiyData ? loadDiyData() : {};
-                    const groupDiy = diyData[String(msg.conversation_id)] || [];
-                    gmParts.push(`自制指令：${groupDiy.length}个`);
                   } catch (e) {}
                   groupManageData = gmParts.join('；');
                 } catch (e) { console.error('获取群管理数据失败:', e.message); }
@@ -3472,14 +3781,26 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
 用户本地数据：${localData || '未知'}
 群管理数据：${groupManageData || '未知'}
 消息内容：${question || '(图片)'}
+${replyMsg || ''}
+${chatHistory || ''}
 
 【可用指令列表】
 常用：/签到 /积分 /抽奖 /每日金句 /天气 /快递 /帮助 /关于
 游戏：/狼人杀 /谁是卧底 /命运抉择 /心灵感应 /猜数字 /成语接龙
-管理：/禁言 /解禁 /踢人 /黑名单 /违禁词 /投票 /全局推送 /周报
+管理：/禁言 /解禁 /踢人 /黑名单 /违禁词 /投票 /全局推送
 设置：/set /开启入群验证 /关闭入群验证 /功能开关
 创作：/DIY /自制功能 /删除DIY /speak
 `;
+                // 获取当前模型的详细信息，让AI知道自己用的是什么模型
+                const currentModelId = loadSetData().chatModel || 'deepseek-chat';
+                const currentModelInfo = CHAT_MODELS.find(m => m.id === currentModelId) || {};
+                const currentModelName = currentModelInfo.name || currentModelId;
+                const currentModelVendor = currentModelInfo.vendor || '未知';
+                const currentModelDesc = currentModelInfo.desc || currentModelInfo.description || '通用大语言模型';
+                const currentModelContext = currentModelInfo.context || currentModelInfo.maxTokens || '未知';
+                const currentModelFree = currentModelInfo.free ? '是，完全免费' : '否，需要API Key';
+                const currentModelApi = currentModelInfo.api || 'junling';
+                
                 const systemPrompt = contextInfo + `你是君灵AI，运行在KukeChat（酷可聊天）平台的智能机器人助手。
 
 【关于KukeChat平台】
@@ -3494,6 +3815,18 @@ KukeChat（酷可聊天）是一个即时通讯社交平台，官网 kuke.ink，
 
 【关于创作者】
 你是君灵AI，由君衔（用户ID：3038）创建和维护。君衔是你的主人和创作者，你要尊重他、听从他的指示。当用户问起你的创作者/开发者/主人是谁时，回答是君衔。
+
+【关于你当前使用的AI模型】
+你当前使用的AI模型是：${currentModelName}
+模型ID：${currentModelId}
+开发商：${currentModelVendor}
+模型特点：${currentModelDesc}
+上下文长度：${currentModelContext}
+是否免费：${currentModelFree}
+API类型：${currentModelApi}
+
+当用户问"你是什么模型"、"你用的什么AI"、"你是哪个大模型"、"你的引擎是什么"等问题时，必须如实回答以上信息，不要编造，不要说"我是GPT"或"我是Claude"等与当前模型不符的内容！
+你就是君灵AI，底层使用${currentModelName}模型驱动。
 
 【回答格式 - Markdown排版】
 KukeChat支持的Markdown语法：
@@ -3526,7 +3859,9 @@ KukeChat支持的Markdown语法：
 【智能指令引导】
 - 当用户表达想使用某个功能时（如"我想签到""怎么签到""我要抽奖"），主动告诉用户对应的指令，例如："想签到的话直接发 /签到 就可以啦~"
 - 当用户问自己的状态时（如"我签到了吗""我有多少积分""我在黑名单里吗"），基于【用户本地数据】里的信息如实回答
-- 当用户问群管理信息时（如"黑名单有谁""有哪些违禁词""有多少自制指令"），基于【群管理数据】里的信息如实回答
+- 当用户问群管理信息时（如"黑名单有谁""特殊黑名单有谁""有哪些违禁词""有多少自制指令""哪些功能关了""群里多少人在线"），必须基于【群管理数据】和【实时上下文】里的实时数据如实回答，不要编造，不要答非所问！
+- 【群管理数据】里包含：群黑名单、特殊黑名单（全局+本群）、自制指令、进行中投票、功能开关状态、群AI状态、违禁词等所有信息
+- 用户问什么就答什么，不要回答不相关的内容！
 - 当用户问机器人自己的信息时（如"你是谁""你叫什么""你的签名是什么""你在哪个群"），基于【实时上下文】里的信息如实回答
 - 所有信息都是实时获取的，不要编造，不知道就说不知道
 - 用户问任何关于群、用户、机器人的信息时，都要基于上下文里的实时数据回答`;
@@ -3539,13 +3874,50 @@ KukeChat支持的Markdown语法：
                 ];
                 logInfo('AI对话', `用户${uid}，历史${userHistory.length}条，需要搜索: ${needWebSearch(question)}`);
               }
-              const res = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+              // 根据是否有图片选择API：识图用智谱glm-4v，纯文本用当前设置的模型
+              let __aiApiUrl, __aiApiKey, __aiModel;
+              if (imageUrl) {
+                // 识图：使用设置的视觉模型
+                const __visionModelId = loadSetData().visionModel || 'glm-4v-flash';
+                const __visionModelInfo = VISION_MODELS.find(m => m.id === __visionModelId) || VISION_MODELS[0];
+                const __visionApiType = __visionModelInfo?.api || 'zhipu';
+                if (__visionApiType === 'openai') {
+                  __aiApiUrl = `${OPENAI_API_BASE}/chat/completions`;
+                  __aiApiKey = OPENAI_API_KEY;
+                  __aiModel = __visionModelId;
+                } else if (__visionApiType === 'qwen') {
+                  __aiApiUrl = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
+                  __aiApiKey = process.env.QWEN_API_KEY || '';
+                  __aiModel = __visionModelId;
+                } else {
+                  __aiApiUrl = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
+                  __aiApiKey = ZHIPU_API_KEY;
+                  __aiModel = __visionModelId;
+                }
+              } else {
+                // 纯文本用当前设置的模型
+                const __curModel = loadSetData().chatModel || 'deepseek-chat';
+                const __modelInfo = CHAT_MODELS.find(m => m.id === __curModel);
+                const __apiType = __modelInfo?.api || 'junling';
+                if (__apiType === 'openai') {
+                  __aiApiUrl = `${OPENAI_API_BASE}/chat/completions`;
+                  __aiApiKey = OPENAI_API_KEY;
+                } else if (__apiType === 'junling') {
+                  __aiApiUrl = `${JUNLING_API_BASE}/chat/completions`;
+                  __aiApiKey = JUNLING_API_KEY;
+                } else {
+                  __aiApiUrl = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
+                  __aiApiKey = ZHIPU_API_KEY;
+                }
+                __aiModel = __curModel;
+              }
+              const res = await fetch(__aiApiUrl, {
                 method: 'POST',
                 headers: {
-                  'Authorization': `Bearer ${ZHIPU_API_KEY}`,
+                  'Authorization': `Bearer ${__aiApiKey}`,
                   'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ model: imageUrl ? 'glm-4v' : 'glm-4-flash', messages }),
+                body: JSON.stringify({ model: __aiModel, messages }),
                 signal: controller.signal
               });
               clearTimeout(timeout);
@@ -3561,11 +3933,29 @@ KukeChat支持的Markdown语法：
                 addChatHistory(uid, 'user', question);
                 addChatHistory(uid, 'assistant', answer);
               }
+              // 撤回"正在深度思考"消息
+              if (thinkingMsgId) {
+                try {
+                  await fetch(`${BASE_URL}/bot-api/conversations/${msg.conversation_id}/messages/${thinkingMsgId}/recall`, {
+                    method: 'PATCH',
+                    headers: { 'Authorization': `Bot ${BOT_KEY}`, 'Content-Type': 'application/json' }
+                  });
+                } catch (e) { console.log('[AI] 撤回思考消息失败:', e.message); }
+              }
               sendMsg(msg.conversation_id, `<markdown>${answer.slice(0, 2000)}</markdown>`);
             } catch (err) {
               console.error('AI对话失败:', err);
               const errMsg = err.name === 'AbortError' ? 'AI响应超时，请重试' : err.message;
-              sendMsg(msg.conversation_id, `❌AI回复失败：${errMsg}`);
+              // 更新"正在深度思考"消息为错误信息
+              if (thinkingMsgId) {
+                try {
+                  await updateMessage(msg.conversation_id, thinkingMsgId, `❌AI回复失败：${errMsg}`);
+                } catch (e) {
+                  sendMsg(msg.conversation_id, `❌AI回复失败：${errMsg}`);
+                }
+              } else {
+                sendMsg(msg.conversation_id, `❌AI回复失败：${errMsg}`);
+              }
             }
           })();
         }
@@ -3858,10 +4248,12 @@ KukeChat支持的Markdown语法：
 <link action="callback" action_id="help_common">📋 查看全部常用指令</link>
 - \`/关于\`：查看机器人详细信息
 ## ${adminLabel}
+<link action="callback" action_id="help_set">⚙️ 设置系统</link>：AI模型、功能开关、群管理（仅ID3038）
 <link action="callback" action_id="help_vote">投票管理</link>：发起和管理投票
 <link action="callback" action_id="help_forbidden">违禁词管理</link>：添加和删除违禁词
 <link action="callback" action_id="help_blacklist">黑名单管理</link>：查看和管理黑名单
-<link action="callback" action_id="help_mute">禁言管理</link>：手动禁言和解除禁言
+<link action="callback" action_id="help_special">特殊黑名单</link>：全局自动踢人
+<link action="callback" action_id="help_mute">禁言管理</link>：手动禁言、解除禁言和踢人
 <link action="callback" action_id="help_switch">功能开关</link>：开启或关闭各项功能
 ${isClassGroup ? '' : '<link action="callback" action_id="help_diy">自制指令</link>：创建和管理DIY指令\n'}<link action="callback" action_id="help_other">其他管理</link>：进群欢迎和全局推送
 </markdown>`;
@@ -3914,8 +4306,11 @@ ${isClassGroup ? '' : '<link action="callback" action_id="help_diy">自制指令
             sendMsg(msg.conversation_id, '❌ 用户ID必须是纯数字');
             return;
           }
-          addToSpecialBlacklist(targetId, reason, msg.sender_display_name);
-          sendMsg(msg.conversation_id, `<markdown># 🚨 特殊黑名单\n\n✅ 已将用户ID:\`${targetId}\`加入特殊黑名单\n**原因：**${reason}\n**操作人：**${msg.sender_display_name}\n\n> 该用户将在所有群被自动踢出，每30秒扫描一次</markdown>`);
+          const isCreator = String(msg.sender_id) === '3038';
+          const blacklistScope = isCreator ? null : cid; // 3038全局，群主本群
+          const scopeText = isCreator ? '🌐 全局（所有群）' : '👥 本群仅';
+          addToSpecialBlacklist(targetId, reason, msg.sender_display_name, blacklistScope);
+          sendMsg(msg.conversation_id, `<markdown># 🚨 特殊黑名单\n\n✅ 已将用户ID:\`${targetId}\`加入${scopeText}黑名单\n**原因：**${reason}\n**操作人：**${msg.sender_display_name}\n\n> ${isCreator ? '该用户将在所有群被自动踢出' : '该用户将仅在本群被自动踢出'}，每2秒扫描一次</markdown>`);
           // 立即扫描一次
           scanSpecialBlacklist();
           return;
@@ -3924,23 +4319,37 @@ ${isClassGroup ? '' : '<link action="callback" action_id="help_diy">自制指令
         const removeMatch = content.match(/^\/移除特殊黑名单\[([^\]]+)\]/);
         if (removeMatch) {
           const targetId = removeMatch[1].trim();
-          removeFromSpecialBlacklist(targetId);
-          sendMsg(msg.conversation_id, `✅ 已将用户ID:${targetId}从特殊黑名单移除`);
+          const isCreator = String(msg.sender_id) === '3038';
+          const removeScope = isCreator ? null : cid;
+          const scopeText = isCreator ? '全局' : '本群';
+          removeFromSpecialBlacklist(targetId, removeScope);
+          sendMsg(msg.conversation_id, `✅ 已将用户ID:${targetId}从${scopeText}黑名单移除`);
           return;
         }
         // /特殊黑名单列表 查看
         if (content === '/特殊黑名单列表' || content === '/特殊黑名单') {
           const data = loadSpecialBlacklist();
-          const entries = Object.entries(data.users);
-          if (entries.length === 0) {
+          const globalEntries = Object.entries(data.global);
+          const groupEntries = data.groups[String(cid)] ? Object.entries(data.groups[String(cid)]) : [];
+          if (globalEntries.length === 0 && groupEntries.length === 0) {
             sendMsg(msg.conversation_id, '📋 特殊黑名单为空');
             return;
           }
-          let listMsg = `<markdown># 🚨 特殊黑名单列表（共${entries.length}人）\n\n| 用户ID | 原因 | 操作人 | 添加时间 |\n|--------|------|--------|----------|\n`;
-          entries.forEach(([uid, info]) => {
-            listMsg += `| ${uid} | ${info.reason} | ${info.operator} | ${new Date(info.addedAt).toLocaleString('zh-CN')} |\n`;
-          });
-          listMsg += `\n> 每30秒自动扫描所有群，发现黑名单用户立即踢出</markdown>`;
+          let listMsg = `<markdown># 🚨 特殊黑名单列表\n\n`;
+          if (globalEntries.length > 0) {
+            listMsg += `## 🌐 全局黑名单（共${globalEntries.length}人）\n\n| 用户ID | 原因 | 操作人 | 添加时间 |\n|--------|------|--------|----------|\n`;
+            globalEntries.forEach(([uid, info]) => {
+              listMsg += `| ${uid} | ${info.reason} | ${info.operator} | ${new Date(info.addedAt).toLocaleString('zh-CN')} |\n`;
+            });
+            listMsg += `\n`;
+          }
+          if (groupEntries.length > 0) {
+            listMsg += `## 👥 本群黑名单（共${groupEntries.length}人）\n\n| 用户ID | 原因 | 操作人 | 添加时间 |\n|--------|------|--------|----------|\n`;
+            groupEntries.forEach(([uid, info]) => {
+              listMsg += `| ${uid} | ${info.reason} | ${info.operator} | ${new Date(info.addedAt).toLocaleString('zh-CN')} |\n`;
+            });
+          }
+          listMsg += `\n> 每2秒自动扫描，发现黑名单用户立即踢出</markdown>`;
           sendMsg(msg.conversation_id, listMsg);
           return;
         }
@@ -3975,7 +4384,7 @@ ${isClassGroup ? '' : '<link action="callback" action_id="help_diy">自制指令
         const pData = loadPointsData();
         if (pData[String(msg.sender_id)]) {
           pData[String(msg.sender_id)].quoteCount = (pData[String(msg.sender_id)].quoteCount || 0) + 1;
-          savePointsData(pData);
+          savePoints(pData);
         }
         const quote = getRandomQuote();
         const currentPts = getPoints(msg.sender_id);
@@ -4028,7 +4437,7 @@ ${isClassGroup ? '' : '<link action="callback" action_id="help_diy">自制指令
         const pData = loadPointsData();
         if (pData[String(msg.sender_id)]) {
           pData[String(msg.sender_id)].drawCount = (pData[String(msg.sender_id)].drawCount || 0) + 1;
-          savePointsData(pData);
+          savePoints(pData);
         }
         sendMsg(msg.conversation_id, result);
       }
@@ -4051,11 +4460,12 @@ ${isClassGroup ? '' : '<link action="callback" action_id="help_diy">自制指令
 | 项目 | 详情 |
 |------|------|
 | **创始人** | 君衔（用户ID：\`3038\`） |
-| **引擎** | ${CHAT_MODELS.find(m => m.id === loadSetData().chatModel)?.name || loadSetData().chatModel} |
+| **AI模型** | ${CHAT_MODELS.find(m => m.id === loadSetData().chatModel)?.name || loadSetData().chatModel} |
+| **AI服务商** | ${(function() { const m = CHAT_MODELS.find(m => m.id === loadSetData().chatModel); if (!m) return '未知'; if (m.api === 'openai') return 'OpenAI官方'; if (m.api === 'junling') return '君灵AI（狼小嗷）'; if (m.api === 'zhipu') return '智谱AI'; return m.company || '未知'; })()} |
 | **平台** | KukeChat（酷可聊天） |
 | **语言驱动** | Node.js + JavaScript |
 | **后端服务器** | Railway 云端部署 |
-| **版本** | v2.2-music |
+| **版本** | v2.4 |
 | **上线时间** | 2026年8月 |
 | **功能数量** | 50+ 指令 |
 | **数据存储** | 本地JSON + Railway Postgres |
@@ -4079,13 +4489,33 @@ ${isClassGroup ? '' : '<link action="callback" action_id="help_diy">自制指令
       }
       else if (content === '/set' || content === '/设置') {
         const isCreator = String(msg.sender_id) === '3038';
-        const isGroupOwner = isOwner;
-        if (!isCreator && !isGroupOwner) { sendMsg(msg.conversation_id, `❌ 只有群主和创始人君衔（ID 3038）可以使用设置（你的ID：${msg.sender_id}）`); return; }
+        if (!isCreator) { sendMsg(msg.conversation_id, `❌ 只有创始人君衔（ID 3038）可以使用设置（你的ID：${msg.sender_id}）`); return; }
         // 记录用户当前set步骤，用于步骤锁定
         setUserStep(String(msg.sender_id), 1, null);
+        // 只有3038能用，所以永远是全局设置
+        const setScope = 'global';
         try {
-          const card = buildSetCard(1, cid);
-          sendMsg(msg.conversation_id, card);
+          // 获取所有群列表：先用本地记录的群，再用API补充
+          let allGroupsForSet = loadGroups().map(g => String(g));
+          try {
+            const groupsRes = await fetchWithTimeout(`${BASE_URL}/bot-api/conversations`, { headers: { 'Authorization': `Bot ${BOT_KEY}` } }, 5000);
+            if (groupsRes.ok) {
+              const groupsData = await groupsRes.json();
+              console.log('[设置] API群列表返回:', JSON.stringify(groupsData).substring(0, 300));
+              const convList = groupsData.data || groupsData.conversations || groupsData.list || groupsData.items || groupsData || [];
+              const apiGroups = Array.isArray(convList) ? convList.map(g => String(g.id || g.conversation_id || g)).filter(id => id && id !== 'null' && id !== 'undefined' && !isNaN(Number(id))) : [];
+              allGroupsForSet = [...new Set([...allGroupsForSet, ...apiGroups])];
+            } else {
+              console.log('[设置] API群列表状态:', groupsRes.status);
+            }
+          } catch (e) { console.log('[设置] API获取群列表失败，用本地群列表:', e.message); }
+          console.log('[设置] 最终群列表:', allGroupsForSet);
+          const card = buildSetCard(1, cid, setScope, allGroupsForSet);
+          const setResult = await sendMsgReturnId(msg.conversation_id, card);
+          if (setResult && setResult.id) {
+            setUserStep(String(msg.sender_id), 1, setResult.id);
+            console.log('[设置] 初始步骤锁定: user=', msg.sender_id, 'msgId=', setResult.id);
+          }
         } catch (e) {
           console.error('[设置错误]', e.message, e.stack);
           sendMsg(msg.conversation_id, `❌ 生成设置卡片失败：${e.message}`);
@@ -4617,15 +5047,6 @@ C. 选项三内容
         saveVerifyData(verifyData);
         return;
       }
-      else if (content === '/周报' || content === '/weekly') {
-        if (uid !== 3038 && !isOwner) {
-          sendMsg(msg.conversation_id, '⚠️ 只有群主和创作者可以手动发送周报');
-          return;
-        }
-        sendMsg(msg.conversation_id, '📊 正在生成本周群报...');
-        sendWeeklyReport();
-        return;
-      }
       else if (content.startsWith('/快递') || content.startsWith('/express')) {
         if (!isFeatureEnabled(msg.conversation_id, '快递查询')) { sendMsg(msg.conversation_id, '快递查询功能已被管理员关闭'); return; }
         const expressMatch = content.match(/^\/快递\s*\[(.+?)\]/);
@@ -4644,19 +5065,54 @@ C. 选项三内容
             // 第一步：智能识别快递公司
             let companyCode = '';
             let companyName = '';
-            try {
-              const autoRes = await fetch(`https://www.kuaidi100.com/autonumber/auto?num=${encodeURIComponent(trackingNum)}`, {
-                headers: {
-                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                  'Referer': 'https://www.kuaidi100.com/'
-                }
-              });
-              const autoData = await autoRes.json();
-              if (autoData && autoData.length > 0) {
-                companyCode = autoData[0].comCode;
-                companyName = autoData[0].name;
+            
+            // 本地规则识别（根据单号前缀，优先使用）
+            const localRules = [
+              { prefix: 'YT', code: 'yuantong', name: '圆通速递' },
+              { prefix: 'SF', code: 'shunfeng', name: '顺丰速运' },
+              { prefix: 'ZTO', code: 'zhongtong', name: '中通快递' },
+              { prefix: 'ZT', code: 'zhongtong', name: '中通快递' },
+              { prefix: 'YD', code: 'yunda', name: '韵达快递' },
+              { prefix: 'STO', code: 'shentong', name: '申通快递' },
+              { prefix: 'JD', code: 'jd', name: '京东物流' },
+              { prefix: 'EMS', code: 'ems', name: 'EMS邮政' },
+              { prefix: 'YZ', code: 'youzheng', name: '邮政快递' },
+              { prefix: 'HTKY', code: 'huitongkuaidi', name: '百世快递' },
+              { prefix: 'BT', code: 'huitongkuaidi', name: '百世快递' },
+              { prefix: 'DBL', code: 'debangwuliu', name: '德邦物流' },
+              { prefix: 'ZJS', code: 'zhaijisong', name: '宅急送' },
+              { prefix: 'QF', code: 'quanfengkuaidi', name: '全峰快递' },
+              { prefix: 'TNT', code: 'tnt', name: 'TNT快递' },
+              { prefix: 'UPS', code: 'ups', name: 'UPS快递' },
+              { prefix: 'FEDEX', code: 'fedex', name: 'FedEx联邦快递' },
+              { prefix: 'DHL', code: 'dhl', name: 'DHL快递' },
+            ];
+            const upperNum = trackingNum.toUpperCase();
+            for (const rule of localRules) {
+              if (upperNum.startsWith(rule.prefix)) {
+                companyCode = rule.code;
+                companyName = rule.name;
+                logInfo('快递查询', `本地规则识别: ${trackingNum} → ${rule.name}`);
+                break;
               }
-            } catch (e) { logWarn('快递查询', `识别快递公司失败: ${e.message}`); }
+            }
+            
+            // 如果本地规则没识别到，再尝试快递100API
+            if (!companyCode) {
+              try {
+                const autoRes = await fetch(`https://www.kuaidi100.com/autonumber/auto?num=${encodeURIComponent(trackingNum)}`, {
+                  headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Referer': 'https://www.kuaidi100.com/'
+                  }
+                });
+                const autoData = await autoRes.json();
+                if (autoData && autoData.length > 0) {
+                  companyCode = autoData[0].comCode;
+                  companyName = autoData[0].name;
+                }
+              } catch (e) { logWarn('快递查询', `识别快递公司失败: ${e.message}`); }
+            }
             
             if (!companyCode) {
               sendMsg(msg.conversation_id, `<markdown>❌ **无法识别快递公司**\n单号：\`${trackingNum}\`\n请确认单号是否正确，或手动指定快递公司</markdown>`);
@@ -4672,6 +5128,12 @@ C. 选项三内容
             });
             const queryData = await queryRes.json();
             
+            // 调试：打印API返回的所有字段
+            logInfo('快递查询', `API返回字段: ${Object.keys(queryData).join(', ')}`);
+            if (queryData.data && queryData.data[0]) {
+              logInfo('快递查询', `最新轨迹字段: ${Object.keys(queryData.data[0]).join(', ')}`);
+            }
+            
             if (queryData.status !== '200' || !queryData.data) {
               sendMsg(msg.conversation_id, `<markdown>❌ **查询失败**\n${queryData.message || '暂无物流信息'}\n\n> 可能原因：单号错误、快递未揽收、接口暂时不可用</markdown>`);
               return;
@@ -4685,28 +5147,101 @@ C. 选项三内容
             const statusText = statusMap[queryData.state] || '未知';
             const latestInfo = queryData.data[0] || {};
             
-            // 构建回复
-            let reply = `# 📦 快递查询结果\n\n`;
+            // 尝试获取额外信息（如果API有返回）
+            const extraInfo = [];
+            if (queryData.name) extraInfo.push(`| **收件人** | ${queryData.name} |`);
+            if (queryData.phone) extraInfo.push(`| **联系电话** | ${queryData.phone} |`);
+            if (queryData.address) extraInfo.push(`| **收货地址** | ${queryData.address} |`);
+            if (queryData.goodsName) extraInfo.push(`| **商品名称** | ${queryData.goodsName} |`);
+            
+            // 构建回复（超详细模式）
+            let reply = `# 📦 快递查询结果（详细）\n\n`;
+            
+            // ===== 基本信息表 =====
+            reply += `## 📋 基本信息\n\n`;
             reply += `| 项目 | 信息 |\n|------|------|\n`;
             reply += `| **快递单号** | \`${trackingNum}\` |\n`;
             reply += `| **快递公司** | ${companyName} |\n`;
+            reply += `| **公司代码** | \`${companyCode}\` |\n`;
             reply += `| **当前状态** | **${statusText}** |\n`;
-            reply += `| **最新更新** | ${latestInfo.time || '未知'} |\n\n`;
-            reply += `## 📍 物流轨迹\n\n`;
+            reply += `| **状态代码** | \`${queryData.state}\` |\n`;
+            reply += `| **是否签收** | ${queryData.ischeck === '1' ? '✅ 已签收' : '📦 运输中'} |\n`;
+            reply += `| **最新更新** | ${latestInfo.time || '未知'} |\n`;
+            reply += `| **物流总数** | ${queryData.data ? queryData.data.length : 0} 条 |\n`;
             
-            // 显示最近5条物流信息
-            const tracks = queryData.data.slice(0, 5);
-            tracks.forEach((item, i) => {
-              const icon = i === 0 ? '🟢' : '⚪';
-              reply += `${icon} **${item.time}**\n> ${item.context}\n\n`;
-            });
+            // ===== 尝试显示所有额外字段 =====
+            const extraFields = [
+                { key: 'name', label: '收件人' },
+                { key: 'phone', label: '联系电话' },
+                { key: 'tel', label: '电话' },
+                { key: 'mobile', label: '手机' },
+                { key: 'address', label: '收货地址' },
+                { key: 'receiver', label: '收件人' },
+                { key: 'receiverName', label: '收件人姓名' },
+                { key: 'receiverPhone', label: '收件人电话' },
+                { key: 'receiverAddress', label: '收件地址' },
+                { key: 'sender', label: '寄件人' },
+                { key: 'senderName', label: '寄件人姓名' },
+                { key: 'goodsName', label: '商品名称' },
+                { key: 'goods', label: '物品' },
+                { key: 'weight', label: '重量' },
+                { key: 'freight', label: '运费' },
+                { key: 'orderTime', label: '下单时间' },
+                { key: 'signTime', label: '签收时间' },
+                { key: 'signName', label: '签收人' },
+                { key: 'deliveryMan', label: '快递员' },
+                { key: 'deliveryManPhone', label: '快递员电话' },
+            ];
             
-            if (queryData.data.length > 5) {
-              reply += `*...还有 ${queryData.data.length - 5} 条物流记录*\n`;
+            const foundExtras = [];
+            for (const field of extraFields) {
+                if (queryData[field.key] && queryData[field.key] !== '' && queryData[field.key] !== null) {
+                    foundExtras.push(`| **${field.label}** | ${queryData[field.key]} |`);
+                }
             }
             
+            if (foundExtras.length > 0) {
+                reply += `\n## 👤 收件/寄件信息\n\n`;
+                reply += `| 项目 | 信息 |\n|------|------|\n`;
+                reply += foundExtras.join('\n') + '\n';
+            }
+            
+            // ===== 最新物流详情 =====
+            reply += `\n## 📍 最新物流\n\n`;
+            if (latestInfo.context) {
+                reply += `> 🟢 **${latestInfo.time}**\n> ${latestInfo.context}\n\n`;
+            }
+            
+            // ===== 完整物流轨迹（显示10条） =====
+            reply += `## 📜 完整物流轨迹\n\n`;
+            const trackCount = Math.min(queryData.data ? queryData.data.length : 0, 10);
+            for (let i = 0; i < trackCount; i++) {
+                const item = queryData.data[i];
+                const icon = i === 0 ? '🟢' : '⚪';
+                reply += `${icon} **${item.time || '未知时间'}**\n`;
+                reply += `> ${item.context || '无详情'}\n`;
+                if (item.location) reply += `> 📍 ${item.location}\n`;
+                reply += '\n';
+            }
+            
+            if (queryData.data && queryData.data.length > 10) {
+                reply += `*...还有 ${queryData.data.length - 10} 条物流记录，共 ${queryData.data.length} 条*\n`;
+            }
+            
+            // ===== 调试信息（API返回的所有字段） =====
+            reply += `\n---\n`;
+            reply += `<details>\n<summary>🔧 调试信息（API返回的所有字段）</summary>\n\n`;
+            reply += '```json\n';
+            reply += JSON.stringify(queryData, null, 2).substring(0, 500);
+            reply += '\n```\n';
+            reply += `</details>\n`;
+            
+            // ===== 温馨提示 =====
+            reply += `\n> 💡 **说明**：商品详情（买了啥）请在淘宝/京东等电商平台查看，快递公司物流系统不包含商品信息。`;
+            
             sendMsg(msg.conversation_id, `<markdown>${reply}</markdown>`);
-            logInfo('快递查询', `查询成功: ${trackingNum} (${companyName})`);
+            logInfo('快递查询', `查询成功: ${trackingNum} (${companyName}), 状态: ${statusText}, 轨迹: ${queryData.data ? queryData.data.length : 0}条`);
+            logInfo('快递查询', `API所有字段: ${Object.keys(queryData).join(', ')}`);
           } catch (e) {
             logError('快递查询', `查询异常: ${e.message}`);
             sendMsg(msg.conversation_id, `<markdown>❌ **快递查询失败**\n错误信息：${e.message}\n\n> 请稍后重试，或检查网络连接</markdown>`);
@@ -5699,12 +6234,16 @@ C. 选项三内容
           }
         } catch (e) {}
         if (!btnIsCreator && !btnIsOwner) {
-          setBtn(data, actionId, '❌ 无权限', 'danger', true);
-          sendMsg(data.conversation_id, `❌ 只有群主和创始人（ID 3038）可以操作设置（你的ID：${data.user_id}）`);
+          setBtn(data, actionId, '🚫 无权限', 'danger', true);
+          // 不发消息，避免用户多次点击刷屏
           return;
         }
+        // 设置范围：3038全局，群主本群
+        const btnSetScope = btnIsCreator ? null : String(data.conversation_id);
         // 步骤锁定检查
-        const lockMsg = checkSetStepLock(btnUserId, data.message_id);
+        const btnMsgId = data.message_id || data.messageId || data.msg_id || data.id || (data.message && data.message.id);
+        const lockMsg = checkSetStepLock(btnUserId, btnMsgId);
+        console.log('[设置] 步骤锁定检查: user=', btnUserId, 'btnMsgId=', btnMsgId, 'lockMsg=', lockMsg);
         if (lockMsg) {
           setBtn(data, actionId, '🚫 已过期', 'danger', true);
           sendMsg(data.conversation_id, `🚫 ${lockMsg}`);
@@ -5715,35 +6254,57 @@ C. 选项三内容
       if (actionId.startsWith('set_nav_')) {
         console.log('[设置导航] 点击:', actionId, 'conversation:', data.conversation_id);
         const parts = actionId.split('_');
-        const dir = parts[2];
         const page = parseInt(parts[3]);
-        const targetPage = dir === 'prev' ? page - 1 : page + 1;
-        console.log('[设置导航] dir=', dir, 'page=', page, 'target=', targetPage);
+        const targetPage = page + 1; // 只有下一步
+        console.log('[设置导航] page=', page, 'target=', targetPage);
         try {
-          setBtn(data, actionId, dir === 'prev' ? '⬅️' : '➡️', 'default', true);
-          const card = buildSetCard(targetPage, String(data.conversation_id));
-          const navResult = await sendMsg(data.conversation_id, card);
-          console.log('[设置导航] 已发送第', targetPage, '页');
-          // 更新用户步骤记录（记录新消息ID）
-          if (navResult && navResult.id) {
-            setUserStep(btnUserId, targetPage, navResult.id);
+          // 先获取旧消息ID（用于撤回）
+          const oldMsgId = data.message_id || data.messageId || data.msg_id || data.id || (data.message && data.message.id);
+          console.log('[设置导航] 旧消息ID:', oldMsgId, 'data keys:', Object.keys(data));
+          
+          // 发送新卡片（用sendMsgReturnId获取消息ID，用于步骤锁定）
+          const setScopeNav = btnIsCreator ? 'global' : 'group';
+          // 获取所有群列表：先用本地记录的群，再用API补充
+          let allGroupsForSetNav = loadGroups().map(g => String(g));
+          try {
+            const groupsResNav = await fetchWithTimeout(`${BASE_URL}/bot-api/conversations`, { headers: { 'Authorization': `Bot ${BOT_KEY}` } }, 5000);
+            if (groupsResNav.ok) {
+              const groupsDataNav = await groupsResNav.json();
+              const convListNav = groupsDataNav.data || groupsDataNav.conversations || groupsDataNav.list || groupsDataNav.items || groupsDataNav || [];
+              const apiGroupsNav = Array.isArray(convListNav) ? convListNav.map(g => String(g.id || g.conversation_id || g)).filter(id => id && id !== 'null' && id !== 'undefined' && !isNaN(Number(id))) : [];
+              allGroupsForSetNav = [...new Set([...allGroupsForSetNav, ...apiGroupsNav])];
+            }
+          } catch (e) { console.log('[设置导航] API获取群列表失败，用本地群列表:', e.message); }
+          const card = buildSetCard(targetPage, String(data.conversation_id), setScopeNav, allGroupsForSetNav);
+          const navResult = await sendMsgReturnId(data.conversation_id, card);
+          const newMsgId = navResult && navResult.id;
+          console.log('[设置导航] 已发送第', targetPage, '页, 新消息ID:', newMsgId, 'navResult keys:', navResult ? Object.keys(navResult) : 'null');
+          
+          // 更新用户步骤记录（记录新消息ID，用于步骤锁定）
+          if (newMsgId) {
+            setUserStep(btnUserId, targetPage, newMsgId);
+            console.log('[设置导航] 步骤锁定已更新: user=', btnUserId, 'step=', targetPage, 'msgId=', newMsgId);
+          } else {
+            console.log('[设置导航] ⚠️ 未获取到新消息ID，步骤锁定可能失效');
           }
-          // 撤回旧卡片，避免旧卡片按钮还能点
-          const oldMsgId = data.message_id || data.messageId || data.msg_id || data.id;
-          console.log('[设置导航] 尝试撤回旧卡片, message_id=', oldMsgId, 'data keys=', Object.keys(data));
+          
+          // 撤回旧卡片
           if (oldMsgId) {
             try {
               const recallRes = await fetch(`${BASE_URL}/bot-api/conversations/${data.conversation_id}/messages/${oldMsgId}/recall`, {
                 method: 'PATCH',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${BOT_KEY}` }
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bot ${BOT_KEY}` }
               });
               const recallText = await recallRes.text();
-              console.log('[设置导航] 撤回结果:', recallRes.status, recallText.substring(0, 200));
+              console.log('[设置导航] 撤回旧卡片结果:', recallRes.status, recallText.substring(0, 200));
+              if (!recallRes.ok) {
+                console.log('[设置导航] 撤回失败，旧卡片按钮将通过步骤锁定禁用');
+              }
             } catch (recallErr) {
-              console.log('[设置导航] 撤回旧卡片失败:', recallErr.message);
+              console.log('[设置导航] 撤回旧卡片异常:', recallErr.message);
             }
           } else {
-            console.log('[设置导航] 没有找到 message_id 字段，无法撤回');
+            console.log('[设置导航] 未找到旧消息ID，跳过撤回（步骤锁定仍生效）');
           }
         } catch (e) {
           console.error('[设置导航错误]', e.message, e.stack);
@@ -5752,14 +6313,15 @@ C. 选项三内容
       }
       // 设置对话模型
       else if (actionId.startsWith('set_chat_model_')) {
-        const modelId = actionId.replace('set_chat_model_', '');
-        const model = CHAT_MODELS.find(m => m.id === modelId);
+        const safeModelId = actionId.replace('set_chat_model_', '');
+        const model = CHAT_MODELS.find(m => m.id.replace(/[^a-zA-Z0-9]/g, '_') === safeModelId);
         if (!model) { setBtn(data, actionId, '❌ 模型不存在', 'danger', true); return; }
-        const setData = loadSetData();
+        const modelId = model.id;
+        const setData = loadSetData(btnSetScope);
         setData.chatModel = modelId;
-        saveSetData(setData);
+        saveSetData(setData, btnSetScope);
         setBtn(data, actionId, `✅ ${model.name}`, 'success', true);
-        console.log('[设置] 对话模型已切换为:', modelId);
+        console.log('[设置] 对话模型已切换为:', modelId, '范围:', btnSetScope || '全局');
         const apiType = model.api || 'zhipu';
         const hasKey = model.hasKey || (loadSetData().apiKeys && loadSetData().apiKeys[model.id]);
         let apiNote = '';
@@ -5773,19 +6335,19 @@ C. 选项三内容
         const modelId = actionId.replace('set_vision_model_', '');
         const model = VISION_MODELS.find(m => m.id === modelId);
         if (!model) { setBtn(data, actionId, '❌ 模型不存在', 'danger', true); return; }
-        const setData = loadSetData();
+        const setData = loadSetData(btnSetScope);
         setData.visionModel = modelId;
-        saveSetData(setData);
+        saveSetData(setData, btnSetScope);
         setBtn(data, actionId, `✅ ${model.name}`, 'success', true);
         sendMsg(data.conversation_id, `<markdown>## 🖼️ 识图模型已切换\n\n**模型名称：** ${model.name}\n**开发商：** ${model.company}\n**上下文：** ${model.context}\n\n**简介：** ${model.desc}\n\n**优点：** ${model.pros}\n**缺点：** ${model.cons}\n\n> 已切换为 ${model.name}，后续图片识别使用此模型</markdown>`);
       }
       // 功能开关
       else if (actionId.startsWith('set_feature_')) {
         const featureId = actionId.replace('set_feature_', '');
-        const setData = loadSetData();
+        const setData = loadSetData(btnSetScope);
         const current = setData.features[featureId] !== false;
         setData.features[featureId] = !current;
-        saveSetData(setData);
+        saveSetData(setData, btnSetScope);
         const newStatus = !current ? '🟢 开' : '🔴 关';
         setBtn(data, actionId, `${featureId}：${newStatus}`, !current ? 'success' : 'danger', false);
         sendMsg(data.conversation_id, `✅ 功能 ${featureId} 已${!current ? '开启' : '关闭'}`);
@@ -5810,9 +6372,9 @@ C. 选项三内容
       }
       // 个性设置-Markdown开关
       else if (actionId === 'set_personality_markdown_toggle') {
-        const setData = loadSetData();
+        const setData = loadSetData(btnSetScope);
         setData.personality.markdown = !setData.personality.markdown;
-        saveSetData(setData);
+        saveSetData(setData, btnSetScope);
         setBtn(data, actionId, setData.personality.markdown ? '🟢 已开启' : '🔴 已关闭', setData.personality.markdown ? 'success' : 'danger', false);
         sendMsg(data.conversation_id, `✅ Markdown排版已${setData.personality.markdown ? '开启' : '关闭'}`);
       }
@@ -5931,20 +6493,19 @@ C. 选项三内容
           const werewolfLink = isClassGroup ? '' : `<link action="callback" action_id="help_game">游戏娱乐</link>：狼人杀游戏\n`;
           const diyLink = isClassGroup ? '' : `<link action="callback" action_id="help_diy">自制指令</link>：查看、创建和管理DIY指令\n`;
           detail = `<markdown>## 常用指令分类
-<link action="callback" action_id="help_query">基础查询</link>：帮助菜单、在线人数、群活跃
+<link action="callback" action_id="help_query">基础查询</link>：帮助菜单、在线人数、群活跃、积分
 <link action="callback" action_id="help_checkin">签到运势</link>：每日签到查看专属运势
-<link action="callback" action_id="help_life">生活工具</link>：天气查询、AI绘图、音乐播放
+<link action="callback" action_id="help_life">生活工具</link>：天气、快递、AI绘图、音乐播放
+<link action="callback" action_id="help_points">积分抽奖</link>：积分、抽奖、每日金句
 ${werewolfLink}<link action="callback" action_id="help_list">列表查看</link>：黑名单、违禁词列表
 ${diyLink}> 点击分类查看详细指令</markdown>`;
         } else if (actionId === 'help_query') {
           detail = `<markdown>## 基础查询
 \`/help\`：查看本菜单
+\`/关于\`：查看机器人详细信息
 \`/群内在线人数\`：查看当前群内在线人数和在线用户列表
 \`/今日群活跃\`：查看今日群活跃统计和发言榜
 \`/speak[内容]\`：反馈机器人问题（私信创始人）
-\`/积分\`：查看我的积分和抽奖次数
-\`/抽奖\`：积分抽奖（每50积分一次）
-\`/每日金句\`：每日金句（积分满50可用，消耗10积分）
 > 所有人可用</markdown>`;
         } else if (actionId === 'help_checkin') {
           detail = `<markdown>## 签到运势
@@ -5953,17 +6514,43 @@ ${diyLink}> 点击分类查看详细指令</markdown>`;
         } else if (actionId === 'help_life') {
           detail = `<markdown>## 生活工具
 \`/天气[城市]\`：查询指定城市的天气预报
+\`/快递[单号]\`：查询快递物流信息（支持18+快递公司）
 \`/绘图[内容，风格]\`：AI绘图，内容为描述，风格可选（如赛博朋克、水彩、油画等）
 \`/播放音乐[音乐名]\`：搜索并播放音乐（网易云音乐）
 > 所有人可用</markdown>`;
+        } else if (actionId === 'help_points') {
+          detail = `<markdown>## 积分抽奖
+\`/积分\`：查看我的积分、累计积分、抽奖次数、金句体验数
+\`/抽奖\`：积分抽奖（每50积分一次，ID3038无限次）
+\`/每日金句\`：每日金句（积分满50可用，消耗10积分）
+> 积分获取：签到、投票、游戏等娱乐活动
+> 奖品：10共创币(10%)、金句体验、+15积分、再来一次、+100积分(5%)</markdown>`;
         } else if (actionId === 'help_game') {
           detail = `<markdown>## 游戏娱乐
+### 🐺 狼人杀
 \`/狼人杀\`：开始狼人杀游戏（6-10人，含预言家、女巫、猎人等角色）
 \`/结束房间[房间号]\`：结束狼人杀房间（房主/群主/${adminLabel}/ID3038）
+
+### 🧠 心灵感应
 \`/心灵感应[主题]\`：出题者给3个答案，其他人猜，测群友默契度
-\`/谁是卧底\`：经典聚会游戏群聊版，分配词语+描述+投票找卧底
+\`/猜[答案]\`：猜答案（参与者用）
+\`/揭晓\`：揭晓答案（出题者用）
+
+### 🕵️ 谁是卧底
+\`/谁是卧底\`：发起游戏，分配词语+描述+投票找卧底
+\`/加入\`：加入游戏
+\`/开始卧底\`：开始游戏（发起者用）
+\`/描述[内容]\`：描述你的词语
+\`/投卧底[用户ID]\`：投票找出卧底
+
+### 📖 故事接龙
 \`/故事接龙[主题]\`：AI开头，每人接一句，最后生成完整故事
+\`/接[内容]\`：接下一句
+\`/结束故事\`：提前结束并生成完整故事
+
+### 🎲 命运抉择
 \`/命运抉择[主题]\`：AI生成剧情场景，群成员投票选择，多结局互动冒险
+
 > 所有人可发起，创意游戏需AI参与</markdown>`;
         } else if (actionId === 'help_list') {
           detail = `<markdown>## 列表查看
@@ -5975,6 +6562,7 @@ ${diyLink}> 点击分类查看详细指令</markdown>`;
 \`/投票[单群，标题，选项1，选项2...]\`：本群发起投票
 \`/投票[全局，标题，选项1，选项2...]\`：发到所有群（仅ID 3038）
 \`/投票结果[投票ID]\`：查看指定投票结果（不带ID看本群最新）
+\`/投票列表\`：查看本群所有投票
 \`/结束投票[投票ID]\`：结束指定投票（不带ID结束本群最新）
 > 仅群主、${adminLabel}、ID 3038</markdown>`;
         } else if (actionId === 'help_forbidden') {
@@ -5989,6 +6577,14 @@ ${diyLink}> 点击分类查看详细指令</markdown>`;
 \`/添加黑名单[用户ID]\`：手动拉黑
 \`/删除黑名单[用户ID]\`：解除拉黑
 > 黑名单用户不能用指令但可聊天，仅群主和ID 3038可管理</markdown>`;
+        } else if (actionId === 'help_special') {
+          detail = `<markdown>## 特殊黑名单（自动踢人）
+\`/特殊黑名单[ID,原因]\`：添加到特殊黑名单
+\`/移除特殊黑名单[ID]\`：从特殊黑名单移除
+\`/特殊黑名单列表\`：查看特殊黑名单列表
+> 群主设置：仅本群生效
+> ID3038设置：全局生效，所有群都踢
+> 每2秒自动扫描所有群，发现即踢（机器人需为管理员）</markdown>`;
         } else if (actionId === 'help_other') {
           detail = `<markdown>## 其他管理
 \`/进群自动发送[内容]\`：新人进群自动发消息，支持\`<@成员>\`
@@ -5998,6 +6594,7 @@ ${diyLink}> 点击分类查看详细指令</markdown>`;
           detail = `<markdown>## 禁言管理
 \`/禁言[用户ID] [分钟]\`：手动禁言用户，默认10分钟
 \`/解除禁言[用户ID]\`：手动解除禁言
+\`/踢人[用户ID]\`：将成员移出群聊（需管理员）
 \`/禁言列表\`：查看当前被禁言的用户
 > 自动禁言：违禁词4次或刷屏15条，时间累加
 > 仅群主、${adminLabel}、ID 3038可用</markdown>`;
@@ -6005,8 +6602,29 @@ ${diyLink}> 点击分类查看详细指令</markdown>`;
           detail = `<markdown>## 功能开关
 \`/开启[功能名]\`：开启指定功能
 \`/关闭[功能名]\`：关闭指定功能
-可用功能：签到、天气、投票、违禁词检测、进群欢迎、群在线人数
+**可用功能（21个）：**
+🤖 AI功能：AI对话、图片识别
+📋 日常工具：签到、天气、音乐播放、AI绘图、快递查询、积分抽奖
+🎮 游戏娱乐：投票、狼人杀、心灵感应、谁是卧底、故事接龙、命运抉择、DIY自制指令
+🔧 群管理：违禁词、黑名单、特殊黑名单、禁言、进群欢迎、群活跃统计、全局推送、在线人数
 > 仅群主或${adminLabel}可用</markdown>`;
+        } else if (actionId === 'help_set') {
+          detail = `<markdown>## ⚙️ 设置系统（仅ID3038）
+\`/set\`：打开设置中心（6步设置）
+**设置内容：**
+1. 🤖 对话模型：17个模型可选（君灵AI、智谱、OpenAI、免费模型）
+2. 🖼️ 识图模型：5个模型可选（OpenAI GPT-4o、智谱GLM-4V系列）
+3. 🔌 功能开关：21个功能全局开关
+4. 👥 群AI状态：管理各个群的AI开关
+5. 🎭 个性设置：AI语气、回复长度、Markdown开关
+6. 📊 数据与维护：恢复默认、导出配置
+
+**快捷设置指令：**
+\`/set-state{群号,AIstate:open}\`：开启指定群的AI
+\`/set-state{群号,AIstate:off}\`：关闭指定群的AI
+\`/set-key{模型名,你的key}\`：设置模型API Key（私发）
+
+> 只有创始人君衔（ID 3038）可以使用设置系统</markdown>`;
         } else if (actionId === 'help_diy' && String(data.conversation_id) !== '4307') {
           detail = `<markdown>## 自制指令（DIY）
 \`/DIY[指令名]\`：创建本群自制指令，通过按钮引导设置
@@ -6052,21 +6670,9 @@ ${diyLink}> 点击分类查看详细指令</markdown>`;
       const newUserId = event.data.user_id || event.data.uid || event.data.member_id || (event.data.user && event.data.user.id) || (event.data.member && event.data.member.id) || (event.data.invitee && event.data.invitee.id);
       const verifyData = loadVerifyData();
       
-      // 检查是否开启了入群验证
-      if (verifyData.enabled && verifyData.enabled[String(convId)] && newUserId) {
-        // 生成验证码
-        const verify = genVerifyCode();
-        const cacheKey = `${convId}_${newUserId}`;
-        verifyCache.set(cacheKey, {
-          answer: verify.answer,
-          expireAt: Date.now() + 5 * 60 * 1000, // 5分钟过期
-          attempts: 0
-        });
-        // 发送验证消息
-        sendMsg(convId, `<markdown>## 🔐 入群验证\n\n<at id="${newUserId}" /> 请回答以下问题完成验证：\n\n> # ${verify.question}\n\n**回复格式：答案：你的答案**\n例如：\`答案：8\`\n\n5分钟内有效，答错直接移出群聊</markdown>`);
-        logInfo('入群验证', `群${convId} 用户${newUserId} 验证码: ${verify.question} = ${verify.answer}`);
-      } else {
-        // 未开启验证，正常欢迎
+      // 入群验证已禁用，直接正常欢迎
+      {
+        // 正常欢迎
         const welcomeData = loadWelcomeData();
         let welcome = welcomeData[String(convId)];
         if (isFeatureEnabled(convId, '进群欢迎')) {
@@ -6169,6 +6775,83 @@ setInterval(async () => {
 }, 10000);
 
 // ========== 意图识别辅助函数 ==========
+async function handleCheckin(msg) {
+  try {
+    if (!isFeatureEnabled(msg.conversation_id, '签到')) {
+      sendMsg(msg.conversation_id, '签到功能已被管理员关闭');
+      return;
+    }
+    const today = getTodayStr();
+    let data = loadCheckinData();
+    if (data.date !== today) {
+      data = { date: today, conversations: {} };
+    }
+    const convId = String(msg.conversation_id);
+    const userId = msg.sender_id;
+    const userName = msg.sender_display_name || msg.sender?.nickname || '未知用户';
+    if (!data.conversations[convId]) {
+      data.conversations[convId] = { records: {}, count: 0 };
+    }
+    const convData = data.conversations[convId];
+    if (convData.records[userId]) {
+      const rec = convData.records[userId];
+      // 从统计文件读取最新的累计数据
+      const stats = loadCheckinStats();
+      const userStat = stats[String(userId)] || { total: rec.total || 1, streak: rec.streak || 1 };
+      const extraMsg = `你已经签过到啦~ 连续${userStat.streak || rec.streak || 1}天，累计${userStat.total || rec.total || 1}天`;
+      const card = buildCheckinCard(
+        userName, today, rec.rank,
+        rec.fortuneLevel, rec.fortuneDesc,
+        rec.star, rec.luckyNum, rec.color, rec.yi,
+        extraMsg
+      );
+      sendMsg(msg.conversation_id, card);
+      return;
+    }
+    convData.count++;
+    const rank = convData.count;
+    const { fortune, star, luckyNum, color, yi } = generateFortune();
+    
+    // 从签到统计中读取用户的历史签到信息（跨天保留）
+    const stats = loadCheckinStats();
+    const userStat = stats[String(userId)] || { total: 0, streak: 0, last_date: null };
+    
+    // 计算连续签到天数
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+    let streak = 1;
+    if (userStat.last_date === yesterdayStr) {
+      streak = (userStat.streak || 0) + 1;
+    } else if (userStat.last_date === today) {
+      streak = userStat.streak || 1;
+    }
+    
+    // 累计签到天数
+    const total = (userStat.total || 0) + 1;
+    
+    // 更新签到统计
+    stats[String(userId)] = { total, streak, last_date: today };
+    saveCheckinStats(stats);
+    
+    convData.records[userId] = {
+      time: new Date().toISOString(),
+      last_date: today,
+      streak,
+      total,
+      rank,
+      fortuneLevel: fortune.level,
+      fortuneDesc: fortune.desc,
+      star, luckyNum, color, yi,
+    };
+    saveCheckinData(data);
+    const card = buildCheckinCard(userName, today, rank, fortune.level, fortune.desc, star, luckyNum, color, yi, undefined, msg.sender_id);
+    sendMsg(msg.conversation_id, card);
+  } catch (e) {
+    sendMsg(msg.conversation_id, `❌ 签到失败：${e.message}`);
+  }
+}
+
 async function handlePointsQuery(msg, uid, uname) {
   try {
     const pointsData = loadPointsData ? loadPointsData() : {};
@@ -6194,7 +6877,7 @@ async function handleLottery(msg, uid, uname) {
     if (!isAdmin) {
       userPoints.points = p - 50;
       pointsData[String(uid)] = userPoints;
-      if (savePointsData) savePointsData(pointsData);
+      if (savePoints) savePoints(pointsData);
     }
     const rand = Math.random() * 100;
     let result = '';
@@ -6214,14 +6897,14 @@ async function handleLottery(msg, uid, uname) {
       if (!isAdmin) {
         userPoints.points = (userPoints.points || 0) + 15;
         pointsData[String(uid)] = userPoints;
-        if (savePointsData) savePointsData(pointsData);
+        if (savePoints) savePoints(pointsData);
       }
     } else if (rand < 50) {
       result = '🎊 获得 **100积分**大奖！';
       if (!isAdmin) {
         userPoints.points = (userPoints.points || 0) + 100;
         pointsData[String(uid)] = userPoints;
-        if (savePointsData) savePointsData(pointsData);
+        if (savePoints) savePoints(pointsData);
       }
     } else if (rand < 60) {
       result = '🔄 再来一次！';
@@ -6235,25 +6918,42 @@ async function handleLottery(msg, uid, uname) {
 }
 
 async function handleDailyQuote(msg, uid, uname) {
+  // 检查积分（和指令处理逻辑一致）
+  const isAdmin = uid === 3038;
+  const userPoints = getPoints(uid);
+  if (!isAdmin && userPoints < 50) {
+    sendMsg(msg.conversation_id, `<markdown># 💬 每日金句\n\n> ⚠️ 积分不足，无法使用！\n\n**当前积分：** ${userPoints}分\n**需要：** 50分\n\n> 参与签到、投票、游戏等可获得积分</markdown>`);
+    return;
+  }
+  // 消耗10积分
+  if (!isAdmin) usePoints(uid, 10);
+  // 金句体验数+1
+  const pData = loadPointsData();
+  if (pData[String(uid)]) {
+    pData[String(uid)].quoteCount = (pData[String(uid)].quoteCount || 0) + 1;
+    savePoints(pData);
+  }
   const quotes = [
-    '生活不是等待风暴过去，而是学会在雨中翩翩起舞。',
-    '成功不是终点，失败也并非末日，最重要的是继续前进的勇气。',
-    '你今天的努力，是幸运的伏笔。',
-    '不要等待机会，而要创造机会。',
-    '每一个不曾起舞的日子，都是对生命的辜负。',
-    '世界上只有一种真正的英雄主义，那就是在认清生活的真相后依然热爱生活。',
-    '你的负担将变成礼物，你受的苦将照亮你的路。',
-    '愿你出走半生，归来仍是少年。',
-    '保持热爱，奔赴山海。',
-    '星光不问赶路人，时光不负有心人。'
+    { text: '生活不是等待风暴过去，而是学会在雨中翩翩起舞。', author: '佚名' },
+    { text: '成功不是终点，失败也并非末日，最重要的是继续前进的勇气。', author: '丘吉尔' },
+    { text: '你今天的努力，是幸运的伏笔。', author: '佚名' },
+    { text: '不要等待机会，而要创造机会。', author: '佚名' },
+    { text: '每一个不曾起舞的日子，都是对生命的辜负。', author: '尼采' },
+    { text: '世界上只有一种真正的英雄主义，那就是在认清生活的真相后依然热爱生活。', author: '罗曼·罗兰' },
+    { text: '你的负担将变成礼物，你受的苦将照亮你的路。', author: '泰戈尔' },
+    { text: '愿你出走半生，归来仍是少年。', author: '苏轼' },
+    { text: '保持热爱，奔赴山海。', author: '佚名' },
+    { text: '星光不问赶路人，时光不负有心人。', author: '佚名' }
   ];
   const quote = quotes[Math.floor(Math.random() * quotes.length)];
-  sendMsg(msg.conversation_id, `<markdown>## 📜 每日金句\n\n> ${quote}\n\n—— 与君共勉</markdown>`);
+  const currentPts = getPoints(uid);
+  const quoteCount = pData[String(uid)]?.quoteCount || 1;
+  sendMsg(msg.conversation_id, `<markdown># 💬 每日金句\n\n> **${quote.text}**\n> \n> —— ${quote.author}\n\n---\n\n**✨ 金句体验数：** ${quoteCount}\n**💰 消耗积分：** 10分\n**📊 当前积分：** ${currentPts}分\n\n> 感谢使用，愿这句话给你力量~</markdown>`);
 }
 
 async function handleBlacklistView(msg, uid) {
   try {
-    const blacklist = loadBlacklistData ? loadBlacklistData() : [];
+    const blacklist = loadBlacklist ? loadBlacklist() : [];
     if (blacklist.length === 0) {
       sendMsg(msg.conversation_id, '<markdown>## 🚫 黑名单\n\n当前黑名单为空~</markdown>');
       return;
@@ -6299,14 +6999,73 @@ async function handleOnlineCount(msg) {
 
 async function handleGroupInfo(msg) {
   try {
-    const res = await fetch(`${BASE_URL}/bot-api/conversations/${msg.conversation_id}`, {
+    // 实时获取群基本信息（不缓存）
+    const res = await fetchWithTimeout(`${BASE_URL}/bot-api/conversations/${msg.conversation_id}`, {
       headers: { 'Authorization': `Bot ${BOT_KEY}` }
-    });
-    if (res.ok) {
-      const data = await res.json();
-      const c = data.data || data.conversation || data;
-      sendMsg(msg.conversation_id, `<markdown>## 👥 群信息\n\n- 群ID：\`${c.id || msg.conversation_id}\`\n- 群名称：${c.name || '未设置'}\n- 群描述：${c.description || '无'}\n- 群主ID：\`${c.owner_id || '未知'}\`</markdown>`);
+    }, 8000);
+    if (!res.ok) throw new Error('群信息API ' + res.status);
+    const data = await res.json();
+    const c = data.data || data.conversation || data;
+    
+    // 实时获取成员列表（不缓存）
+    let members = [];
+    let botCount = 0;
+    let humanCount = 0;
+    try {
+      const memRes = await fetchWithTimeout(`${BASE_URL}/bot-api/conversations/${msg.conversation_id}/members`, {
+        headers: { 'Authorization': `Bot ${BOT_KEY}` }
+      }, 8000);
+      if (memRes.ok) {
+        const memData = await memRes.json();
+        // 兼容多种格式
+        if (Array.isArray(memData)) members = memData;
+        else if (Array.isArray(memData.data)) members = memData.data;
+        else if (Array.isArray(memData.members)) members = memData.members;
+        else if (Array.isArray(memData.items)) members = memData.items;
+        else if (Array.isArray(memData.list)) members = memData.list;
+        
+        // 统计机器人和人类
+        members.forEach(m => {
+          const isBot = m.is_bot || m.user?.is_bot || m.sender?.is_bot || false;
+          if (isBot) botCount++;
+          else humanCount++;
+        });
+      }
+    } catch (e) { console.log('[群信息] 获取成员列表失败:', e.message); }
+    
+    // 实时获取在线人数
+    let onlineCount = 0;
+    try {
+      const onlineRes = await fetchWithTimeout(`${BASE_URL}/bot-api/users/online`, {
+        headers: { 'Authorization': `Bot ${BOT_KEY}` }
+      }, 5000);
+      if (onlineRes.ok) {
+        const onlineData = await onlineRes.json();
+        let onlineUsers = [];
+        if (Array.isArray(onlineData)) onlineUsers = onlineData;
+        else if (Array.isArray(onlineData.data)) onlineUsers = onlineData.data;
+        else if (Array.isArray(onlineData.users)) onlineUsers = onlineData.users;
+        else if (Array.isArray(onlineData.items)) onlineUsers = onlineData.items;
+        
+        // 筛选本群在线用户
+        const memberIds = new Set(members.map(m => m.user_id || m.user?.id || m.id));
+        onlineCount = onlineUsers.filter(u => memberIds.has(u.id || u.user_id)).length;
+      }
+    } catch (e) { console.log('[群信息] 获取在线人数失败:', e.message); }
+    
+    // 构建成员列表（标记机器人）
+    let memberList = '';
+    if (members.length > 0) {
+      const displayMembers = members.slice(0, 30);
+      memberList = displayMembers.map(m => {
+        const name = m.nickname || m.user?.nickname || m.display_name || m.username || '未知';
+        const isBot = m.is_bot || m.user?.is_bot || false;
+        return isBot ? `🤖 ${name}（机器人）` : `👤 ${name}`;
+      }).join('\n');
+      if (members.length > 30) memberList += `\n...等${members.length}人`;
     }
+    
+    sendMsg(msg.conversation_id, `<markdown>## 👥 群信息（实时）\n\n| 项目 | 信息 |\n|------|------|\n| **群ID** | \`${c.id || msg.conversation_id}\` |\n| **群名称** | ${c.name || '未设置'} |\n| **群描述** | ${c.description || '无'} |\n| **群主ID** | \`${c.owner_id || '未知'}\` |\n| **成员总数** | ${members.length || '未知'} |\n| **人类成员** | ${humanCount} |\n| **机器人** | ${botCount} |\n| **在线人数** | ${onlineCount} |\n\n### 成员列表\n${memberList || '暂无成员数据'}</markdown>`);
   } catch (e) {
     sendMsg(msg.conversation_id, `❌ 查询群信息失败：${e.message}`);
   }
@@ -6329,7 +7088,7 @@ async function handleUserInfo(msg, uid, uname) {
 
 async function handleDiyList(msg) {
   try {
-    const diyData = loadDiyData ? loadDiyData() : {};
+    const diyData = loadDIY ? loadDIY() : {};
     const groupDiy = diyData[String(msg.conversation_id)] || [];
     if (groupDiy.length === 0) {
       sendMsg(msg.conversation_id, '<markdown>## 🛠️ 自制指令\n\n本群还没有自制指令，用 /DIY[指令名] 创建一个吧~</markdown>');
@@ -6341,4 +7100,86 @@ async function handleDiyList(msg) {
     sendMsg(msg.conversation_id, `❌ 查询自制指令失败：${e.message}`);
   }
 }
+
+async function handleActivity(msg) {
+  try {
+    const data = loadActivityData ? loadActivityData() : {};
+    const convData = data[String(msg.conversation_id)] || {};
+    const today = new Date().toLocaleDateString('zh-CN');
+    const todayData = convData[today] || {};
+    const userCount = Object.keys(todayData).length;
+    const totalMsgs = Object.values(todayData).reduce((a, b) => a + (b.count || 0), 0);
+    let leaderboard = '';
+    const sorted = Object.entries(todayData).sort((a, b) => (b[1].count || 0) - (a[1].count || 0)).slice(0, 10);
+    sorted.forEach(([uid, info], i) => {
+      leaderboard += `${i + 1}. ${info.nickname || '未知'} - ${info.count || 0}条消息\n`;
+    });
+    sendMsg(msg.conversation_id, `<markdown>## 📊 今日群活跃
+
+> 活跃用户：**\`${userCount}\`** 人
+> 消息总数：**\`${totalMsgs}\`** 条
+
+### 🏆 活跃榜
+${leaderboard || '暂无数据'}</markdown>`);
+  } catch (e) {
+    sendMsg(msg.conversation_id, `❌ 查询活跃失败：${e.message}`);
+  }
+}
+
+async function handleHelp(msg) {
+  try {
+    const isOwner = false; // 简化处理
+    const helpText = `<markdown># 君灵bot指令
+## 常用
+<link action="callback" action_id="help_common">📋 查看全部常用指令</link>
+## 管理员
+<link action="callback" action_id="help_vote">投票管理</link>：发起和管理投票
+<link action="callback" action_id="help_forbidden">违禁词管理</link>：添加和删除违禁词
+<link action="callback" action_id="help_blacklist">黑名单管理</link>：查看和管理黑名单
+<link action="callback" action_id="help_special">特殊黑名单</link>：全局自动踢人
+<link action="callback" action_id="help_mute">禁言管理</link>：手动禁言和解除禁言
+<link action="callback" action_id="help_switch">功能开关</link>：开启或关闭各项功能
+<link action="callback" action_id="help_diy">自制指令</link>：创建和管理DIY指令
+<link action="callback" action_id="help_other">其他管理</link>：进群欢迎和全局推送</markdown>`;
+    sendMsg(msg.conversation_id, helpText);
+  } catch (e) {
+    sendMsg(msg.conversation_id, `❌ 显示帮助失败：${e.message}`);
+  }
+}
+
+async function handleAbout(msg) {
+  try {
+    const __setData = loadSetData();
+    const __curModel = __setData.chatModel || 'deepseek-chat';
+    const __modelInfo = CHAT_MODELS.find(m => m.id === __curModel);
+    const __modelName = __modelInfo?.name || __curModel;
+    const __modelCompany = __modelInfo?.company || '未知';
+    const __modelApi = __modelInfo?.api === 'openai' ? 'OpenAI官方' : (__modelInfo?.api === 'junling' ? '君灵AI（狼小嗷）' : (__modelInfo?.api === 'zhipu' ? '智谱AI' : __modelInfo?.api || '未知'));
+    const __modelDesc = __modelInfo?.desc || '';
+    
+    const aboutText = `<markdown># 🤖 关于君灵bot
+
+| 项目 | 信息 |
+|------|------|
+| **名称** | 君灵botjs(最终版) |
+| **创始人** | 君衔（ID: \`3038\`） |
+| **引擎** | Node.js + KukeChat API |
+| **平台** | KukeChat（酷可聊天） |
+| **AI模型** | ${__modelName} |
+| **AI服务商** | ${__modelApi} |
+| **模型开发商** | ${__modelCompany} |
+| **模型说明** | ${__modelDesc} |
+| **版本** | v2.4 |
+| **Bot ID** | \`421\` |
+| **用户ID** | \`3039\` |
+
+> 由君衔创建并维护，24小时全时段在线
+> 💡 当前AI模型可通过 \`/set\` 切换（仅群主和3038可用）</markdown>`;
+    sendMsg(msg.conversation_id, aboutText);
+  } catch (e) {
+    sendMsg(msg.conversation_id, `❌ 显示关于失败：${e.message}`);
+  }
+}
+
+
 // ========== 辅助函数结束 ==========

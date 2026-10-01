@@ -1,30 +1,133 @@
 {
-  "date": "2026-08-30",
+  "date": "2026-09-27",
   "conversations": {
     "5500": {
       "records": {
-        "1552": {
-          "time": "2026-08-30T04:01:26.093Z",
-          "rank": 2,
-          "fortuneLevel": "凶",
-          "fortuneDesc": "容易烦烦，少做决定（现实为准）。",
-          "star": 15,
-          "luckyNum": 27,
-          "color": "青色",
+        "56": {
+          "time": "2026-09-27T09:04:27.365Z",
+          "rank": 3,
+          "fortuneLevel": "大吉",
+          "fortuneDesc": "万事顺意，心想事成，适合搞大事！",
+          "star": 75,
+          "luckyNum": 93,
+          "color": "黑色",
+          "yi": "宜暴躁怼人！😆",
+          "streak": 1,
+          "total": 1,
+          "last_date": "2026-09-27"
+        },
+        "60": {
+          "time": "2026-09-27T10:21:49.260Z",
+          "rank": 5,
+          "fortuneLevel": "大凶",
+          "fortuneDesc": "诸事不宜，躺平一天，别给自己找事。",
+          "star": 49,
+          "luckyNum": 79,
+          "color": "蓝色",
           "yi": "宜早睡早起😴"
         },
-        "3038": {
-          "time": "2026-08-30T03:02:38.816Z",
+        "1166": {
+          "time": "2026-09-27T10:19:31.959Z",
+          "rank": 4,
+          "fortuneLevel": "吉",
+          "fortuneDesc": "运势不错，稳步前行必有收获。",
+          "star": 66,
+          "luckyNum": 21,
+          "color": "黑色",
+          "yi": "宜请人吃饭🍜"
+        },
+        "1627": {
+          "time": "2026-09-27T04:16:43.187Z",
           "rank": 1,
           "fortuneLevel": "小吉",
           "fortuneDesc": "小有收获，积少成多，继续努力。",
-          "star": 49,
-          "luckyNum": 33,
-          "color": "红色",
-          "yi": "宜出门散步🚶"
+          "star": 18,
+          "luckyNum": 80,
+          "color": "橙色",
+          "yi": "宜摸鱼划水🐟",
+          "streak": 1,
+          "total": 1,
+          "last_date": "2026-09-27"
+        },
+        "1878": {
+          "time": "2026-09-27T10:22:02.198Z",
+          "rank": 6,
+          "fortuneLevel": "小吉",
+          "fortuneDesc": "小有收获，积少成多，继续努力。",
+          "star": 30,
+          "luckyNum": 44,
+          "color": "绿色",
+          "yi": "宜听首音乐🎵"
+        },
+        "3038": {
+          "time": "2026-09-27T08:26:08.896Z",
+          "rank": 2,
+          "fortuneLevel": "吉",
+          "fortuneDesc": "运势不错，稳步前行必有收获。",
+          "star": 97,
+          "luckyNum": 92,
+          "color": "粉色",
+          "yi": "宜早睡早起😴",
+          "streak": 1,
+          "total": 1,
+          "last_date": "2026-09-27"
         }
       },
-      "count": 2
+      "count": 6
+    },
+    "7147": {
+      "records": {
+        "2924": {
+          "time": "2026-09-27T04:25:38.305Z",
+          "rank": 1,
+          "fortuneLevel": "小吉",
+          "fortuneDesc": "小有收获，积少成多，继续努力。",
+          "star": 22,
+          "luckyNum": 19,
+          "color": "绿色",
+          "yi": "宜摸鱼划水🐟",
+          "streak": 1,
+          "total": 1,
+          "last_date": "2026-09-27"
+        }
+      },
+      "count": 1
+    },
+    "9154": {
+      "records": {
+        "2924": {
+          "time": "2026-09-27T04:22:57.103Z",
+          "rank": 1,
+          "fortuneLevel": "凶",
+          "fortuneDesc": "容易烦烦，少做决定（现实为准）。",
+          "star": 100,
+          "luckyNum": 54,
+          "color": "绿色",
+          "yi": "宜早睡早起😴",
+          "streak": 1,
+          "total": 1,
+          "last_date": "2026-09-27"
+        }
+      },
+      "count": 1
+    },
+    "9190": {
+      "records": {
+        "3462": {
+          "time": "2026-09-27T09:09:12.645Z",
+          "rank": 1,
+          "fortuneLevel": "中吉",
+          "fortuneDesc": "平稳度日，不宜冒进，稳中求胜。",
+          "star": 81,
+          "luckyNum": 11,
+          "color": "青色",
+          "yi": "宜暴躁怼人！😆",
+          "streak": 1,
+          "total": 1,
+          "last_date": "2026-09-27"
+        }
+      },
+      "count": 1
     }
   }
 }
