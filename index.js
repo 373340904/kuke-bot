@@ -1185,7 +1185,7 @@ async function tryExecuteIntent(question, msg, uid, uname) {
     const intentList = INTENT_MAP.filter(item => executeActions.includes(item.action))
       .map(item => `${item.action}: ${item.intent}（${item.keywords.join('、')}）`).join('\n');
     const aiPrompt = `用户说："${question}"\n\n判断用户是否想执行以下操作（注意：是"执行"操作，不是"查询"）：\n${intentList}\n\n判断规则：\n- "帮我签到"、"我要签到"、"签个到" → checkin\n- "帮我抽奖"、"我要抽奖"、"抽个奖" → lottery\n- "每日金句"、"来个金句"、"金句" → dailyquote\n- "清空对话"、"清空记录" → clearchat\n- 只是问"签到了吗"、"有多少积分"、"黑名单有谁"等查询类 → none\n- 普通聊天 → none\n\n只返回action或none，不要其他内容。`;
-    const currentModel = loadSetData().chatModel || 'deepseek-chat';
+    const currentModel = loadSetData().chatModel || 'glm-4-flash';
     const modelInfo = CHAT_MODELS.find(m => m.id === currentModel);
     const apiType = modelInfo?.api || 'junling';
     
@@ -1368,7 +1368,7 @@ async function callAI(prompt, systemPrompt) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 30000);
   try {
-    const currentModel = loadSetData().chatModel || 'deepseek-chat';
+    const currentModel = loadSetData().chatModel || 'glm-4-flash';
     const modelInfo = CHAT_MODELS.find(m => m.id === currentModel);
     const sys = systemPrompt || '你是君灵AI，一只乐于助人的AI助手，用简洁生动的语言回答。';
     const apiType = modelInfo?.api || 'junling';
@@ -1433,7 +1433,7 @@ async function callAI(prompt, systemPrompt) {
   } catch (e) {
     clearTimeout(timeout);
     // 君灵AI失败时自动降级到智谱
-    const currentModel = loadSetData().chatModel || 'deepseek-chat';
+    const currentModel = loadSetData().chatModel || 'glm-4-flash';
     const modelInfo = CHAT_MODELS.find(m => m.id === currentModel);
     if (modelInfo?.api === 'junling' && ZHIPU_API_KEY) {
       logWarn('AI', `君灵AI调用失败，降级到智谱GLM-4-Flash: ${e.message}`);
@@ -3437,17 +3437,18 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
           (async () => {
             try {
               // 检查AI配置（君灵AI或智谱至少有一个）
-              const currentModel = loadSetData().chatModel || 'deepseek-chat';
+              const currentModel = loadSetData().chatModel || 'glm-4-flash';
               const modelInfo = CHAT_MODELS.find(m => m.id === currentModel);
               const apiType = modelInfo?.api || 'junling';
               if (apiType === 'openai' && !OPENAI_API_KEY) {
                 sendMsg(msg.conversation_id, '⚠️ OpenAI未配置');
                 return;
               }
-              if (apiType === 'junling' && !JUNLING_API_KEY) {
-                sendMsg(msg.conversation_id, '⚠️ 君灵AI未配置');
-                return;
-              }
+              // 君灵AI检查暂时跳过
+              // if (apiType === 'junling' && !JUNLING_API_KEY) {
+              //   sendMsg(msg.conversation_id, '⚠️ 君灵AI未配置');
+              //   return;
+              // }
               if (apiType === 'zhipu' && !ZHIPU_API_KEY) {
                 sendMsg(msg.conversation_id, '⚠️ 智谱AI未配置');
                 return;
@@ -3457,18 +3458,8 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
               const thinkingMsg = await sendMsgReturnId(msg.conversation_id, imageUrl ? "🖼️ 正在深度思考图片..." : "🤔 正在深度思考...");
               const thinkingMsgId = thinkingMsg?.id || null;
               
-              // ========== 意图识别：自动执行指令（超时10秒，不阻塞主对话） ==========
-              try {
-                const intentPromise = tryExecuteIntent(question, msg, uid, uname);
-                const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(null), 10000));
-                const intentResult = await Promise.race([intentPromise, timeoutPromise]);
-                if (intentResult) {
-                  logInfo('意图识别', `用户${uid} 意图: ${intentResult.intent}`);
-                  return;
-                }
-              } catch (intentErr) {
-                console.log('[意图识别] 出错，继续AI对话:', intentErr.message);
-              }
+              // ========== 意图识别临时关闭，直接走AI对话 ==========
+              console.log('[意图识别] 临时关闭，直接走AI对话');
               // ========== 意图识别结束 ==========
               const controller = new AbortController();
               const timeout = setTimeout(() => controller.abort(), 25000);
