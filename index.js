@@ -3896,29 +3896,49 @@ KukeChat支持的Markdown语法：
                 } else if (__apiType === 'junling') {
                   __aiApiUrl = `${JUNLING_API_BASE}/chat/completions`;
                   __aiApiKey = JUNLING_API_KEY;
+                } else if (__apiType === 'pollinations') {
+                  // Pollinations：GET请求，不需要key
+                  const pollModel = __curModel === 'pollinations-mistral' ? 'mistral' : 'openai';
+                  const userMsg = messages.map(m => m.content).join('\n');
+                  __aiApiUrl = `https://text.pollinations.ai/${encodeURIComponent(userMsg)}?model=${pollModel}`;
+                  __aiApiKey = '';
                 } else {
                   __aiApiUrl = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
                   __aiApiKey = ZHIPU_API_KEY;
                 }
                 __aiModel = __curModel;
               }
-              const res = await fetch(__aiApiUrl, {
-                method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${__aiApiKey}`,
-                  'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ model: __aiModel, messages }),
-                signal: controller.signal
-              });
+              
+              let res;
+              if (__apiType === 'pollinations') {
+                // Pollinations用GET请求
+                res = await fetch(__aiApiUrl, { signal: controller.signal });
+              } else {
+                // 其他用POST请求
+                res = await fetch(__aiApiUrl, {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': `Bearer ${__aiApiKey}`,
+                    'Content-Type': 'application/json'
+                  },
+                  body: JSON.stringify({ model: __aiModel, messages }),
+                  signal: controller.signal
+                });
+              }
               clearTimeout(timeout);
               if (!res.ok) {
                 const errText = await res.text();
                 console.error('[AI错误] status:', res.status, 'body:', errText.substring(0, 500));
                 throw new Error(`AI接口返回 ${res.status}: ${errText.substring(0, 100)}`);
               }
-              const data = await res.json();
-              const answer = data?.choices?.[0]?.message?.content || '抱歉，我暂时无法回答这个问题。';
+              let answer;
+              if (__apiType === 'pollinations') {
+                // Pollinations返回纯文本
+                answer = await res.text();
+              } else {
+                const data = await res.json();
+                answer = data?.choices?.[0]?.message?.content || '抱歉，我暂时无法回答这个问题。';
+              }
               // 保存对话历史（用户问 + AI答）
               if (!imageUrl) {
                 addChatHistory(uid, 'user', question);
