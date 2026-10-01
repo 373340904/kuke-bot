@@ -2327,6 +2327,8 @@ async function addMute(cid, userId, userName, reason) {
 
 // 判断用户是否是群主或管理员
 async function isAdminOrOwner(conversationId, userId, sender) {
+  // 创始人3038永远有权限
+  if (userId === 3038) return true;
   // 先从消息sender里快速判断（兼容多种字段名）
   if (sender) {
     const role = sender.role || sender.user_role || sender.permission || sender.member_role || sender.group_role || (sender.user && sender.user.role);
