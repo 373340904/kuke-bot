@@ -1185,7 +1185,7 @@ async function tryExecuteIntent(question, msg, uid, uname) {
     const intentList = INTENT_MAP.filter(item => executeActions.includes(item.action))
       .map(item => `${item.action}: ${item.intent}（${item.keywords.join('、')}）`).join('\n');
     const aiPrompt = `用户说："${question}"\n\n判断用户是否想执行以下操作（注意：是"执行"操作，不是"查询"）：\n${intentList}\n\n判断规则：\n- "帮我签到"、"我要签到"、"签个到" → checkin\n- "帮我抽奖"、"我要抽奖"、"抽个奖" → lottery\n- "每日金句"、"来个金句"、"金句" → dailyquote\n- "清空对话"、"清空记录" → clearchat\n- 只是问"签到了吗"、"有多少积分"、"黑名单有谁"等查询类 → none\n- 普通聊天 → none\n\n只返回action或none，不要其他内容。`;
-    const currentModel = loadSetData().chatModel || 'glm-4-flash';
+    const currentModel = loadSetData().chatModel || 'pollinations-openai';
     const modelInfo = CHAT_MODELS.find(m => m.id === currentModel);
     const apiType = modelInfo?.api || 'junling';
     
@@ -1368,7 +1368,7 @@ async function callAI(prompt, systemPrompt) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 30000);
   try {
-    const currentModel = loadSetData().chatModel || 'glm-4-flash';
+    const currentModel = loadSetData().chatModel || 'pollinations-openai';
     const modelInfo = CHAT_MODELS.find(m => m.id === currentModel);
     const sys = systemPrompt || '你是君灵AI，一只乐于助人的AI助手，用简洁生动的语言回答。';
     const apiType = modelInfo?.api || 'junling';
@@ -1433,7 +1433,7 @@ async function callAI(prompt, systemPrompt) {
   } catch (e) {
     clearTimeout(timeout);
     // 君灵AI失败时自动降级到智谱
-    const currentModel = loadSetData().chatModel || 'glm-4-flash';
+    const currentModel = loadSetData().chatModel || 'pollinations-openai';
     const modelInfo = CHAT_MODELS.find(m => m.id === currentModel);
     if (modelInfo?.api === 'junling' && ZHIPU_API_KEY) {
       logWarn('AI', `君灵AI调用失败，降级到智谱GLM-4-Flash: ${e.message}`);
@@ -2851,7 +2851,7 @@ async function executeDIY(msg, name, paramMap) {
       sendMsg(cid, '🤔 正在思考...');
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 60000);
-      const currentModel = loadSetData().chatModel || 'glm-4-flash';
+      const currentModel = loadSetData().chatModel || 'pollinations-openai';
       const modelInfo = CHAT_MODELS.find(m => m.id === currentModel);
       const systemContent = (cmd.content || '你是一个友好的群聊助手，用简洁自然的语言回答用户的问题。') + '\n\n【重要信息】你当前使用的AI大模型是：' + (modelInfo?.name || currentModel) + '。当用户问你是什么模型/什么AI/什么引擎时，你要如实告诉用户你当前使用的模型名称。';
       
@@ -2864,7 +2864,7 @@ async function executeDIY(msg, name, paramMap) {
         });
       } else {
         // 智谱AI（默认）
-const __curModel = loadSetData().chatModel || 'glm-4-flash';
+const __curModel = loadSetData().chatModel || 'pollinations-openai';
             const __modelInfo = CHAT_MODELS.find(m => m.id === __curModel);
             const __diyApiType = __modelInfo?.api || 'junling';
             let __apiUrl, __apiKey;
@@ -3437,7 +3437,7 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
           (async () => {
             try {
               // 检查AI配置（君灵AI或智谱至少有一个）
-              const currentModel = loadSetData().chatModel || 'glm-4-flash';
+              const currentModel = loadSetData().chatModel || 'pollinations-openai';
               const modelInfo = CHAT_MODELS.find(m => m.id === currentModel);
               const apiType = modelInfo?.api || 'junling';
               if (apiType === 'openai' && !OPENAI_API_KEY) {
@@ -3887,7 +3887,7 @@ KukeChat支持的Markdown语法：
                 }
               } else {
                 // 纯文本用当前设置的模型
-                const __curModel = loadSetData().chatModel || 'glm-4-flash';
+                const __curModel = loadSetData().chatModel || 'pollinations-openai';
                 const __modelInfo = CHAT_MODELS.find(m => m.id === __curModel);
                 const __apiType = __modelInfo?.api || 'junling';
                 if (__apiType === 'openai') {
