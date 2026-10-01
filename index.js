@@ -6668,7 +6668,9 @@ ${diyLink}> 点击分类查看详细指令</markdown>`;
         let welcome = welcomeData[String(convId)];
         if (isFeatureEnabled(convId, '进群欢迎')) {
           if (!welcome) {
-            welcome = `<at id="${newUserId}" />，欢迎进群~/help查看全部指令`;
+            welcome = `<at id="${newUserId}" />
+# 欢迎进群！
+/help 查看可用指令`;
           } else {
             if (newUserId) {
               welcome = welcome.replace(/<@成员>/g, `<at id="${newUserId}" />`);
