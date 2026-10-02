@@ -37,7 +37,7 @@ const JUNLING_API_KEY = 'sk-feb9266213661bb8e80cb14db0137ce8776b08d1e828fba4';
 const JUNLING_API_BASE = 'https://ai.laolibuhuifei.com/v1';
 
 // ===== OpenAI 官方API =====
-const OPENAI_API_KEY = 'sk-68a4413a296e62a72b825b415199ad02e79eb78a4e28f833';
+const OPENAI_API_KEY = ''; // OpenAI key已失效，暂时不用
 const OPENAI_API_BASE = 'https://api.openai.com/v1';
 // 智谱AI免费Key（glm-4-flash模型完全免费，主要用于识图），申请地址：https://open.bigmodel.cn/usercenter/apikeys
 const ZHIPU_API_KEY = 'd9cd0300341d4ac1aed9260c715c1a8a.2aChFKD7pTs3j7Y4'; // 在这里填你的智谱AI API Key
@@ -3546,7 +3546,14 @@ ${context ? '【联网搜索结果】\n' + context : ''}`;
               // 选择模型和API
               const __curModel = loadSetData().chatModel || 'deepseek-chat';
               const __modelInfo = CHAT_MODELS.find(m => m.id === __curModel);
-              const __apiType = __modelInfo?.api || 'pollinations';
+              let __apiType = __modelInfo?.api || 'junling';
+              // 如果选了OpenAI但是key没配，自动切回君灵AI
+              if (__apiType === 'openai' && !OPENAI_API_KEY) {
+                console.log('⚠️ OpenAI key未配置，自动切回君灵AI');
+                __curModel = 'deepseek-chat';
+                __modelInfo = CHAT_MODELS.find(m => m.id === __curModel);
+                __apiType = __modelInfo?.api || 'junling';
+              }
               
               let __aiApiUrl, __aiApiKey, __aiModel;
               if (__apiType === 'openai') {
