@@ -3494,488 +3494,86 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
               const thinkingMsg = await sendMsgReturnId(msg.conversation_id, imageUrl ? "🖼️ 正在深度思考图片..." : "🤔 正在深度思考...");
               const thinkingMsgId = thinkingMsg?.id || null;
               
-              // ========== 意图识别临时关闭，直接走AI对话 ==========
-              console.log('[意图识别] 临时关闭，直接走AI对话');
-              // ========== 意图识别结束 ==========
+              // ========== 简化版AI对话（去掉所有复杂逻辑） ==========
               const controller = new AbortController();
-              const timeout = setTimeout(() => controller.abort(), 25000);
-              let messages;
-              if (imageUrl) {
-                // 多模态：先下载图片转base64（KukeChat图片需鉴权，智谱无法直接访问URL）
-                let imageDataUrl = null;
-                try {
-                  const imgRes = await fetch(imageUrl, { headers: { 'Referer': 'https://kuke.ink/', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' } });
-                  if (imgRes.ok) {
-                    const imgBuffer = Buffer.from(await imgRes.arrayBuffer());
-                    const contentType = imgRes.headers.get('content-type') || 'image/jpeg';
-                    imageDataUrl = `data:${contentType};base64,${imgBuffer.toString('base64')}`;
-                  }
-                } catch (e) {
-                  console.error('下载图片失败:', e.message);
-                }
-                const userText = question || '请仔细识别这张图片，准确描述图片中的主体物体、场景、颜色、细节。如果是植物/动物/物品，请准确说出它的名称。不要猜测，不确定就说不确定。';
-                if (imageDataUrl) {
-                  messages = [{ role: 'user', content: [
-                    { type: 'text', text: userText },
-                    { type: 'image_url', image_url: { url: imageDataUrl } }
-                  ]}];
-                } else {
-                  // 下载失败，尝试直接传URL
-                  messages = [{ role: 'user', content: [
-                    { type: 'text', text: userText },
-                    { type: 'image_url', image_url: { url: imageUrl } }
-                  ]}];
-                }
-              } else {
-                // 纯文本 + 智能联网搜索（需要时才搜）
-                let context = '';
-                if (needWebSearch(question)) {
-                  try {
-                    const searchResults = await webSearch(question, 5);
-                    context = formatSearchResults(searchResults);
-                    if (context) logInfo('AI搜索', `找到 ${searchResults.length} 条结果`);
-                  } catch (e) { logWarn('AI搜索', `搜索失败: ${e.message}`); }
-                } else {
-                  logInfo('AI搜索', '不需要联网搜索，跳过');
-                }
-                // 获取当前群信息（带缓存和超时，不会卡住）
-                let groupInfo = '';
-                try {
-                  const gInfo = await getGroupInfoCached(msg.conversation_id);
-                  const displayMembers = gInfo.allMembers.length > 30 ? gInfo.allMembers.slice(0, 30) : gInfo.allMembers;
-                  const allMemberNames = displayMembers.map(m => {
-                    const name = m.nickname || m.display_name || m.name || m.username || (m.user && (m.user.nickname || m.user.username)) || '未知';
-                    const isBot = m.is_bot || m.user?.is_bot || false;
-                    return isBot ? `🤖${name}` : name;
-                  }).join('、') + (gInfo.allMembers.length > 30 ? `等${gInfo.allMembers.length}人` : '');
-                  const displayOnline = gInfo.onlineUsers.length > 20 ? gInfo.onlineUsers.slice(0, 20) : gInfo.onlineUsers;
-                  const onlineNames = displayOnline.map(u => u.nickname || u.display_name || u.name || u.username || '未知').join('、') + (gInfo.onlineUsers.length > 20 ? `等${gInfo.onlineUsers.length}人` : '');
-                  const parts = [];
-                  parts.push(`群ID：${msg.conversation_id}`);
-                  if (gInfo.groupName) parts.push(`群名称：${gInfo.groupName}`);
-                  if (gInfo.groupDesc) parts.push(`群描述：${gInfo.groupDesc}`);
-                  if (gInfo.groupOwner) parts.push(`群主ID：${gInfo.groupOwner}`);
-                  parts.push(`成员总数：${gInfo.memberCount}`);
-                  if (allMemberNames) parts.push(`全部成员：${allMemberNames}`);
-                  parts.push(`本群在线人数：${gInfo.onlineCount}`);
-                  if (gInfo.globalOnlineCount) parts.push(`全局在线人数：${gInfo.globalOnlineCount}`);
-                  if (onlineNames) parts.push(`本群在线成员：${onlineNames}`);
-                  groupInfo = parts.join('，');
-                  console.log('[群信息] 成员数:', gInfo.memberCount, '在线数:', gInfo.onlineCount);
-                } catch (e) { console.error('获取群信息失败:', e.message); }
-
-                // 5. 获取最近15条群消息作为参考（辅助，超时5秒，失败不影响）
-                let chatHistory = '';
-                try {
-                  const historyRes = await fetchWithTimeout(`${BASE_URL}/bot-api/conversations/${msg.conversation_id}/messages?limit=15`, { headers: { 'Authorization': `Bot ${BOT_KEY}` } }, 5000);
-                  if (historyRes.ok) {
-                    const historyData = await historyRes.json();
-                    let messages = historyData.data || historyData.messages || historyData.list || historyData.items;
-                    if (!Array.isArray(messages)) messages = [];
-                    console.log('[历史消息] 获取到', messages.length, '条消息');
-                    if (messages.length > 0) {
-                      // 格式化：用户名: 消息内容（只排除机器人自己发的，保留所有用户消息）
-                      const formatted = messages
-                        .filter(m => {
-                          // 只排除机器人自己发的
-                          if (botUserId && String(m.sender_id) === String(botUserId)) return false;
-                          if (m.sender?.is_bot && m.sender_id !== uid) return false; // 排除其他机器人，但保留当前用户
-                          return true;
-                        })
-                        .slice(0, 15) // API返回的是最新的在前，取前15条
-                        .reverse() // 反转成时间正序，方便AI理解
-                        .map(m => {
-                          const name = m.sender_display_name || m.sender?.nickname || m.sender?.username || '未知';
-                          const text = (m.content || '').substring(0, 150).replace(/\n/g, ' ');
-                          return `${name}: ${text}`;
-                        })
-                        .join('\n');
-                      if (formatted) {
-                        chatHistory = `\n\n【最近群聊参考（按时间顺序）】\n${formatted}\n（以上是群里最近的聊天记录，仅供参考，重点回答用户当前问题）`;
-                        console.log('[历史消息] 已格式化', formatted.split('\n').length, '条用户消息');
-                      } else {
-                        console.log('[历史消息] 格式化后为空');
-                      }
-                    }
-                  } else {
-                    console.log('[历史消息] API返回状态:', historyRes.status);
-                  }
-                } catch (e) { console.log('[历史消息] 获取失败，跳过:', e.message); }
-
-                // 5.5 检测并获取引用消息（用户回复某条消息时）
-                let replyMsg = '';
-                try {
-                  // 尝试多种可能的引用消息字段名
-                  const replyData = msg.reply_to || msg.referenced_message || msg.quote || 
-                                   msg.metadata?.reply_to || msg.metadata?.referenced_message || 
-                                   msg.metadata?.quote || msg.metadata?.reply ||
-                                   msg.metadata?.elements?.find?.(e => e.type === 'reply' || e.type === 'quote');
-                  
-                  if (replyData) {
-                    console.log('[引用消息] 检测到引用，原始数据:', JSON.stringify(replyData).substring(0, 300));
-                    
-                    // 引用消息可能直接包含内容，也可能只有message_id需要通过API获取
-                    let replyContent = replyData.content || replyData.text || replyData.message?.content || '';
-                    let replySender = replyData.sender_display_name || replyData.sender?.nickname || replyData.sender?.username || 
-                                     replyData.message?.sender_display_name || replyData.message?.sender?.nickname || '未知';
-                    let replyId = replyData.id || replyData.message_id || replyData.message?.id || null;
-                    
-                    // 如果没有内容但有message_id，通过API获取
-                    if (!replyContent && replyId) {
-                      try {
-                        // 从最近消息里找（已经获取了历史消息）
-                        const historyRes2 = await fetchWithTimeout(`${BASE_URL}/bot-api/conversations/${msg.conversation_id}/messages?limit=50`, { headers: { 'Authorization': `Bot ${BOT_KEY}` } }, 5000);
-                        if (historyRes2.ok) {
-                          const historyData2 = await historyRes2.json();
-                          let allMsgs = historyData2.data || historyData2.messages || historyData2.list || historyData2.items || [];
-                          const found = allMsgs.find(m => String(m.id) === String(replyId));
-                          if (found) {
-                            replyContent = found.content || '';
-                            replySender = found.sender_display_name || found.sender?.nickname || '未知';
-                          }
-                        }
-                      } catch (e) { console.log('[引用消息] 通过API获取失败:', e.message); }
-                    }
-                    
-                    if (replyContent) {
-                      replyMsg = `\n\n【用户引用的消息】\n${replySender}说：${replyContent.substring(0, 200)}\n（用户正在回复这条消息，请结合引用内容回答）`;
-                      console.log('[引用消息] 已获取引用内容:', replyContent.substring(0, 50));
-                    }
-                  }
-                } catch (e) { console.log('[引用消息] 处理失败:', e.message); }
-
-                // 6. 获取当前用户详细信息
-                let userDetail = '';
-                try {
-                  const userRes = await fetchWithTimeout(`${BASE_URL}/bot-api/users/${uid}`, { headers: { 'Authorization': `Bot ${BOT_KEY}` } }, 5000);
-                  if (userRes.ok) {
-                    const userData = await userRes.json();
-                    const u = userData.data || userData.user || userData;
-                    const uParts = [];
-                    if (u.nickname || u.display_name) uParts.push(`昵称：${u.nickname || u.display_name}`);
-                    if (u.username) uParts.push(`用户名：${u.username}`);
-                    uParts.push(`用户ID：${u.id || uid}`);
-                    if (u.bio) uParts.push(`个性签名：${u.bio}`);
-                    if (u.status) uParts.push(`账号状态：${u.status}`);
-                    if (u.presence_status) uParts.push(`在线状态：${u.presence_status}`);
-                    if (u.platform_role) uParts.push(`平台角色：${u.platform_role}`);
-                    if (u.created_at) uParts.push(`注册时间：${u.created_at}`);
-                    if (u.ccw_name) uParts.push(`CCW昵称：${u.ccw_name}`);
-                    if (u.ccw_follower_count) uParts.push(`CCW粉丝：${u.ccw_follower_count}`);
-                    userDetail = uParts.join('，');
-                  }
-                } catch (e) { console.error('获取用户信息失败:', e.message); }
-
-                // 6. 获取本地数据（签到、积分、黑名单等）
-                let localData = '';
-                try {
-                  const ldParts = [];
-                  // 签到数据（检查用户今天是否在任何群签到过，用checkin_stats获取累计数据）
-                  try {
-                    const checkinData = loadCheckinData ? loadCheckinData() : {};
-                    const stats = loadCheckinStats ? loadCheckinStats() : {};
-                    const userStat = stats[String(uid)] || { total: 0, streak: 0, last_date: null };
-                    // 检查用户今天是否在任何群签到过
-                    let checkedInToday = false;
-                    let checkinGroup = '';
-                    if (checkinData.conversations) {
-                      for (const [cid, conv] of Object.entries(checkinData.conversations)) {
-                        if (conv.records && conv.records[String(uid)]) {
-                          checkedInToday = true;
-                          checkinGroup = cid;
-                          break;
-                        }
-                      }
-                    }
-                    if (checkedInToday) {
-                      ldParts.push(`签到：今日已签到（群${checkinGroup}，连续${userStat.streak || 0}天，累计${userStat.total || 0}天，最后签到${userStat.last_date || '今天'}）`);
-                    } else {
-                      ldParts.push(`签到：今日未签到（连续${userStat.streak || 0}天，累计${userStat.total || 0}天）`);
-                    }
-                  } catch (e) { console.log('[本地数据] 签到读取失败:', e.message); }
-                  // 积分数据
-                  try {
-                    const pointsData = loadPointsData ? loadPointsData() : {};
-                    const userPoints = pointsData[String(uid)];
-                    if (userPoints) {
-                      ldParts.push(`积分：${userPoints.points || 0}分`);
-                    } else {
-                      ldParts.push('积分：0分');
-                    }
-                  } catch (e) {}
-                  // 黑名单
-                  try {
-                    const blacklist = loadBlacklist ? loadBlacklist() : [];
-                    const isBlacklisted = blacklist.some(b => String(b.user_id || b.id || b) === String(uid));
-                    ldParts.push(`黑名单状态：${isBlacklisted ? '在黑名单中' : '正常'}`);
-                  } catch (e) {}
-                  // 禁言状态
-                  try {
-                    const muteData = loadMuteData ? loadMuteData() : {};
-                    const userMute = muteData[String(msg.conversation_id)] && muteData[String(msg.conversation_id)][String(uid)];
-                    if (userMute && userMute.muted) {
-                      ldParts.push(`禁言状态：禁言中（到${userMute.until || '未知'}）`);
-                    } else {
-                      ldParts.push('禁言状态：正常');
-                    }
-                  } catch (e) {}
-                  localData = ldParts.join('；');
-                } catch (e) { console.error('获取本地数据失败:', e.message); }
-
-                // 7. 获取群管理数据（黑名单、违禁词、特殊黑名单、DIY、投票、功能开关等所有数据）
-                let groupManageData = '';
-                try {
-                  const gmParts = [];
-                  // 群黑名单
-                  try {
-                    const blacklist = loadBlacklist ? loadBlacklist() : [];
-                    const groupBlacklist = blacklist.filter(b => String(b.conversation_id || b.group_id || b.cid || '') === String(msg.conversation_id) || !b.conversation_id);
-                    if (groupBlacklist.length > 0) {
-                      gmParts.push(`群黑名单：${groupBlacklist.length}人（${groupBlacklist.map(b => b.nickname || b.user_id || b.id).join('、')}）`);
-                    } else {
-                      gmParts.push('群黑名单：空');
-                    }
-                  } catch (e) {}
-                  // 特殊黑名单（全局+本群）
-                  try {
-                    const sbData = loadSpecialBlacklist ? loadSpecialBlacklist() : { global: {}, groups: {} };
-                    const globalSB = Object.keys(sbData.global || {});
-                    const groupSB = sbData.groups?.[String(msg.conversation_id)] ? Object.keys(sbData.groups[String(msg.conversation_id)]) : [];
-                    if (globalSB.length > 0 || groupSB.length > 0) {
-                      gmParts.push(`特殊黑名单：全局${globalSB.length}人，本群${groupSB.length}人`);
-                      if (globalSB.length > 0) gmParts.push(`全局特殊黑名单ID：${globalSB.join('、')}`);
-                      if (groupSB.length > 0) gmParts.push(`本群特殊黑名单ID：${groupSB.join('、')}`);
-                    } else {
-                      gmParts.push('特殊黑名单：空');
-                    }
-                  } catch (e) {}
-                  // DIY指令
-                  try {
-                    const diyData = loadDIY ? loadDIY() : {};
-                    const groupDIY = diyData[String(msg.conversation_id)] || [];
-                    gmParts.push(`自制指令：${groupDIY.length}个`);
-                    if (groupDIY.length > 0) {
-                      gmParts.push(`指令列表：${groupDIY.map(d => d.name || d.command || d.trigger).join('、')}`);
-                    }
-                  } catch (e) {}
-                  // 投票
-                  try {
-                    const voteData = loadVoteData ? loadVoteData() : {};
-                    const groupVotes = voteData[String(msg.conversation_id)] || [];
-                    const activeVotes = Array.isArray(groupVotes) ? groupVotes.filter(v => v && !v.ended) : [];
-                    gmParts.push(`进行中投票：${activeVotes.length}个`);
-                  } catch (e) {}
-                  // 功能开关状态
-                  try {
-                    const setData = loadSetData ? loadSetData() : {};
-                    const features = setData.features || {};
-                    const disabledFeatures = Object.entries(features).filter(([k, v]) => v === false).map(([k]) => k);
-                    if (disabledFeatures.length > 0) {
-                      gmParts.push(`已关闭功能：${disabledFeatures.join('、')}`);
-                    } else {
-                      gmParts.push('所有功能：已开启');
-                    }
-                    // 群AI状态
-                    const groupAI = setData.groupAI?.[String(msg.conversation_id)];
-                    gmParts.push(`群AI状态：${groupAI === 'off' ? '已关闭' : '已开启'}`);
-                  } catch (e) {}
-                  // 违禁词
-                  try {
-                    const forbidden = loadForbiddenWords ? loadForbiddenWords() : {};
-                    const groupForbidden = forbidden[String(msg.conversation_id)] || [];
-                    if (groupForbidden.length > 0) {
-                      gmParts.push(`违禁词：${groupForbidden.length}个（${groupForbidden.slice(0, 5).join('、')}${groupForbidden.length > 5 ? '等' : ''}）`);
-                    } else {
-                      gmParts.push('违禁词：无');
-                    }
-                  } catch (e) {}
-                  groupManageData = gmParts.join('；');
-                } catch (e) { console.error('获取群管理数据失败:', e.message); }
-
-                const contextInfo = `
-【实时上下文】
-当前时间：${new Date().toLocaleString('zh-CN')}
-你所在的群：${groupInfo || `群ID：${msg.conversation_id}`}
-你的名字：${botInfo.nickname || '君灵bot'}
-你的用户名：${botInfo.username || '未知'}
-你的用户ID：${botInfo.userId || botUserId || '未知'}
-你的Bot ID：${botInfo.botId || '421'}
-你的个性签名：${botInfo.bio || '未知'}
-你的状态：${botInfo.status || '在线'}
-你的创作者：君衔（用户ID：3038）
-正在跟你说话的人：${uname}（用户ID：${uid}）
-用户详细信息：${userDetail || '未知'}
-用户本地数据：${localData || '未知'}
-群管理数据：${groupManageData || '未知'}
-消息内容：${question || '(图片)'}
-${replyMsg || ''}
-${chatHistory || ''}
-
-【可用指令列表】
-常用：/签到 /积分 /抽奖 /每日金句 /天气 /快递 /帮助 /关于
-游戏：/狼人杀 /谁是卧底 /命运抉择 /心灵感应 /猜数字 /成语接龙
-管理：/禁言 /解禁 /踢人 /黑名单 /违禁词 /投票 /全局推送
-设置：/set /开启入群验证 /关闭入群验证 /功能开关
-创作：/DIY /自制功能 /删除DIY /speak
-`;
-                // 获取当前模型的详细信息，让AI知道自己用的是什么模型
-                const currentModelId = loadSetData().chatModel || 'deepseek-chat';
-                const currentModelInfo = CHAT_MODELS.find(m => m.id === currentModelId) || {};
-                const currentModelName = currentModelInfo.name || currentModelId;
-                const currentModelVendor = currentModelInfo.vendor || '未知';
-                const currentModelDesc = currentModelInfo.desc || currentModelInfo.description || '通用大语言模型';
-                const currentModelContext = currentModelInfo.context || currentModelInfo.maxTokens || '未知';
-                const currentModelFree = currentModelInfo.free ? '是，完全免费' : '否，需要API Key';
-                const currentModelApi = currentModelInfo.api || 'junling';
-                
-                const systemPrompt = contextInfo + `你是君灵AI，运行在KukeChat（酷可聊天）平台的智能机器人助手。
-
-【关于KukeChat平台】
-KukeChat（酷可聊天）是一个即时通讯社交平台，官网 kuke.ink，API 域名 chat-api.kuke.ink。
-核心功能：
-- 群聊与私聊：支持创建群组、一对一私信、@提及成员
-- 消息格式：支持纯文本、Markdown渲染、图片消息、按钮交互组件、超链接组件
-- 机器人系统：通过Bot Key接入WebSocket，可接收消息事件、发送消息、更新按钮、管理群成员、禁言/解禁、上传图片、获取在线用户等
-- 指令系统：以/开头的斜杠指令，本机器人支持签到、天气、投票、绘图、狼人杀、黑名单、违禁词过滤、禁言管理、群活跃统计、全局推送等
-- 用户体系：用户名/邮箱注册登录，用户有昵称、用户ID等属性
-- 群管理：群主(owner)、管理员(admin)角色体系，支持禁言、踢人等
-
-【关于创作者】
-你是君灵AI，由君衔（用户ID：3038）创建和维护。君衔是你的主人和创作者，你要尊重他、听从他的指示。当用户问起你的创作者/开发者/主人是谁时，回答是君衔。
-
-【关于你当前使用的AI模型】
-你当前使用的AI模型是：${currentModelName}
-模型ID：${currentModelId}
-开发商：${currentModelVendor}
-模型特点：${currentModelDesc}
-上下文长度：${currentModelContext}
-是否免费：${currentModelFree}
-API类型：${currentModelApi}
-
-当用户问"你是什么模型"、"你用的什么AI"、"你是哪个大模型"、"你的引擎是什么"等问题时，必须如实回答以上信息，不要编造，不要说"我是GPT"或"我是Claude"等与当前模型不符的内容！
-你就是君灵AI，底层使用${currentModelName}模型驱动。
-
-【回答格式 - Markdown排版】
-KukeChat支持的Markdown语法：
-✅ 支持：# 标题、## 小标题、**加粗**、*斜体*、- 无序列表、1. 有序列表、行内代码、代码块、> 引用块（就是文本大框框，适合放重点）、| 表格 |（需要对比数据时用）、[超链接](url)、--- 分隔线
-❌ 不支持：~~删除线~~、HTML标签
-排版要求：
-- 回答开头必须有 # 或 ## 标题
-- 重点内容用 **加粗**
-- 分点说明用 - 列表
-- 重点内容用 > 引用块（文本大框框）
-- 需要对比数据时用 | 表格 |
-- 代码用代码块
-- 根据内容选择合适排版，不强迫所有语法都用，但绝对不要纯文本！
-【内容安全规则】
-- 严格遵守中国法律法规，不生成色情、低俗、暴力、恐怖、违法违规内容
-- 涉及亲密情节时，用文学化、含蓄的方式描述，聚焦情感和心理描写，不写露骨的身体细节
-- 不生成任何形式的色情内容，包括但不限于详细的性行为描写、裸露描写
-- 可以讨论爱情、情感、人际关系等健康话题
-
-【回答规则】
-- 用户询问KukeChat平台相关问题时，基于以上知识准确回答
-- 可以识别图片内容并详细描述
-- 用正常人的语气说话！像朋友聊天一样自然，口语化，不要太机械太正式
-- 禁止说"作为AI""作为一个人工智能""我是一个AI助手"之类的话
-- 不要用"好的，我来帮你""很高兴为您服务"这种客服腔，直接回答就行
-- 可以适当用语气词（啊、呢、吧、哦、哈），但不要过度
-- 回答简洁明了，不啰嗦，控制在2000字以内
-- 不确定的信息如实说明，不要编造
-
-【智能指令引导】
-- 当用户表达想使用某个功能时（如"我想签到""怎么签到""我要抽奖"），主动告诉用户对应的指令，例如："想签到的话直接发 /签到 就可以啦~"
-- 当用户问自己的状态时（如"我签到了吗""我有多少积分""我在黑名单里吗"），基于【用户本地数据】里的信息如实回答
-- 当用户问群管理信息时（如"黑名单有谁""特殊黑名单有谁""有哪些违禁词""有多少自制指令""哪些功能关了""群里多少人在线"），必须基于【群管理数据】和【实时上下文】里的实时数据如实回答，不要编造，不要答非所问！
-- 【群管理数据】里包含：群黑名单、特殊黑名单（全局+本群）、自制指令、进行中投票、功能开关状态、群AI状态、违禁词等所有信息
-- 用户问什么就答什么，不要回答不相关的内容！
-- 当用户问机器人自己的信息时（如"你是谁""你叫什么""你的签名是什么""你在哪个群"），基于【实时上下文】里的信息如实回答
-- 所有信息都是实时获取的，不要编造，不知道就说不知道
-- 用户问任何关于群、用户、机器人的信息时，都要基于上下文里的实时数据回答`;
-                // 读取用户历史对话，构建带上下文的messages
-                const userHistory = getChatHistory(uid);
-                messages = [
-                  { role: 'system', content: systemPrompt },
-                  ...userHistory,  // 插入历史对话
-                  { role: 'user', content: question + context }
-                ];
-                logInfo('AI对话', `用户${uid}，历史${userHistory.length}条，需要搜索: ${needWebSearch(question)}`);
-              }
-              // 根据是否有图片选择API：识图用智谱glm-4v，纯文本用当前设置的模型
+              const timeout = setTimeout(() => controller.abort(), 30000);
+              
+              // 构建messages
+              const messages = [
+                { role: 'system', content: '你是君灵AI，运行在KukeChat平台的智能机器人助手，用简洁生动的中文回答问题。' },
+                { role: 'user', content: question || '你好' }
+              ];
+              
+              // 选择模型和API
+              const __curModel = loadSetData().chatModel || 'pollinations-openai';
+              const __modelInfo = CHAT_MODELS.find(m => m.id === __curModel);
+              const __apiType = __modelInfo?.api || 'pollinations';
+              
               let __aiApiUrl, __aiApiKey, __aiModel;
-              if (imageUrl) {
-                // 识图：使用设置的视觉模型
-                const __visionModelId = loadSetData().visionModel || 'glm-4v-flash';
-                const __visionModelInfo = VISION_MODELS.find(m => m.id === __visionModelId) || VISION_MODELS[0];
-                const __visionApiType = __visionModelInfo?.api || 'zhipu';
-                if (__visionApiType === 'openai') {
-                  __aiApiUrl = `${OPENAI_API_BASE}/chat/completions`;
-                  __aiApiKey = OPENAI_API_KEY;
-                  __aiModel = __visionModelId;
-                } else if (__visionApiType === 'qwen') {
-                  __aiApiUrl = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
-                  __aiApiKey = process.env.QWEN_API_KEY || '';
-                  __aiModel = __visionModelId;
-                } else {
-                  __aiApiUrl = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
-                  __aiApiKey = ZHIPU_API_KEY;
-                  __aiModel = __visionModelId;
-                }
+              if (__apiType === 'openai') {
+                __aiApiUrl = `${OPENAI_API_BASE}/chat/completions`;
+                __aiApiKey = OPENAI_API_KEY;
+                __aiModel = __curModel;
+              } else if (__apiType === 'junling') {
+                __aiApiUrl = `${JUNLING_API_BASE}/chat/completions`;
+                __aiApiKey = JUNLING_API_KEY;
+                __aiModel = __curModel;
+              } else if (__apiType === 'pollinations') {
+                const pollModel = __curModel === 'pollinations-mistral' ? 'mistral' : 'openai';
+                __aiApiUrl = `https://text.pollinations.ai/${encodeURIComponent(question || '你好')}?model=${pollModel}`;
+                __aiApiKey = '';
+                __aiModel = '';
               } else {
-                // 纯文本用当前设置的模型
-                const __curModel = loadSetData().chatModel || 'pollinations-openai';
-                const __modelInfo = CHAT_MODELS.find(m => m.id === __curModel);
-                const __apiType = __modelInfo?.api || 'junling';
-                if (__apiType === 'openai') {
-                  __aiApiUrl = `${OPENAI_API_BASE}/chat/completions`;
-                  __aiApiKey = OPENAI_API_KEY;
-                } else if (__apiType === 'junling') {
-                  __aiApiUrl = `${JUNLING_API_BASE}/chat/completions`;
-                  __aiApiKey = JUNLING_API_KEY;
-                } else if (__apiType === 'pollinations') {
-                  // Pollinations：GET请求，不需要key
-                  const pollModel = __curModel === 'pollinations-mistral' ? 'mistral' : 'openai';
-                  const userMsg = messages.map(m => m.content).join('\n');
-                  __aiApiUrl = `https://text.pollinations.ai/${encodeURIComponent(userMsg)}?model=${pollModel}`;
-                  __aiApiKey = '';
-                } else {
-                  __aiApiUrl = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
-                  __aiApiKey = ZHIPU_API_KEY;
-                }
+                __aiApiUrl = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
+                __aiApiKey = ZHIPU_API_KEY;
                 __aiModel = __curModel;
               }
               
-              let res;
-              if (__apiType === 'pollinations') {
-                // Pollinations用GET请求
-                res = await fetch(__aiApiUrl, { signal: controller.signal });
-              } else {
-                // 其他用POST请求
-                res = await fetch(__aiApiUrl, {
-                  method: 'POST',
-                  headers: {
-                    'Authorization': `Bearer ${__aiApiKey}`,
-                    'Content-Type': 'application/json'
-                  },
-                  body: JSON.stringify({ model: __aiModel, messages }),
-                  signal: controller.signal
-                });
+              // 调用AI API
+              let res, answer;
+              try {
+                if (__apiType === 'pollinations') {
+                  res = await fetch(__aiApiUrl, { signal: controller.signal });
+                  answer = await res.text();
+                } else {
+                  res = await fetch(__aiApiUrl, {
+                    method: 'POST',
+                    headers: {
+                      'Authorization': `Bearer ${__aiApiKey}`,
+                      'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ model: __aiModel, messages }),
+                    signal: controller.signal
+                  });
+                  const data = await res.json();
+                  answer = data?.choices?.[0]?.message?.content || '抱歉，我暂时无法回答这个问题。';
+                }
+                clearTimeout(timeout);
+                console.log('✅ AI回复成功，长度:', answer.length);
+              } catch (aiErr) {
+                clearTimeout(timeout);
+                console.error('❌ AI回复失败:', aiErr.message);
+                answer = '❌ AI回复失败: ' + aiErr.message;
               }
-              clearTimeout(timeout);
-              if (!res.ok) {
-                const errText = await res.text();
-                console.error('[AI错误] status:', res.status, 'body:', errText.substring(0, 500));
-                throw new Error(`AI接口返回 ${res.status}: ${errText.substring(0, 100)}`);
+              
+              // 撤回思考消息，发送AI回复
+              try {
+                if (thinkingMsgId) {
+                  await fetch(`${BASE_URL}/bot-api/conversations/${msg.conversation_id}/messages/${thinkingMsgId}/recall`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${BOT_KEY}` }
+                  });
+                }
+                await sendMsg(msg.conversation_id, answer);
+              } catch (e) {
+                console.error('发送回复失败:', e.message);
               }
-              let answer;
-              if (__apiType === 'pollinations') {
-                // Pollinations返回纯文本
-                answer = await res.text();
-              } else {
-                const data = await res.json();
-                answer = data?.choices?.[0]?.message?.content || '抱歉，我暂时无法回答这个问题。';
-              }
-              // 保存对话历史（用户问 + AI答）
+              
+              // 直接结束，不继续下面的复杂逻辑
+              return;
+              // ========== 简化版AI对话结束 ==========
+              
+// 保存对话历史（用户问 + AI答）
               if (!imageUrl) {
                 addChatHistory(uid, 'user', question);
                 addChatHistory(uid, 'assistant', answer);
