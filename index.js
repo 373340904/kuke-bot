@@ -1364,6 +1364,18 @@ async function executeIntentAction(action, msg, uid, uname, question) {
 
 // ========== 意图识别系统结束 ==========
 
+function getUserDataForAI(uid, cid) {
+  // 简单的用户数据注入
+  const checkinData = loadCheckinData();
+  const userRecord = checkinData?.conversations?.[String(cid)]?.records?.[String(uid)];
+  const points = userRecord?.points || 0;
+  const lastCheckin = userRecord?.lastCheckin || '未签到';
+  
+  return `用户ID：${uid}
+当前积分：${points}
+上次签到：${lastCheckin}`;
+}
+
 async function callAI(prompt, systemPrompt) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 30000);
@@ -3494,13 +3506,41 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
               const thinkingMsg = await sendMsgReturnId(msg.conversation_id, imageUrl ? "🖼️ 正在深度思考图片..." : "🤔 正在深度思考...");
               const thinkingMsgId = thinkingMsg?.id || null;
               
-              // ========== 简化版AI对话（去掉所有复杂逻辑） ==========
+              // ========== AI对话（保留所有功能，只去掉意图识别） ==========
               const controller = new AbortController();
               const timeout = setTimeout(() => controller.abort(), 30000);
               
+              // 1. 联网搜索（需要时才搜）
+              let context = '';
+              if (needWebSearch(question)) {
+                try {
+                  const searchResults = await webSearch(question, 5);
+                  context = formatSearchResults(searchResults);
+                  if (context) logInfo('AI搜索', `找到 ${searchResults.length} 条结果`);
+                } catch (e) { logWarn('AI搜索', `搜索失败: ${e.message}`); }
+              }
+              
+              // 2. 用户数据注入
+              const userData = getUserDataForAI(uid, cid);
+              
+              // 3. 对话历史上下文
+              const userHistory = getChatHistory(uid);
+              
+              // 构建system prompt
+              const systemPrompt = `你是君灵AI，运行在KukeChat（酷可聊天）平台的智能机器人助手。
+你由君衔（用户ID：3038）创建和维护。
+用简洁生动的中文回答问题，不要说"作为AI"之类的话。
+
+【用户数据】
+${userData}
+
+${context ? '【联网搜索结果】
+' + context : ''}`;
+              
               // 构建messages
               const messages = [
-                { role: 'system', content: '你是君灵AI，运行在KukeChat平台的智能机器人助手，用简洁生动的中文回答问题。' },
+                { role: 'system', content: systemPrompt },
+                ...userHistory,
                 { role: 'user', content: question || '你好' }
               ];
               
@@ -3520,7 +3560,8 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
                 __aiModel = __curModel;
               } else if (__apiType === 'pollinations') {
                 const pollModel = __curModel === 'pollinations-mistral' ? 'mistral' : 'openai';
-                __aiApiUrl = `https://text.pollinations.ai/${encodeURIComponent(question || '你好')}?model=${pollModel}`;
+                const fullPrompt = systemPrompt + '\n\n用户问：' + (question || '你好');
+                __aiApiUrl = `https://text.pollinations.ai/${encodeURIComponent(fullPrompt)}?model=${pollModel}`;
                 __aiApiKey = '';
                 __aiModel = '';
               } else {
@@ -3550,6 +3591,10 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
                 }
                 clearTimeout(timeout);
                 console.log('✅ AI回复成功，长度:', answer.length);
+                
+                // 保存对话历史
+                addChatHistory(uid, 'user', question);
+                addChatHistory(uid, 'assistant', answer);
               } catch (aiErr) {
                 clearTimeout(timeout);
                 console.error('❌ AI回复失败:', aiErr.message);
@@ -3569,9 +3614,8 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
                 console.error('发送回复失败:', e.message);
               }
               
-              // 直接结束，不继续下面的复杂逻辑
               return;
-              // ========== 简化版AI对话结束 ==========
+              // ========== AI对话结束 ==========
               
 // 保存对话历史（用户问 + AI答）
               if (!imageUrl) {
