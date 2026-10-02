@@ -2912,7 +2912,7 @@ async function executeDIY(msg, name, paramMap) {
         });
       } else {
         // 智谱AI（默认）
-const __curModel = loadSetData().chatModel || 'pollinations-openai';
+const __curModel = loadSetData().chatModel || 'deepseek-chat';
             const __modelInfo = CHAT_MODELS.find(m => m.id === __curModel);
             const __diyApiType = __modelInfo?.api || 'junling';
             let __apiUrl, __apiKey;
@@ -3544,7 +3544,7 @@ ${context ? '【联网搜索结果】\n' + context : ''}`;
               ];
               
               // 选择模型和API
-              const __curModel = loadSetData().chatModel || 'pollinations-openai';
+              const __curModel = loadSetData().chatModel || 'deepseek-chat';
               const __modelInfo = CHAT_MODELS.find(m => m.id === __curModel);
               const __apiType = __modelInfo?.api || 'pollinations';
               
@@ -3570,13 +3570,18 @@ ${context ? '【联网搜索结果】\n' + context : ''}`;
               }
               
               // 调用AI API
-              let res, answer;
+              let answer;
               try {
                 if (__apiType === 'pollinations') {
-                  res = await fetch(__aiApiUrl, { signal: controller.signal });
+                  // Pollinations：GET请求，返回纯文本
+                  console.log('🔍 调用Pollinations模型:', __aiApiUrl.substring(0, 100) + '...');
+                  const res = await fetch(__aiApiUrl, { signal: controller.signal });
                   answer = await res.text();
+                  console.log('✅ Pollinations回复成功，长度:', answer.length);
                 } else {
-                  res = await fetch(__aiApiUrl, {
+                  // 其他模型：POST请求，返回JSON
+                  console.log('🔍 调用模型:', __aiModel, 'URL:', __aiApiUrl);
+                  const res = await fetch(__aiApiUrl, {
                     method: 'POST',
                     headers: {
                       'Authorization': `Bearer ${__aiApiKey}`,
@@ -3585,11 +3590,16 @@ ${context ? '【联网搜索结果】\n' + context : ''}`;
                     body: JSON.stringify({ model: __aiModel, messages }),
                     signal: controller.signal
                   });
-                  const data = await res.json();
-                  answer = data?.choices?.[0]?.message?.content || '抱歉，我暂时无法回答这个问题。';
+                  const resText = await res.text();
+                  console.log('🔍 AI原始响应:', resText.substring(0, 200));
+                  const data = JSON.parse(resText);
+                  answer = data?.choices?.[0]?.message?.content;
+                  if (!answer) {
+                    answer = '❌ AI返回格式错误: ' + resText.substring(0, 100);
+                  }
+                  console.log('✅ AI回复成功，长度:', answer.length);
                 }
                 clearTimeout(timeout);
-                console.log('✅ AI回复成功，长度:', answer.length);
                 
                 // 保存对话历史
                 addChatHistory(uid, 'user', question);
