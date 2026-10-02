@@ -1625,12 +1625,29 @@ function buildVoteButtonMessage(vote) {
   msg += `> ID：${vote.voteId}\n`;
   if (vote.creator) msg += `> 发起人：${vote.creator}\n`;
   msg += `\n`;
-  vote.options.forEach((opt, i) => {
-    const count = counts[i];
-    const pct = total > 0 ? Math.round(count / total * 100) : 0;
-    const componentId = `${vote.voteId}_${i}`;
-    msg += `<button action="callback" action_id="${componentId}" id="${componentId}">\`${i + 1}\`. ${opt} · \`${count}\`票(\`${pct}\`%)</button>\n`;
-  });
+  // 如果有sections，按sections渲染（显示小标题）
+  if (vote.sections && vote.sections.length > 0) {
+    for (const sec of vote.sections) {
+      if (sec.type === 'section') {
+        msg += `### ${sec.text}\n\n`;
+      } else {
+        const i = sec.index;
+        const opt = vote.options[i];
+        const count = counts[i];
+        const pct = total > 0 ? Math.round(count / total * 100) : 0;
+        const componentId = `${vote.voteId}_${i}`;
+        msg += `<button action="callback" action_id="${componentId}" id="${componentId}">\`${i + 1}\`. ${opt} · \`${count}\`票(\`${pct}\`%)</button>\n`;
+      }
+    }
+  } else {
+    // 没有sections，按原来的方式渲染
+    vote.options.forEach((opt, i) => {
+      const count = counts[i];
+      const pct = total > 0 ? Math.round(count / total * 100) : 0;
+      const componentId = `${vote.voteId}_${i}`;
+      msg += `<button action="callback" action_id="${componentId}" id="${componentId}">\`${i + 1}\`. ${opt} · \`${count}\`票(\`${pct}\`%)</button>\n`;
+    });
+  }
   msg += `</markdown>`;
   return msg;
 }
@@ -1641,12 +1658,29 @@ function buildVoteResultCard(vote) {
   let reply = `<markdown># 🏁 ${vote.title} - 投票结果\n\n`;
   if (vote.creator) reply += `> 发起人：${vote.creator}\n`;
   reply += `\n`;
-  vote.options.forEach((opt, i) => {
-    const count = counts[i];
-    const pct = total > 0 ? Math.round(count / total * 100) : 0;
-    const bar = '█'.repeat(Math.round(pct / 5)) + '░'.repeat(20 - Math.round(pct / 5));
-    reply += `**${i + 1}. ${opt}**\n${bar} ${count}票 (${pct}%)\n\n`;
-  });
+  // 如果有sections，按sections渲染
+  if (vote.sections && vote.sections.length > 0) {
+    for (const sec of vote.sections) {
+      if (sec.type === 'section') {
+        reply += `### ${sec.text}\n\n`;
+      } else {
+        const i = sec.index;
+        const opt = vote.options[i];
+        const count = counts[i];
+        const pct = total > 0 ? Math.round(count / total * 100) : 0;
+        const bar = '█'.repeat(Math.round(pct / 5)) + '░'.repeat(20 - Math.round(pct / 5));
+        reply += `**${i + 1}. ${opt}**\n${bar} ${count}票 (${pct}%)\n\n`;
+      }
+    }
+  } else {
+    // 没有sections，按原来的方式渲染
+    vote.options.forEach((opt, i) => {
+      const count = counts[i];
+      const pct = total > 0 ? Math.round(count / total * 100) : 0;
+      const bar = '█'.repeat(Math.round(pct / 5)) + '░'.repeat(20 - Math.round(pct / 5));
+      reply += `**${i + 1}. ${opt}**\n${bar} ${count}票 (${pct}%)\n\n`;
+    });
+  }
   reply += `</markdown>`;
   return reply;
 }
@@ -5528,14 +5562,28 @@ C. 选项三内容
             startIdx = 1;
           }
           const title = parts[startIdx];
-          const options = parts.slice(startIdx + 1, startIdx + 11);
-          if (!title || options.length < 2) { sendMsg(msg.conversation_id, '⚠️需要1个标题+至少2个选项，用中文逗号分隔'); return; }
+          // 解析选项和小标题（小标题格式：小标题：XXX）
+          const options = [];
+          const sections = []; // {type: 'section'/'option', text: '...', index: 0}
+          for (let i = startIdx + 1; i < parts.length; i++) {
+            const part = parts[i];
+            if (part.startsWith('小标题：') || part.startsWith('小标题:')) {
+              // 这是一个小标题
+              const sectionTitle = part.replace(/^小标题[：:]/, '').trim();
+              sections.push({ type: 'section', text: sectionTitle });
+            } else {
+              // 这是一个普通选项
+              options.push(part);
+              sections.push({ type: 'option', text: part, index: options.length - 1 });
+            }
+          }
+          if (!title || options.length < 2) { sendMsg(msg.conversation_id, '⚠️需要1个标题+至少2个选项，用中文逗号分隔\n支持小标题：小标题：XXX'); return; }
           const creator = msg.sender_display_name || msg.sender?.nickname || '匿名';
           if (isGlobal) {
             // 全局投票：所有群共享同一个voteId
             const groups = loadGroups();
             const voteId = genVoteId();
-            const tempVote = { voteId, title, options, votes: {}, creator, isGlobal: true, conversationIds: [], messageIds: {} };
+            const tempVote = { voteId, title, options, sections, votes: {}, creator, isGlobal: true, conversationIds: [], messageIds: {} };
             let success = 0;
             for (const gid of groups) {
               const message = await sendMsgReturnId(gid, buildVoteButtonMessage(tempVote));
@@ -5552,7 +5600,7 @@ C. 选项三内容
           } else {
             // 单群投票
             const voteId = genVoteId();
-            const tempVote = { voteId, title, options, votes: {}, creator };
+            const tempVote = { voteId, title, options, sections, votes: {}, creator };
             const message = await sendMsgReturnId(msg.conversation_id, buildVoteButtonMessage(tempVote));
             if (!message || !message.id) { sendMsg(msg.conversation_id, '❌投票创建失败'); return; }
             const voteData = loadVoteData();
