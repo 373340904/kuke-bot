@@ -3534,8 +3534,7 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
 【用户数据】
 ${userData}
 
-${context ? '【联网搜索结果】
-' + context : ''}`;
+${context ? '【联网搜索结果】\n' + context : ''}`;
               
               // 构建messages
               const messages = [
