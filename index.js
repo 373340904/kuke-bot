@@ -3488,10 +3488,11 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
               const currentModel = loadSetData().chatModel || 'pollinations-openai';
               const modelInfo = CHAT_MODELS.find(m => m.id === currentModel);
               const apiType = modelInfo?.api || 'junling';
-              if (apiType === 'openai' && !OPENAI_API_KEY) {
-                sendMsg(msg.conversation_id, '⚠️ OpenAI未配置');
-                return;
-              }
+              // OpenAI key已硬编码，不需要检查
+              // if (apiType === 'openai' && !OPENAI_API_KEY) {
+              //   sendMsg(msg.conversation_id, '⚠️ OpenAI未配置');
+              //   return;
+              // }
               // 君灵AI检查暂时跳过
               // if (apiType === 'junling' && !JUNLING_API_KEY) {
               //   sendMsg(msg.conversation_id, '⚠️ 君灵AI未配置');
@@ -3617,7 +3618,7 @@ ${context ? '【联网搜索结果】\n' + context : ''}`;
                 answer = '❌ AI回复失败: ' + aiErr.message;
               }
               
-              // 撤回思考消息，发送AI回复
+              // 撤回思考消息，发送AI回复（自动用<markdown>标签包裹）
               try {
                 if (thinkingMsgId) {
                   await fetch(`${BASE_URL}/bot-api/conversations/${msg.conversation_id}/messages/${thinkingMsgId}/recall`, {
@@ -3625,7 +3626,9 @@ ${context ? '【联网搜索结果】\n' + context : ''}`;
                     headers: { 'Authorization': `Bearer ${BOT_KEY}` }
                   });
                 }
-                await sendMsg(msg.conversation_id, answer);
+                // 自动用<markdown>标签包裹AI回答
+                const markdownAnswer = answer.startsWith('<markdown>') ? answer : `<markdown>${answer}</markdown>`;
+                await sendMsg(msg.conversation_id, markdownAnswer);
               } catch (e) {
                 console.error('发送回复失败:', e.message);
               }
