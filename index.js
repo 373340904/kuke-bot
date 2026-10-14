@@ -4212,7 +4212,6 @@ ${context ? '【联网搜索结果】\n' + context : ''}`;
 ## ✨ 核心特性
 
 - 🤖 **AI对话**：支持文字和图片识别，正常人语气
-- 🛠️ **DIY自制指令**：群内自定义指令，AI协助创建
 - 🔇 **群管理**：禁言、踢人、黑名单、违禁词过滤
 - 🎮 **娱乐功能**：狼人杀、投票、签到、音乐播放
 - 📊 **数据统计**：群活跃统计、在线人数查询
@@ -6252,7 +6251,7 @@ C. 选项三内容
 <link action="callback" action_id="help_special">👮 特殊黑名单</link>
 <link action="callback" action_id="help_mute">🔇 禁言管理</link>
 <link action="callback" action_id="help_switch">🔌 功能开关</link>
-${isClassGroup ? '' : '<link action="callback" action_id="help_diy">🛠️ 自制指令</link>\n'}<link action="callback" action_id="help_other">📢 其他管理</link>
+<link action="callback" action_id="help_other">📢 其他管理</link>
 
 > 仅群主、${adminLabel}、创始人ID3038可用</markdown>`;
         } else if (actionId === 'help_common') {
@@ -6267,7 +6266,7 @@ ${isClassGroup ? '' : '<link action="callback" action_id="help_diy">🛠️ 自�
 <link action="callback" action_id="help_life">🌤️ 生活工具</link>
 <link action="callback" action_id="help_points">🎁 积分抽奖</link>
 ${werewolfLink}<link action="callback" action_id="help_list">📝 列表查看</link>
-${diyLink}> 💡 小提示：@机器人可以直接和AI聊天！</markdown>`;
+> 💡 小提示：@机器人可以直接和AI聊天！</markdown>`;
         } else if (actionId === 'help_query') {
           detail = `<markdown># 🔍 基础查询
 
@@ -6423,7 +6422,7 @@ ${diyLink}> 💡 小提示：@机器人可以直接和AI聊天！</markdown>`;
 **可用功能（21个）：**
 🤖 AI功能：AI对话、图片识别
 📋 日常工具：签到、天气、音乐播放、AI绘图、快递查询、积分抽奖
-🎮 游戏娱乐：投票、狼人杀、心灵感应、谁是卧底、故事接龙、命运抉择、DIY自制指令
+🎮 游戏娱乐：投票、狼人杀、心灵感应、谁是卧底、故事接龙、命运抉择
 🔧 群管理：违禁词、黑名单、特殊黑名单、禁言、进群欢迎、群活跃统计、全局推送、在线人数
 > 仅群主或${adminLabel}可用</markdown>`;
         } else if (actionId === 'help_set') {
