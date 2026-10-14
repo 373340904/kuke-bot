@@ -3434,14 +3434,14 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
         if (featureBlocked) return;
       }
 
-      // @机器人 AI 对话
+      // @机器人 AI 对话（彻底重写，去掉所有关键词检测）
       const botUid = botUserId || botInfo.userId || 3039;
       const botIdNum = botInfo.botId || 421;
       const botAtPattern = new RegExp(`<at[^>]*id=["']?(${botUid}|${botIdNum})["']?[^>]*>`, 'i');
       const hasAtInContent = botAtPattern.test(content);
       const hasAtInMeta = msg.metadata?.mentions && msg.metadata.mentions.some(m => String(m.id) === String(botUid) || String(m.id) === String(botIdNum) || m.user_id === botUid || m.user_id === botIdNum);
       const isAtBot = hasAtInContent || hasAtInMeta;
-      // 提取去掉@后的纯文本（用于判断是指令还是AI对话）
+      // 提取去掉@后的纯文本
       const atPureText = isAtBot ? content.replace(botAtPattern, '').replace(/@\S+\s*/g, '').replace(/^[@\s]+/, '').trim() : content;
       // @机器人 + 斜杠指令 → 替换为纯指令，继续走正常指令处理
       if (isAtBot && atPureText.startsWith('/')) {
@@ -3452,7 +3452,7 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
         const setDataAI = loadSetData();
         const groupAIState = setDataAI.groupAI?.[String(cid)];
         if (groupAIState === 'off') {
-          sendMsg(cid, '<markdown>## ⚠️ The AI in this group has been disabled!\n\n> 此群AI功能已被管理员禁用\n> 请联系管理员开启或使用其他群</markdown>');
+          sendMsg(cid, '<markdown>## ⚠️ 此群AI功能已被管理员禁用！</markdown>');
           return;
         }
       }
@@ -3467,95 +3467,33 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
           imageUrl = typeof img === 'string' ? img : (img.url || img.src || img.image_url);
         } else if (msg.metadata?.image_url) {
           imageUrl = msg.metadata.image_url;
-        } else if (msg.metadata?.image?.url) {
-          imageUrl = msg.metadata.image.url;
-        } else if (msg.metadata?.elements) {
-          const imgEl = msg.metadata.elements.find(e => 
-            (e.type === 'image' || e.type === 'img') && (e.src || e.url || e.image_url)
-          );
-          if (imgEl) imageUrl = imgEl.src || imgEl.url || imgEl.image_url;
-        } else if (msg.metadata?.attachments) {
-          const imgAtt = msg.metadata.attachments.find(a => a.type === 'image' || a.content_type?.startsWith('image/'));
-          if (imgAtt) imageUrl = imgAtt.url || imgAtt.image_url;
-        } else {
-          const imgMatch = content.match(/<img[^>]+src=["']([^"']+)["']/i);
-          if (imgMatch) imageUrl = imgMatch[1];
-        }
-        // 功能开关检查
-        const setDataFeatures = loadSetData();
-        const aiChatEnabled = setDataFeatures.features['ai_chat'] !== false;
-        const imgRecogEnabled = setDataFeatures.features['image_recognition'] !== false;
-        
-        if (!aiChatEnabled) {
-          // AI对话功能关闭，不回复
-          console.log('[功能开关] AI对话已关闭，不回复');
-          return;
-        }
-        if (!imgRecogEnabled && imageUrl) {
-          // 图片识别功能关闭，只进行纯文本对话
-          console.log('[功能开关] 图片识别已关闭，忽略图片');
-          imageUrl = null;
-          if (!question) {
-            sendMsg(msg.conversation_id, '⚠️ 图片识别功能已被管理员关闭');
-            return;
-          }
         }
         
         if (question || imageUrl) {
           (async () => {
             try {
-              // 检查AI配置（君灵AI或智谱至少有一个）
-              const currentModel = loadSetData().chatModel || 'pollinations-openai';
-              const modelInfo = CHAT_MODELS.find(m => m.id === currentModel);
-              const apiType = modelInfo?.api || 'junling';
-              // OpenAI key已硬编码，不需要检查
-              // if (apiType === 'openai' && !OPENAI_API_KEY) {
-              //   sendMsg(msg.conversation_id, '⚠️ OpenAI未配置');
-              //   return;
-              // }
-              // 君灵AI检查暂时跳过
-              // if (apiType === 'junling' && !JUNLING_API_KEY) {
-              //   sendMsg(msg.conversation_id, '⚠️ 君灵AI未配置');
-              //   return;
-              // }
-              if (apiType === 'zhipu' && !ZHIPU_API_KEY) {
-                sendMsg(msg.conversation_id, '⚠️ 智谱AI未配置');
-                return;
-              }
-              
-              // 先发送"正在思考"提示，让用户知道已经收到（记录消息ID，回复后撤回）
-              const thinkingMsg = await sendMsgReturnId(msg.conversation_id, imageUrl ? "🖼️ 正在深度思考图片..." : "🤔 正在深度思考...");
+              // 先发送"正在思考"提示
+              const thinkingMsg = await sendMsgReturnId(msg.conversation_id, imageUrl ? "🖼️ 正在思考图片..." : "🤔 正在思考...");
               const thinkingMsgId = thinkingMsg?.id || null;
               
-              // ========== AI对话（保留所有功能，只去掉意图识别） ==========
-              const controller = new AbortController();
-              const timeout = setTimeout(() => controller.abort(), 30000);
-              
-              // 1. 联网搜索（需要时才搜）
-              let context = '';
-              if (needWebSearch(question)) {
-                try {
-                  const searchResults = await webSearch(question, 5);
-                  context = formatSearchResults(searchResults);
-                  if (context) logInfo('AI搜索', `找到 ${searchResults.length} 条结果`);
-                } catch (e) { logWarn('AI搜索', `搜索失败: ${e.message}`); }
-              }
-              
-              // 2. 用户数据注入
+              // 构建system prompt（包含用户数据和群信息）
               const userData = getUserDataForAI(uid, cid);
-              
-              // 3. 对话历史上下文
               const userHistory = getChatHistory(uid);
               
-              // 构建system prompt
-              const systemPrompt = `你是君灵AI，运行在KukeChat（酷可聊天）平台的智能机器人助手。
+              const systemPrompt = `你是君灵AI，运行在KukeChat平台的智能机器人助手。
 你由君衔（用户ID：3038）创建和维护。
 用简洁生动的中文回答问题，不要说"作为AI"之类的话。
+回答要用Markdown格式。
 
 【用户数据】
 ${userData}
 
-${context ? '【联网搜索结果】\n' + context : ''}`;
+【群信息】
+群ID: ${cid}
+用户ID: ${uid}
+用户名: ${uname}
+
+> 你可以查询群信息和回答用户问题，不需要任何关键词检测，直接回答即可。`;
               
               // 构建messages
               const messages = [
@@ -3564,139 +3502,88 @@ ${context ? '【联网搜索结果】\n' + context : ''}`;
                 { role: 'user', content: question || '你好' }
               ];
               
-              // 选择模型和API
+              // 选择模型（默认君灵AI）
               const __curModel = loadSetData().chatModel || 'deepseek-chat';
               const __modelInfo = CHAT_MODELS.find(m => m.id === __curModel);
               let __apiType = __modelInfo?.api || 'junling';
-              // 如果选了OpenAI但是key没配，自动切回君灵AI
+              
+              // OpenAI key空就自动切回君灵AI
               if (__apiType === 'openai' && !OPENAI_API_KEY) {
                 console.log('⚠️ OpenAI key未配置，自动切回君灵AI');
                 __curModel = 'deepseek-chat';
-                __modelInfo = CHAT_MODELS.find(m => m.id === __curModel);
-                __apiType = __modelInfo?.api || 'junling';
+                __apiType = 'junling';
               }
               
               let __aiApiUrl, __aiApiKey, __aiModel;
-              if (__apiType === 'openai') {
-                __aiApiUrl = `${OPENAI_API_BASE}/chat/completions`;
-                __aiApiKey = OPENAI_API_KEY;
-                __aiModel = __curModel;
-              } else if (__apiType === 'junling') {
+              if (__apiType === 'junling') {
                 __aiApiUrl = `${JUNLING_API_BASE}/chat/completions`;
                 __aiApiKey = JUNLING_API_KEY;
                 __aiModel = __curModel;
-              } else if (__apiType === 'pollinations') {
-                const pollModel = __curModel === 'pollinations-mistral' ? 'mistral' : 'openai';
-                const fullPrompt = systemPrompt + '\n\n用户问：' + (question || '你好');
-                __aiApiUrl = `https://text.pollinations.ai/${encodeURIComponent(fullPrompt)}?model=${pollModel}`;
-                __aiApiKey = '';
-                __aiModel = '';
-              } else {
+              } else if (__apiType === 'zhipu') {
                 __aiApiUrl = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
                 __aiApiKey = ZHIPU_API_KEY;
                 __aiModel = __curModel;
+              } else {
+                // 默认用君灵AI
+                __aiApiUrl = `${JUNLING_API_BASE}/chat/completions`;
+                __aiApiKey = JUNLING_API_KEY;
+                __aiModel = 'deepseek-chat';
               }
               
               // 调用AI API
-              let answer;
-              try {
-                // 如果是OpenAI但是key空，直接切回君灵AI
-                if (__apiType === 'openai' && !OPENAI_API_KEY) {
-                  console.log('⚠️ OpenAI key为空，切换到君灵AI');
-                  __apiType = 'junling';
-                  __curModel = 'deepseek-chat';
-                  __aiApiUrl = `${JUNLING_API_BASE}/chat/completions`;
-                  __aiApiKey = JUNLING_API_KEY;
-                  __aiModel = __curModel;
-                }
-                if (__apiType === 'pollinations') {
-                  // Pollinations：GET请求，返回纯文本
-                  console.log('🔍 调用Pollinations模型:', __aiApiUrl.substring(0, 100) + '...');
-                  const res = await fetch(__aiApiUrl, { signal: controller.signal });
-                  answer = await res.text();
-                  console.log('✅ Pollinations回复成功，长度:', answer.length);
-                } else {
-                  // 其他模型：POST请求，返回JSON
-                  console.log('🔍 调用模型:', __aiModel, 'URL:', __aiApiUrl);
-                  const res = await fetch(__aiApiUrl, {
-                    method: 'POST',
-                    headers: {
-                      'Authorization': `Bearer ${__aiApiKey}`,
-                      'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ model: __aiModel, messages }),
-                    signal: controller.signal
-                  });
-                  const resText = await res.text();
-                  console.log('🔍 AI原始响应:', resText.substring(0, 200));
-                  const data = JSON.parse(resText);
-                  answer = data?.choices?.[0]?.message?.content;
-                  if (!answer) {
-                    answer = '❌ AI返回格式错误: ' + resText.substring(0, 100);
-                  }
-                  console.log('✅ AI回复成功，长度:', answer.length);
-                }
-                clearTimeout(timeout);
-                
-                // 保存对话历史
-                addChatHistory(uid, 'user', question);
-                addChatHistory(uid, 'assistant', answer);
-              } catch (aiErr) {
-                clearTimeout(timeout);
-                console.error('❌ AI回复失败:', aiErr.message);
-                answer = '❌ AI回复失败: ' + aiErr.message;
+              const controller = new AbortController();
+              const timeout = setTimeout(() => controller.abort(), 30000);
+              
+              console.log('🔍 调用AI模型:', __aiModel);
+              const res = await fetch(__aiApiUrl, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${__aiApiKey}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ model: __aiModel, messages }),
+                signal: controller.signal
+              });
+              
+              const resText = await res.text();
+              clearTimeout(timeout);
+              
+              const data = JSON.parse(resText);
+              let answer = data?.choices?.[0]?.message?.content;
+              
+              if (!answer) {
+                answer = '❌ AI返回错误: ' + resText.substring(0, 100);
               }
               
-              // 撤回思考消息，发送AI回复（自动用<markdown>标签包裹）
-              try {
-                if (thinkingMsgId) {
+              console.log('✅ AI回复成功，长度:', answer.length);
+              
+              // 保存对话历史
+              addChatHistory(uid, 'user', question);
+              addChatHistory(uid, 'assistant', answer);
+              
+              // 撤回思考消息
+              if (thinkingMsgId) {
+                try {
                   await fetch(`${BASE_URL}/bot-api/conversations/${msg.conversation_id}/messages/${thinkingMsgId}/recall`, {
                     method: 'DELETE',
                     headers: { 'Authorization': `Bearer ${BOT_KEY}` }
                   });
-                }
-                // 自动用<markdown>标签包裹AI回答
-                const markdownAnswer = answer.startsWith('<markdown>') ? answer : `<markdown>${answer}</markdown>`;
-                await sendMsg(msg.conversation_id, markdownAnswer);
-              } catch (e) {
-                console.error('发送回复失败:', e.message);
+                } catch (e) {}
               }
+              
+              // 发送AI回复（自动用markdown标签包裹）
+              const markdownAnswer = answer.startsWith('<markdown>') ? answer : `<markdown>${answer}</markdown>`;
+              await sendMsg(msg.conversation_id, markdownAnswer);
               
               return;
-              // ========== AI对话结束 ==========
               
-// 保存对话历史（用户问 + AI答）
-              if (!imageUrl) {
-                addChatHistory(uid, 'user', question);
-                addChatHistory(uid, 'assistant', answer);
-              }
-              // 撤回"正在深度思考"消息
-              if (thinkingMsgId) {
-                try {
-                  await fetch(`${BASE_URL}/bot-api/conversations/${msg.conversation_id}/messages/${thinkingMsgId}/recall`, {
-                    method: 'PATCH',
-                    headers: { 'Authorization': `Bot ${BOT_KEY}`, 'Content-Type': 'application/json' }
-                  });
-                } catch (e) { console.log('[AI] 撤回思考消息失败:', e.message); }
-              }
-              sendMsg(msg.conversation_id, `<markdown>${answer.slice(0, 2000)}</markdown>`);
             } catch (err) {
               console.error('AI对话失败:', err);
               const errMsg = err.name === 'AbortError' ? 'AI响应超时，请重试' : err.message;
-              // 更新"正在深度思考"消息为错误信息
-              if (thinkingMsgId) {
-                try {
-                  await updateMessage(msg.conversation_id, thinkingMsgId, `❌AI回复失败：${errMsg}`);
-                } catch (e) {
-                  sendMsg(msg.conversation_id, `❌AI回复失败：${errMsg}`);
-                }
-              } else {
-                sendMsg(msg.conversation_id, `❌AI回复失败：${errMsg}`);
-              }
+              sendMsg(msg.conversation_id, `<markdown>❌ AI回复失败: ${errMsg}</markdown>`);
             }
           })();
         }
-        return;
       }
 
       // 刷屏检测（指令和签到跳过，群主和ID3038豁免）
