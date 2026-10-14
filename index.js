@@ -3960,20 +3960,19 @@ ${context ? '【联网搜索结果】\n' + context : ''}`;
         const diyHelpLines = isClassGroup ? '' : `- \`/自制功能\`：查看本群自制指令列表
 - \`/DIY[指令名]\`：创建本群自制指令
 `;
-        const helpText = `<markdown># ${botTitle}
-## 常用
-<link action="callback" action_id="help_common">📋 查看全部常用指令</link>
-- \`/关于\`：查看机器人详细信息
-## ${adminLabel}
-<link action="callback" action_id="help_set">⚙️ 设置系统</link>：AI模型、功能开关、群管理（仅ID3038）
-<link action="callback" action_id="help_vote">投票管理</link>：发起和管理投票
-<link action="callback" action_id="help_forbidden">违禁词管理</link>：添加和删除违禁词
-<link action="callback" action_id="help_blacklist">黑名单管理</link>：查看和管理黑名单
-<link action="callback" action_id="help_special">特殊黑名单</link>：全局自动踢人
-<link action="callback" action_id="help_mute">禁言管理</link>：手动禁言、解除禁言和踢人
-<link action="callback" action_id="help_switch">功能开关</link>：开启或关闭各项功能
-${isClassGroup ? '' : '<link action="callback" action_id="help_diy">自制指令</link>：创建和管理DIY指令\n'}<link action="callback" action_id="help_other">其他管理</link>：进群欢迎和全局推送
-</markdown>`;
+        const helpText = `<markdown># 🤖 ${botTitle}
+
+> 点击下面的按钮，查看详细指令
+
+## 📋 导航
+
+<link action="callback" action_id="help_common">📚 常用指令</link>
+所有人都能用的功能（签到、游戏、工具等）
+
+<link action="callback" action_id="help_admin">🔧 管理功能</link>
+群管理相关功能（仅管理员/群主/创始人可用）
+
+> 💡 小提示：@机器人可以直接和AI聊天，不需要指令！</markdown>`;
         sendMsg(msg.conversation_id, helpText);
       }
       else if (content.startsWith('/测试踢人') || content.startsWith('/test-kick')) {
@@ -6220,7 +6219,40 @@ C. 选项三内容
         let detail = '';
         const isClassGroup = String(data.conversation_id) === '4307';
         const adminLabel = isClassGroup ? '班干部及老师' : '管理员';
-        if (actionId === 'help_common') {
+        if (actionId === 'help_admin') {
+          // 管理员功能分类页
+          detail = `<markdown># 🔧 管理功能
+
+> 点击下面的按钮，查看详细指令
+
+## 📋 分类导航
+
+<link action="callback" action_id="help_set">⚙️ 设置系统</link>
+AI模型、功能开关、群管理（仅ID3038）
+
+<link action="callback" action_id="help_vote">🗳️ 投票管理</link>
+发起和管理投票
+
+<link action="callback" action_id="help_forbidden">🚫 违禁词管理</link>
+添加和删除违禁词
+
+<link action="callback" action_id="help_blacklist">📋 黑名单管理</link>
+查看和管理群黑名单
+
+<link action="callback" action_id="help_special">👮 特殊黑名单</link>
+全局自动踢人（每2秒扫描）
+
+<link action="callback" action_id="help_mute">🔇 禁言管理</link>
+手动禁言、解除禁言和踢人
+
+<link action="callback" action_id="help_switch">🔌 功能开关</link>
+开启或关闭各项功能
+
+${isClassGroup ? '' : '<link action="callback" action_id="help_diy">🛠️ 自制指令</link>\n通过DIY创建自定义指令\n'}<link action="callback" action_id="help_other">📢 其他管理</link>
+进群欢迎、全局推送
+
+> 仅群主、${adminLabel}、创始人ID3038可用</markdown>`;
+        } else if (actionId === 'help_common') {
           const werewolfLink = isClassGroup ? '' : `<link action="callback" action_id="help_game">🎮 游戏娱乐</link>：狼人杀、谁是卧底、心灵感应等5个游戏\n`;
           const diyLink = isClassGroup ? '' : `<link action="callback" action_id="help_diy">🛠️ 自制指令</link>：自己创建指令，AI协助生成\n`;
           detail = `<markdown># 📖 君灵bot指令大全
