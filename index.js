@@ -6220,62 +6220,34 @@ C. 选项三内容
         const isClassGroup = String(data.conversation_id) === '4307';
         const adminLabel = isClassGroup ? '班干部及老师' : '管理员';
         if (actionId === 'help_admin') {
-          // 管理员功能分类页
+          // 管理员功能分类页 - 只有按钮，没有说明
           detail = `<markdown># 🔧 管理功能
 
-> 点击下面的按钮，查看详细指令
-
-## 📋 分类导航
+> 点击按钮查看详细指令
 
 <link action="callback" action_id="help_set">⚙️ 设置系统</link>
-AI模型、功能开关、群管理（仅ID3038）
-
 <link action="callback" action_id="help_vote">🗳️ 投票管理</link>
-发起和管理投票
-
 <link action="callback" action_id="help_forbidden">🚫 违禁词管理</link>
-添加和删除违禁词
-
 <link action="callback" action_id="help_blacklist">📋 黑名单管理</link>
-查看和管理群黑名单
-
 <link action="callback" action_id="help_special">👮 特殊黑名单</link>
-全局自动踢人（每2秒扫描）
-
 <link action="callback" action_id="help_mute">🔇 禁言管理</link>
-手动禁言、解除禁言和踢人
-
 <link action="callback" action_id="help_switch">🔌 功能开关</link>
-开启或关闭各项功能
-
-${isClassGroup ? '' : '<link action="callback" action_id="help_diy">🛠️ 自制指令</link>\n通过DIY创建自定义指令\n'}<link action="callback" action_id="help_other">📢 其他管理</link>
-进群欢迎、全局推送
+${isClassGroup ? '' : '<link action="callback" action_id="help_diy">🛠️ 自制指令</link>\n'}<link action="callback" action_id="help_other">📢 其他管理</link>
 
 > 仅群主、${adminLabel}、创始人ID3038可用</markdown>`;
         } else if (actionId === 'help_common') {
           const werewolfLink = isClassGroup ? '' : `<link action="callback" action_id="help_game">🎮 游戏娱乐</link>：狼人杀、谁是卧底、心灵感应等5个游戏\n`;
           const diyLink = isClassGroup ? '' : `<link action="callback" action_id="help_diy">🛠️ 自制指令</link>：自己创建指令，AI协助生成\n`;
-          detail = `<markdown># 📖 君灵bot指令大全
-> 点击下面的分类链接，查看详细指令
+          detail = `<markdown># 📚 常用指令
 
-## 📋 分类导航
+> 点击按钮查看详细指令
 
 <link action="callback" action_id="help_query">🔍 基础查询</link>
-帮助菜单、机器人信息、在线人数、群活跃统计、问题反馈
-
 <link action="callback" action_id="help_checkin">📅 签到运势</link>
-每日签到、专属运势、幸运星幸运数字
-
 <link action="callback" action_id="help_life">🌤️ 生活工具</link>
-天气查询、快递追踪、AI绘图、音乐播放
-
 <link action="callback" action_id="help_points">🎁 积分抽奖</link>
-积分查询、幸运抽奖、每日金句
-
 ${werewolfLink}<link action="callback" action_id="help_list">📝 列表查看</link>
-黑名单、违禁词列表查看
-
-${diyLink}> 💡 **小提示**：@机器人可以直接和AI聊天，不需要指令！</markdown>`;
+${diyLink}> 💡 小提示：@机器人可以直接和AI聊天！</markdown>`;
         } else if (actionId === 'help_query') {
           detail = `<markdown># 🔍 基础查询
 
