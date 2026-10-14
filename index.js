@@ -3025,6 +3025,10 @@ try {
 console.log('✅ 已连接到 KukeChat');
   });
 
+  // 消息ID去重缓存（防止重复处理同一条消息）
+  const processedMessageIds = new Set();
+  const MAX_PROCESSED_IDS = 500; // 最多存500个，防止内存泄漏
+  
   ws.on('message', async (raw) => {
     const text = raw.toString();
     if (text === 'pong') return;
@@ -3035,6 +3039,22 @@ console.log('✅ 已连接到 KukeChat');
     } catch {
       return;
     }
+    
+    // ========== 消息ID去重：同一条消息只处理一次 ==========
+    if (event.type === 'message.created' && event.data && event.data.id) {
+      const msgId = event.data.id;
+      if (processedMessageIds.has(msgId)) {
+        console.log('⚠️ 重复消息，跳过处理:', msgId);
+        return;
+      }
+      processedMessageIds.add(msgId);
+      // 缓存太多就清理一半
+      if (processedMessageIds.size > MAX_PROCESSED_IDS) {
+        const idsToRemove = Array.from(processedMessageIds).slice(0, MAX_PROCESSED_IDS / 2);
+        idsToRemove.forEach(id => processedMessageIds.delete(id));
+      }
+    }
+    // ========== 去重结束 ==========
 
     // 连接就绪
     if (event.type === 'bot.connection.ready') {
