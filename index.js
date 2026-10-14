@@ -6221,41 +6221,104 @@ C. 选项三内容
         const isClassGroup = String(data.conversation_id) === '4307';
         const adminLabel = isClassGroup ? '班干部及老师' : '管理员';
         if (actionId === 'help_common') {
-          const werewolfLink = isClassGroup ? '' : `<link action="callback" action_id="help_game">游戏娱乐</link>：狼人杀游戏\n`;
-          const diyLink = isClassGroup ? '' : `<link action="callback" action_id="help_diy">自制指令</link>：查看、创建和管理DIY指令\n`;
-          detail = `<markdown>## 常用指令分类
-<link action="callback" action_id="help_query">基础查询</link>：帮助菜单、在线人数、群活跃、积分
-<link action="callback" action_id="help_checkin">签到运势</link>：每日签到查看专属运势
-<link action="callback" action_id="help_life">生活工具</link>：天气、快递、AI绘图、音乐播放
-<link action="callback" action_id="help_points">积分抽奖</link>：积分、抽奖、每日金句
-${werewolfLink}<link action="callback" action_id="help_list">列表查看</link>：黑名单、违禁词列表
-${diyLink}> 点击分类查看详细指令</markdown>`;
+          const werewolfLink = isClassGroup ? '' : `<link action="callback" action_id="help_game">🎮 游戏娱乐</link>：狼人杀、谁是卧底、心灵感应等5个游戏\n`;
+          const diyLink = isClassGroup ? '' : `<link action="callback" action_id="help_diy">🛠️ 自制指令</link>：自己创建指令，AI协助生成\n`;
+          detail = `<markdown># 📖 君灵bot指令大全
+> 点击下面的分类链接，查看详细指令
+
+## 📋 分类导航
+
+<link action="callback" action_id="help_query">🔍 基础查询</link>
+帮助菜单、机器人信息、在线人数、群活跃统计、问题反馈
+
+<link action="callback" action_id="help_checkin">📅 签到运势</link>
+每日签到、专属运势、幸运星幸运数字
+
+<link action="callback" action_id="help_life">🌤️ 生活工具</link>
+天气查询、快递追踪、AI绘图、音乐播放
+
+<link action="callback" action_id="help_points">🎁 积分抽奖</link>
+积分查询、幸运抽奖、每日金句
+
+${werewolfLink}<link action="callback" action_id="help_list">📝 列表查看</link>
+黑名单、违禁词列表查看
+
+${diyLink}> 💡 **小提示**：@机器人可以直接和AI聊天，不需要指令！</markdown>`;
         } else if (actionId === 'help_query') {
-          detail = `<markdown>## 基础查询
-\`/help\`：查看本菜单
-\`/关于\`：查看机器人详细信息
-\`/群内在线人数\`：查看当前群内在线人数和在线用户列表
-\`/今日群活跃\`：查看今日群活跃统计和发言榜
-\`/speak[内容]\`：反馈机器人问题（私信创始人）
-> 所有人可用</markdown>`;
+          detail = `<markdown># 🔍 基础查询
+
+## 📌 指令列表
+
+| 指令 | 说明 | 示例 |
+|------|------|------|
+| \`/help\` | 打开帮助菜单 | \`/help\` |
+| \`/关于\` | 查看机器人详细信息（版本、开发者、引擎等） | \`/关于\` |
+| \`/群内在线人数\` | 查看当前群在线人数和在线用户列表 | \`/群内在线人数\` |
+| \`/今日群活跃\` | 查看今日群发言统计和活跃榜 | \`/今日群活跃\` |
+| \`/speak[内容]\` | 反馈问题或建议，私信发给创始人 | \`/speak 机器人有bug\` |
+
+> ✅ 所有人可用</markdown>`;
         } else if (actionId === 'help_checkin') {
-          detail = `<markdown>## 签到运势
-\`/签到\`：签到查看专属运势（幸运星、幸运数字、幸运色、宜做事项）
-> 每人每天限签一次，所有人可用</markdown>`;
+          detail = `<markdown># 📅 签到运势
+
+## 📌 指令列表
+
+| 指令 | 说明 |
+|------|------|
+| \`/签到\` | 每日签到，获得专属运势报告 |
+
+## 🎯 签到内容
+- ⭐ 幸运星评级（1-5星）
+- 🔢 幸运数字
+- 🎨 幸运颜色
+- ✅ 今日宜做事项
+- 🎁 签到积分奖励
+
+> 💡 每人每天限签一次，签到可得积分，积分可用来抽奖！
+> ✅ 所有人可用</markdown>`;
         } else if (actionId === 'help_life') {
-          detail = `<markdown>## 生活工具
-\`/天气[城市]\`：查询指定城市的天气预报
-\`/快递[单号]\`：查询快递物流信息（支持18+快递公司）
-\`/绘图[内容，风格]\`：AI绘图，内容为描述，风格可选（如赛博朋克、水彩、油画等）
-\`/播放音乐[音乐名]\`：搜索并播放音乐（网易云音乐）
-> 所有人可用</markdown>`;
+          detail = `<markdown># 🌤️ 生活工具
+
+## 📌 指令列表
+
+| 指令 | 说明 | 示例 |
+|------|------|------|
+| \`/天气[城市]\` | 查询天气预报（温度、天气、风力） | \`/天气北京\` |
+| \`/快递[单号]\` | 查询快递物流轨迹（支持顺丰、中通、圆通等） | \`/快递SF1234567890\` |
+| \`/绘图[内容，风格]\` | AI生成图片，支持多种风格 | \`/绘图 一只猫，赛博朋克\` |
+| \`/播放音乐[音乐名]\` | 搜索并播放音乐（网易云音源） | \`/播放音乐 周杰伦晴天\` |
+
+## 🎨 绘图风格可选
+赛博朋克、水彩、油画、动漫、写实、像素风、国风、抽象等
+
+> ✅ 所有人可用</markdown>`;
         } else if (actionId === 'help_points') {
-          detail = `<markdown>## 积分抽奖
-\`/积分\`：查看我的积分、累计积分、抽奖次数、金句体验数
-\`/抽奖\`：积分抽奖（每50积分一次，ID3038无限次）
-\`/每日金句\`：每日金句（积分满50可用，消耗10积分）
-> 积分获取：签到、投票、游戏等娱乐活动
-> 奖品：10共创币(10%)、金句体验、+15积分、再来一次、+100积分(5%)</markdown>`;
+          detail = `<markdown># 🎁 积分抽奖
+
+## 📌 指令列表
+
+| 指令 | 说明 | 消耗/条件 |
+|------|------|-----------|
+| \`/积分\` | 查看我的积分详情、抽奖次数、金句体验数 | 免费 |
+| \`/抽奖\` | 幸运大抽奖，赢取各种奖品 | 50积分/次 |
+| \`/每日金句\` | 每日一句精选金句 | 需50积分以上，消耗10积分 |
+
+## 🎰 奖池概率
+| 奖品 | 概率 |
+|------|------|
+| 🪙 10共创币 | 10% |
+| ✨ +15积分 | 30% |
+| 🔄 再来一次 | 25% |
+| 📜 金句体验+1 | 30% |
+| 💎 +100积分 | 5% |
+
+## 💡 怎么赚积分？
+- 每日签到
+- 参与群内游戏
+- 发起投票
+- 其他娱乐活动
+
+> 👑 创始人ID3038无限抽奖，不限次数！</markdown>`;
         } else if (actionId === 'help_game') {
           detail = `<markdown>## 游戏娱乐
 ### 🐺 狼人杀
