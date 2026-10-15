@@ -914,7 +914,7 @@ function getDefaultSetData() {
     features: {
       ai_chat: true, checkin: true, weather: true, express: true, vote: true,
       music: true, draw: true, werewolf: true, telepathy: true,
-      undercover: true, story: true, fate: true, diy: true,
+      
       forbidden: true, blacklist: true, mute: true, welcome: true,
       activity: true, broadcast: true, image_recognition: true,
       points: true, special_blacklist: true, online: true
