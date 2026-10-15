@@ -6247,6 +6247,20 @@ C. 选项三内容
 <link action="callback" action_id="help_switch">🔌 功能开关</link>
 <link action="callback" action_id="help_other">📢 其他管理</link>
 ${String(data.conversation_id) === '10334' ? '<link action="callback" action_id="help_admin_backend">🛠️ 后台管理</link>\n' : ''}> 仅群主、${adminLabel}、创始人ID3038可用</markdown>`;
+        } else if (actionId === 'help_admin_backend') {
+          detail = `<markdown># 🛠️ 后台管理（仅创始人）
+
+## 📌 指令列表
+
+| 指令 | 说明 |
+|------|------|
+| \`/后台 日志\` | 查看机器人最近日志和报错 |
+| \`/后台 自检\` | 自动检测系统运行状态 |
+| \`/后台 面板\` | 查看机器人状态面板 |
+| \`/后台 信息\` | 查看群功能开关信息 |
+| \`/后台 恢复\` | 重启机器人，重新部署服务器 |
+
+> ⚠️ 仅群10334 + ID3038可用</markdown>`;
         } else if (actionId === 'help_common') {
           const werewolfLink = '';
           const diyLink = isClassGroup ? '' : `<link action="callback" action_id="help_diy">🛠️ 自制指令</link>：自己创建指令，AI协助生成\n`;
