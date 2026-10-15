@@ -3761,36 +3761,7 @@ ${userData}
         return;
       }
 
-            // /创建指令 指令名 描述 - AI自动生成
-      if (diyEnabled && /^\/创建指令/ || /^\/create-cmd/.test(content)) {
-        const match = content.match(/^\/创建指令\s+(\S+)(?:\s+(.+))?/);
-        if (!match) {
-          sendMsg(cid, '⚠️ 格式：/创建指令 指令名 指令描述\n\n例子：\n/创建指令 加油 给用户加油打气\n/创建指令 摸鱼 摸鱼表情');
-          return;
-        }
-        const cmdName = match[1].replace(/[\[\]\/]/g, '');
-        const description = match[2] || '一个有趣的指令';
-        
-        if (hasDIYCommand(cid, cmdName)) {
-          sendMsg(cid, `⚠️ 指令"/${cmdName}"已经存在了！`);
-          return;
-        }
-        
-        sendMsg(cid, `🤖 AI正在分析"/${cmdName}"指令，请稍等...`);
-        
-        (async () => {
-          const result = await aiCreateDIY(cid, uid, cmdName, description);
-          if (result.success) {
-            sendMsg(cid, `<markdown># ✅ 指令创建成功！\n\n**指令名：** /${cmdName}\n**说明：** ${result.config.desc}\n**内容预览：**\n> ${String(result.config.content).slice(0, 200)}\n\n现在输入 /${cmdName} 就能用了！</markdown>`);
-          } else {
-            sendMsg(cid, `❌ 创建失败：${result.error}\n\n换个描述重试试试？`);
-          }
-        })();
-        
-        return;
-      }
-      
-// /自制功能 查看本群DIY指令列表
+      // /自制功能 查看本群DIY指令列表
       if (diyEnabled && content === '/自制功能') {
         sendMsg(cid, buildDIYTable(cid, '📋 本群自制功能列表'));
         return;
