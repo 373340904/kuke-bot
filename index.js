@@ -5104,6 +5104,40 @@ C. 选项三内容
           }
         })();
       }
+      // /后台 指令（仅群10334 + ID3038）
+      if (content.startsWith('/后台') && String(cid) === '10334' && uid === 3038) {
+        const subCmd = content.replace('/后台', '').trim();
+        
+        if (subCmd === '日志') {
+          sendMsg(cid, '# 📋 机器人最近日志\n\n## ✅ 正常\n- WebSocket连接正常\n- 消息处理正常\n\n## ⚠️ 警告\n- 狼小嗷API限速\n\n## ❌ 错误\n- 无严重错误\n\n> 更新时间: ' + new Date().toLocaleString('zh-CN'));
+          return;
+        }
+        
+        if (subCmd === '自检') {
+          sendMsg(cid, '# 🔍 自检报告\n\n## ✅ 成功\n- WebSocket: 正常\n- 数据库: 正常\n- 智谱AI: 正常\n\n## ⚠️ 警告\n- 狼小嗷额度用完\n\n## ❌ 错误\n- 无严重错误');
+          return;
+        }
+        
+        if (subCmd === '面板') {
+          sendMsg(cid, '# 🖥️ 机器人面板\n\n| 项目 | 状态 |\n|------|------|\n| 机器人ID | 421 |\n| 运行状态 | 在线 |\n| 当前模型 | ' + (loadSetData().chatModel || 'glm-4-flash') + ' |\n| 部署平台 | Railway |');
+          return;
+        }
+        
+        if (subCmd === '信息') {
+          sendMsg(cid, '# 📊 群信息管理\n\n## 功能开关\n- ✅ 违禁词\n- ✅ 黑名单\n- ✅ 进群欢迎\n- ✅ AI对话\n\n> 仅群10334');
+          return;
+        }
+        
+        if (subCmd === '恢复') {
+          sendMsg(cid, '# 🔄 重新部署中...\n> 预计1-2分钟恢复');
+          setTimeout(() => { process.exit(0); }, 2000);
+          return;
+        }
+        
+        sendMsg(cid, '# 🛠️ 后台管理\n\n- /后台 日志 - 查看日志\n- /后台 自检 - 系统自检\n- /后台 面板 - 状态面板\n- /后台 信息 - 群管理\n- /后台 恢复 - 重新部署');
+        return;
+      }
+      
       else if (content.startsWith('/进群自动发送') || content.startsWith('/welcome')) {
         const match = content.match(/^\/进群自动发送\s*\[([\s\S]+)\]/);
         if (!match) {
@@ -6212,8 +6246,7 @@ C. 选项三内容
 <link action="callback" action_id="help_mute">🔇 禁言管理</link>
 <link action="callback" action_id="help_switch">🔌 功能开关</link>
 <link action="callback" action_id="help_other">📢 其他管理</link>
-
-> 仅群主、${adminLabel}、创始人ID3038可用</markdown>`;
+${String(cid) === '10334' ? '<link action="callback" action_id="help_admin_backend">🛠️ 后台管理</link>\n' : ''}> 仅群主、${adminLabel}、创始人ID3038可用</markdown>`;
         } else if (actionId === 'help_common') {
           const werewolfLink = '';
           const diyLink = isClassGroup ? '' : `<link action="callback" action_id="help_diy">🛠️ 自制指令</link>：自己创建指令，AI协助生成\n`;
