@@ -6246,7 +6246,7 @@ C. 选项三内容
 <link action="callback" action_id="help_mute">🔇 禁言管理</link>
 <link action="callback" action_id="help_switch">🔌 功能开关</link>
 <link action="callback" action_id="help_other">📢 其他管理</link>
-${String(cid) === '10334' ? '<link action="callback" action_id="help_admin_backend">🛠️ 后台管理</link>\n' : ''}> 仅群主、${adminLabel}、创始人ID3038可用</markdown>`;
+${String(data.conversation_id) === '10334' ? '<link action="callback" action_id="help_admin_backend">🛠️ 后台管理</link>\n' : ''}> 仅群主、${adminLabel}、创始人ID3038可用</markdown>`;
         } else if (actionId === 'help_common') {
           const werewolfLink = '';
           const diyLink = isClassGroup ? '' : `<link action="callback" action_id="help_diy">🛠️ 自制指令</link>：自己创建指令，AI协助生成\n`;
