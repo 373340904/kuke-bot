@@ -3503,7 +3503,7 @@ ${userData}
               ];
               
               // 选择模型（默认君灵AI）
-              const __curModel = loadSetData().chatModel || 'deepseek-chat';
+              let __curModel = loadSetData().chatModel || 'deepseek-chat';
               const __modelInfo = CHAT_MODELS.find(m => m.id === __curModel);
               let __apiType = __modelInfo?.api || 'junling';
               
