@@ -2432,7 +2432,7 @@ const aiDiyCreating = {};
 
 async function aiCreateDIY(cid, uid, name, description) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 30000);
+  const timeout = setTimeout(() => controller.abort(), 10000); // 10秒超时
   
   const prompt = `你是一个群聊机器人指令生成助手。
 用户想要创建一个自定义指令，指令名是"/${name}"，描述是"${description}"。
