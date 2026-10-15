@@ -2426,6 +2426,71 @@ function deleteDIYCommand(cid, name) {
     saveDIY(data);
     return true;
   }
+
+// ========== AI自动生成自制指令 ==========
+const aiDiyCreating = {};
+
+async function aiCreateDIY(cid, uid, name, description) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30000);
+  
+  const prompt = `你是一个群聊机器人指令生成助手。
+用户想要创建一个自定义指令，指令名是"/${name}"，描述是"${description}"。
+请你分析这个指令应该做什么，然后返回JSON格式的指令配置。
+
+只返回JSON，不要其他内容：
+{
+  "type": "text",
+  "content": "指令触发时回复的内容，支持变量{用户名}{用户ID}{群ID}等",
+  "desc": "指令的简短说明"
+}
+
+要求：
+1. 内容要符合用户的描述
+2. 如果是需要随机的，可以用"选项1|选项2|选项3"的格式
+3. desc要简短，说明这个指令是干什么的
+4. 只返回JSON，不要解释`;
+
+  try {
+    const res = await fetch(`${JUNLING_API_BASE}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${JUNLING_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.7
+      }),
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeout);
+    const data = await res.json();
+    let aiResponse = data?.choices?.[0]?.message?.content?.trim();
+    
+    const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      return { success: false, error: 'AI生成失败，请换个描述重试' };
+    }
+    
+    const config = JSON.parse(jsonMatch[0]);
+    
+    saveDIYCommand(cid, name, {
+      type: config.type || 'text',
+      content: config.content || '你好！',
+      desc: config.desc || '自定义指令'
+    });
+    
+    return { success: true, config };
+  } catch (e) {
+    clearTimeout(timeout);
+    return { success: false, error: e.message };
+  }
+}
+// ========== AI自制指令结束 ==========
+
   return false;
 }
 
@@ -3688,7 +3753,36 @@ ${userData}
         return;
       }
 
-      // /自制功能 查看本群DIY指令列表
+            // /创建指令 指令名 描述 - AI自动生成
+      if (diyEnabled && /^\/创建指令/.test(content)) {
+        const match = content.match(/^\/创建指令\s+(\S+)(?:\s+(.+))?/);
+        if (!match) {
+          sendMsg(cid, '⚠️ 格式：/创建指令 指令名 指令描述\n\n例子：\n/创建指令 加油 给用户加油打气\n/创建指令 摸鱼 摸鱼表情');
+          return;
+        }
+        const cmdName = match[1].replace(/[\[\]\/]/g, '');
+        const description = match[2] || '一个有趣的指令';
+        
+        if (hasDIYCommand(cid, cmdName)) {
+          sendMsg(cid, `⚠️ 指令"/${cmdName}"已经存在了！`);
+          return;
+        }
+        
+        sendMsg(cid, `🤖 AI正在分析"/${cmdName}"指令，请稍等...`);
+        
+        (async () => {
+          const result = await aiCreateDIY(cid, uid, cmdName, description);
+          if (result.success) {
+            sendMsg(cid, `<markdown># ✅ 指令创建成功！\n\n**指令名：** /${cmdName}\n**说明：** ${result.config.desc}\n**内容预览：**\n> ${String(result.config.content).slice(0, 200)}\n\n现在输入 /${cmdName} 就能用了！</markdown>`);
+          } else {
+            sendMsg(cid, `❌ 创建失败：${result.error}\n\n换个描述重试试试？`);
+          }
+        })();
+        
+        return;
+      }
+      
+// /自制功能 查看本群DIY指令列表
       if (diyEnabled && content === '/自制功能') {
         sendMsg(cid, buildDIYTable(cid, '📋 本群自制功能列表'));
         return;
