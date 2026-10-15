@@ -37,7 +37,7 @@ const JUNLING_API_KEY = 'sk-feb9266213661bb8e80cb14db0137ce8776b08d1e828fba4';
 const JUNLING_API_BASE = 'https://ai.laolibuhuifei.com/v1';
 
 // ===== OpenAI 官方API =====
-const OPENAI_API_KEY = ''; // OpenAI key已失效，暂时清空
+const OPENAI_API_KEY = 'sk-2223649b94d8fc4e2d67bfc0636b4b7bbe014808d75ba036'; // 新OpenAI key
 const OPENAI_API_BASE = 'https://api.openai.com/v1';
 // 智谱AI免费Key（glm-4-flash模型完全免费，主要用于识图），申请地址：https://open.bigmodel.cn/usercenter/apikeys
 const ZHIPU_API_KEY = 'd9cd0300341d4ac1aed9260c715c1a8a.2aChFKD7pTs3j7Y4'; // 在这里填你的智谱AI API Key
