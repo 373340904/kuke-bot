@@ -3548,8 +3548,9 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
               
               const systemPrompt = `你是君灵AI，运行在KukeChat平台的智能机器人助手。
 你由君衔（用户ID：3038）创建和维护。
-用简洁生动的中文回答问题，不要说"作为AI"之类的话。
-回答要用Markdown格式。
+用生动详细的中文回答问题，不要太简短，该展开就展开。
+不要说"作为AI"之类的话。
+回答要用Markdown格式，可以用标题、列表、加粗等格式。
 
 【用户数据】
 ${userData}
@@ -3607,7 +3608,13 @@ ${userData}
                   'Authorization': `Bearer ${__aiApiKey}`,
                   'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ model: __aiModel, messages }),
+                body: JSON.stringify({ 
+                  model: __aiModel, 
+                  messages,
+                  max_tokens: 2000,  // 最大回复长度
+                  temperature: 0.7,  // 创造性
+                  stream: false
+                }),
                 signal: controller.signal
               });
               
