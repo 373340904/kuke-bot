@@ -3762,7 +3762,7 @@ ${userData}
       }
 
             // /创建指令 指令名 描述 - AI自动生成
-      if (diyEnabled && /^\/创建指令/.test(content)) {
+      if (diyEnabled && /^\/创建指令/ || /^\/create-cmd/.test(content)) {
         const match = content.match(/^\/创建指令\s+(\S+)(?:\s+(.+))?/);
         if (!match) {
           sendMsg(cid, '⚠️ 格式：/创建指令 指令名 指令描述\n\n例子：\n/创建指令 加油 给用户加油打气\n/创建指令 摸鱼 摸鱼表情');
@@ -4282,14 +4282,14 @@ ${userData}
         saveSetData(setData);
         sendMsg(msg.conversation_id, `<markdown>## 🔑 API Key 已设置\n\n**模型：** ${modelName}\n**Key：** \`${apiKey.substring(0, 8)}...\`\n\n> 现在可以使用 ${modelName} 模型了！</markdown>`);
       }
-      else if (content === '/违禁词表格') {
+      else if (content === '/违禁词表格' || content === '/forbidden-list') {
         sendMsg(msg.conversation_id, buildForbiddenTable(msg.conversation_id, '📋 当前违禁词列表'));
       }
       else if (content === '/ping') {
         sendMsg(msg.conversation_id, '🏓 pong！机器人在线');
       }
       // ========== 创意游戏 ==========
-      else if (content.startsWith('/心灵感应')) {
+      else if (content.startsWith('/心灵感应') || content.startsWith('/telepathy')) {
         const match = content.match(/^\/心灵感应\[(.+?)\]/);
         if (!match) { sendMsg(msg.conversation_id, '<markdown>## 🧠 心灵感应\n\n**玩法：**\n1. 出题者用 \`/心灵感应[主题]\` 发起\n2. 其他人点击"加入"按钮参与（至少1人）\n3. 出题者点击"开始"，然后**私聊机器人**发送3个答案\n4. 参与者用 \`/猜[答案]\` 猜这3个词\n5. 出题者用 \`/揭晓\` 公布结果\n\n> 测测你们的心灵感应有多强~</markdown>'); return; }
         const theme = match[1];
@@ -4347,7 +4347,7 @@ ${userData}
         delete teleData[String(cid)];
         saveTelepathyData(teleData);
       }
-      else if (content === '/谁是卧底') {
+      else if (content === '/谁是卧底' || content === '/undercover') {
         const wordPairs = [
           ['苹果', '梨'], ['可乐', '雪碧'], ['老虎', '狮子'], ['玫瑰', '月季'],
           ['篮球', '足球'], ['咖啡', '奶茶'], ['电影', '电视剧'], ['猫', '狗'],
@@ -4490,7 +4490,7 @@ ${userData}
           }
         }
       }
-      else if (content.startsWith('/故事接龙')) {
+      else if (content.startsWith('/故事接龙') || content.startsWith('/story')) {
         const match = content.match(/^\/故事接龙(?:\[(.+?)\])?/);
         const theme = match && match[1] ? match[1] : '随机';
         const storyData = loadStoryData();
@@ -4556,7 +4556,7 @@ ${userData}
         delete storyData[String(cid)];
         saveStoryData(storyData);
       }
-      else if (content.startsWith('/命运抉择')) {
+      else if (content.startsWith('/命运抉择') || content.startsWith('/choice')) {
         const match = content.match(/^\/命运抉择(?:\[(.+?)\])?/);
         const theme = match && match[1] ? match[1] : '随机冒险';
         const fateData = loadFateData();
@@ -4618,7 +4618,7 @@ C. 选项三内容
       else if (content === '你好') {
         sendMsg(msg.conversation_id, `你好呀 ${msg.sender_display_name}！有什么可以帮你的？`);
       }
-      else if (content === '/群内在线人数') {
+      else if (content === '/群内在线人数' || content === '/online' || content === '/users') {
         if (!isFeatureEnabled(msg.conversation_id, '群在线人数')) { sendMsg(msg.conversation_id, '群在线人数功能已被管理员关闭'); return; }
         (async () => {
           try {
@@ -4662,7 +4662,7 @@ C. 选项三内容
           }
         })();
       }
-      else if (content === '/今日群活跃') {
+      else if (content === '/今日群活跃' || content === '/activity') {
         try {
           const today = getTodayStr();
           const data = loadActivityData();
@@ -4689,7 +4689,7 @@ C. 选项三内容
           sendMsg(msg.conversation_id, `❌统计失败：${e.message}`);
         }
       }
-      else if (content === '/签到' || content === '签到') {
+      else if (content === '/签到' || content === '签到' || content === '/checkin' || content === 'checkin') {
         if (!isFeatureEnabled(msg.conversation_id, '签到')) { sendMsg(msg.conversation_id, '签到功能已被管理员关闭'); return; }
         const today = getTodayStr();
         let data = loadCheckinData();
@@ -4973,7 +4973,7 @@ C. 选项三内容
         })();
         return;
       }
-      else if (content.startsWith('/天气')) {
+      else if (content.startsWith('/天气') || content.startsWith('/weather')) {
         if (!isFeatureEnabled(msg.conversation_id, '天气')) { sendMsg(msg.conversation_id, '天气功能已被管理员关闭'); return; }
         const match = content.match(/^\/天气\s*\[(.+?)\]/);
         if (!match) {
@@ -5047,7 +5047,7 @@ C. 选项三内容
           }
         })();
       }
-      else if (content.startsWith('/绘图')) {
+      else if (content.startsWith('/绘图') || content.startsWith('/imagine') || content.startsWith('/paint')) {
         const match = content.match(/^\/绘图\s*\[(.+?)，(.+?)\]/);
         if (!match) {
           sendMsg(msg.conversation_id, '⚠️格式：/绘图[内容，风格]，例如：/绘图[一只猫，动漫风格]');
@@ -5133,7 +5133,7 @@ C. 选项三内容
           }
         })();
       }
-      else if (content.startsWith('/进群自动发送')) {
+      else if (content.startsWith('/进群自动发送') || content.startsWith('/welcome')) {
         const match = content.match(/^\/进群自动发送\s*\[([\s\S]+)\]/);
         if (!match) {
           sendMsg(msg.conversation_id, '⚠️格式错误，请使用：/进群自动发送[欢迎内容]');
@@ -5155,7 +5155,7 @@ C. 选项三内容
           sendMsg(msg.conversation_id, `✅已设置本群进群自动发送\n\n———— 内容预览 ————\n\n${welcomeText}`);
         })();
       }
-      else if (content.startsWith('/全局推送')) {
+      else if (content.startsWith('/全局推送') || content.startsWith('/broadcast')) {
         // 只有用户ID 3038 可以使用
         if (msg.sender_id !== 3038) {
           sendMsg(msg.conversation_id, '❌你没有权限使用此命令');
@@ -5183,7 +5183,7 @@ C. 选项三内容
           sendMsg(msg.conversation_id, `✅已向 \`${success}\`/\`${groups.length}\` 个群推送消息`);
         })();
       }
-      else if (content === '/狼人杀') {
+      else if (content === '/狼人杀' || content === '/werewolf') {
         const existing = findWRByUser(uid);
         // 只有进行中的房间才阻止创建新房间
         if (existing && existing.room.status !== 'ended') { sendMsg(cid, '❌你已经在一个狼人杀房间中了'); return; }
@@ -5219,7 +5219,7 @@ C. 选项三内容
         await unmuteAllPlayers(room);
         sendMsg(room.conversationId, `<markdown># 🏁 房间已结束\n\n> 房间号：\`${roomId}\`\n> 由 **${uname}** 手动结束\n\n**身份揭晓：**\n${room.players.map(p => `${p.alive ? '✅' : '💀'} ${p.nickname} - ${p.role ? ROLE_INFO[p.role].name : '未分配'}`).join('\n')}</markdown>`);
       }
-      else if (content.startsWith('/投票') || content.startsWith('/投票结果') || content.startsWith('/结束投票')) {
+      else if (content.startsWith('/投票') || content.startsWith('/投票结果') || content.startsWith('/结束投票') || content.startsWith('/vote') || content.startsWith('/vote-result') || content.startsWith('/vote-end')) {
         if (!isFeatureEnabled(msg.conversation_id, '投票')) { sendMsg(msg.conversation_id, '投票功能已被管理员关闭'); return; }
         addPoints(msg.sender_id, 5, '参与投票');
         const canUse = await canManage(msg.conversation_id, msg.sender_id, msg.sender);
@@ -5356,7 +5356,7 @@ C. 选项三内容
           sendMsg(msg.conversation_id, listText);
         }
       }
-      else if (content.startsWith('/增加违禁词')) {
+      else if (content.startsWith('/增加违禁词') || content.startsWith('/forbidden-add')) {
         const canUse = await canManage(msg.conversation_id, msg.sender_id, msg.sender);
         if (!canUse) { sendMsg(msg.conversation_id, '❌只有群主、管理员或指定用户才能管理违禁词'); return; }
         const match = content.match(/^\/增加违禁词\s*\[(.+?)\]/);
@@ -5372,7 +5372,7 @@ C. 选项三内容
           sendMsg(msg.conversation_id, buildForbiddenTable(msg.conversation_id, `✅已添加违禁词"${maskWord(word)}"`));
         }
       }
-      else if (content.startsWith('/删除违禁词')) {
+      else if (content.startsWith('/删除违禁词') || content.startsWith('/forbidden-remove')) {
         const canUse = await canManage(msg.conversation_id, msg.sender_id, msg.sender);
         if (!canUse) { sendMsg(msg.conversation_id, '❌只有群主、管理员或指定用户才能管理违禁词'); return; }
         const match = content.match(/^\/删除违禁词\s*\[(.+?)\]/);
@@ -5387,10 +5387,10 @@ C. 选项三内容
           sendMsg(msg.conversation_id, buildForbiddenTable(msg.conversation_id, `✅已删除违禁词"${maskWord(word)}"`));
         }
       }
-      else if (content === '/黑名单') {
+      else if (content === '/黑名单' || content === '/blacklist') {
         sendMsg(msg.conversation_id, buildBlacklistCard(msg.conversation_id));
       }
-      else if (content.startsWith('/删除黑名单')) {
+      else if (content.startsWith('/删除黑名单') || content.startsWith('/blacklist-remove')) {
         // 只有群主和ID3038能用
         const senderRole = msg.sender?.role || msg.sender?.user_role || msg.sender?.permission;
         const isOwner = senderRole === 'owner' || msg.sender?.is_owner === true;
@@ -5408,7 +5408,7 @@ C. 选项三内容
           sendMsg(msg.conversation_id, `<markdown>❌未找到ID为 \`${targetId}\` 的黑名单记录\n\n${buildBlacklistCard(msg.conversation_id).replace(/^<markdown>/, '').replace(/<\/markdown>$/, '')}</markdown>`);
         }
       }
-      else if (content.startsWith('/添加黑名单')) {
+      else if (content.startsWith('/添加黑名单') || content.startsWith('/blacklist-add')) {
         const senderRole = msg.sender?.role || msg.sender?.user_role || msg.sender?.permission;
         const isOwner = senderRole === 'owner' || msg.sender?.is_owner === true;
         if (uid !== 3038 && !isOwner) {
@@ -5444,7 +5444,7 @@ C. 选项三内容
         sendMsg(msg.conversation_id, buildSwitchTable(msg.conversation_id, `已${isEnable?'开启':'关闭'}功能：${feature}`));
       }
       // 手动禁言
-      else if (content.startsWith('/禁言') && !content.startsWith('/禁言列表')) {
+      else if (content.startsWith('/禁言') && !content.startsWith('/禁言列表') || content.startsWith('/mute')) {
         const canUse = uid === 3038 || isOwner || await canManage(msg.conversation_id, uid, msg.sender);
         if (!canUse) { sendMsg(msg.conversation_id, '只有群主、管理员或ID3038才能禁言'); return; }
         const match = content.match(/^\/禁言\s*\[(\d+)\]\s*\[?(\d*)\]?/);
@@ -5467,7 +5467,7 @@ C. 选项三内容
         sendMsg(msg.conversation_id, `<markdown>🔇 已禁言 **${targetName}**（ID：\`${targetId}\`）\`${minutes}\` 分钟</markdown>`);
       }
       // 手动解除禁言
-      else if (content.startsWith('/解除禁言')) {
+      else if (content.startsWith('/解除禁言') || content.startsWith('/unmute')) {
         const canUse = uid === 3038 || isOwner || await canManage(msg.conversation_id, uid, msg.sender);
         if (!canUse) { sendMsg(msg.conversation_id, '只有群主、管理员或ID3038才能解除禁言'); return; }
         const match = content.match(/^\/解除禁言\s*\[(\d+)\]/);
@@ -5482,7 +5482,7 @@ C. 选项三内容
         sendMsg(msg.conversation_id, `<markdown>✅ 已解除用户 \`${targetId}\` 的禁言</markdown>`);
       }
       // 禁言列表
-      else if (content === '/禁言列表') {
+      else if (content === '/禁言列表' || content === '/mute-list') {
         const data = loadMuteData();
         const list = data[String(msg.conversation_id)] || {};
         const now = Date.now();
