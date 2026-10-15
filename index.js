@@ -2978,7 +2978,7 @@ async function executeDIY(msg, name, paramMap) {
         });
       } else {
         // 智谱AI（默认）
-const __curModel = loadSetData().chatModel || 'deepseek-chat';
+const __curModel = loadSetData().chatModel || 'glm-4-flash';
             const __modelInfo = CHAT_MODELS.find(m => m.id === __curModel);
             const __diyApiType = __modelInfo?.api || 'junling';
             let __apiUrl, __apiKey;
@@ -3326,7 +3326,7 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
 9. description不超过30字
 10. note可以为空字符串`;
 
-            const __curModel2 = loadSetData().chatModel || 'deepseek-chat';
+            const __curModel2 = loadSetData().chatModel || 'glm-4-flash';
             const __modelInfo2 = CHAT_MODELS.find(m => m.id === __curModel2);
             const __diyApiType2 = __modelInfo2?.api || 'junling';
             let apiUrl, __apiKey2;
@@ -3570,7 +3570,7 @@ ${userData}
               ];
               
               // 选择模型（默认君灵AI）
-              let __curModel = loadSetData().chatModel || 'deepseek-chat';
+              let __curModel = loadSetData().chatModel || 'glm-4-flash';
               const __modelInfo = CHAT_MODELS.find(m => m.id === __curModel);
               let __apiType = __modelInfo?.api || 'junling';
               
@@ -3947,7 +3947,7 @@ ${userData}
 ## 📋 导航
 
 <link action="callback" action_id="help_common">📚 常用指令</link>
-所有人都能用的功能（签到、游戏、工具等）
+所有人都能用的功能（签到、工具等）
 
 <link action="callback" action_id="help_admin">🔧 管理功能</link>
 群管理相关功能（仅管理员/群主/创始人可用）
@@ -6215,7 +6215,7 @@ C. 选项三内容
 
 > 仅群主、${adminLabel}、创始人ID3038可用</markdown>`;
         } else if (actionId === 'help_common') {
-          const werewolfLink = isClassGroup ? '' : `<link action="callback" action_id="help_game">🎮 游戏娱乐</link>：狼人杀、谁是卧底、心灵感应等5个游戏\n`;
+          const werewolfLink = '';
           const diyLink = isClassGroup ? '' : `<link action="callback" action_id="help_diy">🛠️ 自制指令</link>：自己创建指令，AI协助生成\n`;
           detail = `<markdown># 📚 常用指令
 
@@ -6302,33 +6302,6 @@ ${werewolfLink}<link action="callback" action_id="help_list">📝 列表查看</
 - 其他娱乐活动
 
 > 👑 创始人ID3038无限抽奖，不限次数！</markdown>`;
-        } else if (actionId === 'help_game') {
-          detail = `<markdown>## 游戏娱乐
-### 🐺 狼人杀
-\`/狼人杀\`：开始狼人杀游戏（6-10人，含预言家、女巫、猎人等角色）
-\`/结束房间[房间号]\`：结束狼人杀房间（房主/群主/${adminLabel}/ID3038）
-
-### 🧠 心灵感应
-\`/心灵感应[主题]\`：出题者给3个答案，其他人猜，测群友默契度
-\`/猜[答案]\`：猜答案（参与者用）
-\`/揭晓\`：揭晓答案（出题者用）
-
-### 🕵️ 谁是卧底
-\`/谁是卧底\`：发起游戏，分配词语+描述+投票找卧底
-\`/加入\`：加入游戏
-\`/开始卧底\`：开始游戏（发起者用）
-\`/描述[内容]\`：描述你的词语
-\`/投卧底[用户ID]\`：投票找出卧底
-
-### 📖 故事接龙
-\`/故事接龙[主题]\`：AI开头，每人接一句，最后生成完整故事
-\`/接[内容]\`：接下一句
-\`/结束故事\`：提前结束并生成完整故事
-
-### 🎲 命运抉择
-\`/命运抉择[主题]\`：AI生成剧情场景，群成员投票选择，多结局互动冒险
-
-> 所有人可发起，创意游戏需AI参与</markdown>`;
         } else if (actionId === 'help_list') {
           detail = `<markdown>## 列表查看
 \`/黑名单\`：查看本群黑名单列表
@@ -6381,8 +6354,8 @@ ${werewolfLink}<link action="callback" action_id="help_list">📝 列表查看</
 \`/关闭[功能名]\`：关闭指定功能
 **可用功能（21个）：**
 🤖 AI功能：AI对话、图片识别
-📋 日常工具：签到、天气、音乐播放、AI绘图、快递查询、积分抽奖
-🎮 游戏娱乐：投票、狼人杀、心灵感应、谁是卧底、故事接龙、命运抉择
+📋 日常工具：签到运势、天气查询、AI绘图、投票管理
+🔧 群管理：黑名单、违禁词、禁言、欢迎设置
 🔧 群管理：违禁词、黑名单、特殊黑名单、禁言、进群欢迎、群活跃统计、全局推送、在线人数
 > 仅群主或${adminLabel}可用</markdown>`;
         } else if (actionId === 'help_set') {
@@ -6447,24 +6420,29 @@ ${werewolfLink}<link action="callback" action_id="help_list">📝 列表查看</
       const newUserId = event.data.user_id || event.data.uid || event.data.member_id || (event.data.user && event.data.user.id) || (event.data.member && event.data.member.id) || (event.data.invitee && event.data.invitee.id);
       const verifyData = loadVerifyData();
       
-      // 入群验证已禁用，直接正常欢迎
+      // 入群欢迎
       {
-        // 正常欢迎
+        // 默认欢迎语，不管有没有设置都发
         const welcomeData = loadWelcomeData();
         let welcome = welcomeData[String(convId)];
-        if (isFeatureEnabled(convId, '进群欢迎')) {
-          if (!welcome) {
-            welcome = `<at id="${newUserId}" />
-# 欢迎进群！
-/help 查看可用指令`;
-          } else {
-            if (newUserId) {
-              welcome = welcome.replace(/<@成员>/g, `<at id="${newUserId}" />`);
-            }
+        
+        if (!welcome) {
+          // 默认欢迎语
+          welcome = `<markdown>🎉 欢迎 <at id="${newUserId}" /> 加入群聊！
+
+我是君灵bot！是君衔（ID:3038）开发的智能群管理bot。
+欢迎使用！
+
+<link action="callback" action_id="help_common">📋 查看帮助</link></markdown>`;
+        } else {
+          // 用户自定义的欢迎语
+          if (newUserId) {
+            welcome = welcome.replace(/<@成员>/g, `<at id="${newUserId}" />`);
           }
-          const content = welcome.includes('<markdown>') ? welcome : `<markdown>${welcome}</markdown>`;
-          sendMsg(convId, content);
+          welcome = welcome.includes('<markdown>') ? welcome : `<markdown>${welcome}</markdown>`;
         }
+        
+        sendMsg(convId, welcome);
       }
       console.log('👋 进群事件:', event.type, event.data);
       return;
