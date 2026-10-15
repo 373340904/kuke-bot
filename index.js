@@ -2452,14 +2452,15 @@ async function aiCreateDIY(cid, uid, name, description) {
 4. 只返回JSON，不要解释`;
 
   try {
-    const res = await fetch(`${JUNLING_API_BASE}/chat/completions`, {
+    // 用智谱AI生成指令配置
+    const res = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${JUNLING_API_KEY}`,
+        'Authorization': `Bearer ${ZHIPU_API_KEY}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'deepseek-chat',
+        model: 'glm-4-flash',
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.7
       }),
