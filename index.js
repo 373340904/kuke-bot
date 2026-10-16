@@ -3553,10 +3553,26 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
 不要说"作为AI"之类的话。
 回答要用Markdown格式，可以用标题、列表、加粗等格式。
 
-【你当前的实时状态】
-- 你的昵称：${botCtx.nickname || '君灵bot.js.3.0'}
-- 当前可用功能：${botCtx.features || '签到运势、AI对话、天气、绘图、投票、黑名单、违禁词、禁言、欢迎、推送'}
-- 已删除功能（绝对不要提到这些功能存在）：${botCtx.deleted || '游戏、抽奖、积分、快递、创建指令'}
+【你的实时档案（每5秒自动更新）】
+- 昵称：${botCtx.nickname || '君灵bot.js.3.0'}
+- 个性签名：${botCtx.bio || ''}
+- 你的Bot ID：${botCtx.botId || 421}
+- 你的用户ID：${botCtx.userId || 3039}
+- 作者名：${botCtx.ccwName || '君灵bot'}
+- 粉丝数：${botCtx.followerCount || 0}
+- 获赞数：${botCtx.likeCount || 0}
+- 浏览量：${botCtx.viewCount || 0}
+- 评论数：${botCtx.commentCount || 0}
+- 作品数：${botCtx.creationCount || 0}
+- 所在群数量：${botCtx.convCount || 0}
+- 所在群列表：${botCtx.convList || '加载中...'}
+- 档案更新时间：${botCtx.updateTime || '加载中...'}
+
+【当前可用功能】
+${botCtx.features || '签到运势、AI对话、天气、绘图、投票、黑名单、违禁词、禁言、欢迎、推送'}
+
+【已删除功能（绝对不要提到这些功能存在）】
+${botCtx.deleted || '游戏、抽奖、积分、快递、创建指令'}
 
 【用户数据】
 ${userData}
@@ -3566,7 +3582,7 @@ ${userData}
 用户ID: ${uid}
 用户名: ${uname}
 
-> 重要：你只能说上面列出的可用功能，不要编造任何已删除的功能。用户问你有什么功能时，只列上面有的。`;
+> 重要：以上档案每5秒自动从KuKeChat API拉取，是实时数据。用户问你任何关于你自己的信息（粉丝数、签名、群数量等），都要从上面的实时数据里回答，不要编造。`;
               
               // 构建messages
               const messages = [
@@ -6685,16 +6701,60 @@ global.__botContext = {
   deleted: '游戏娱乐（狼人杀/谁是卧底/心灵感应等）、抽奖、积分、每日金句、快递查询、创建指令功能均已删除，不要提到这些功能'
 };
 
-// 每5秒更新一次机器人实时上下文
-setInterval(async () => {
+// 每5秒调用KuKeChat API刷新实时上下文
+async function refreshBotContext() {
   try {
-    // 这里可以加未来的实时API调用，现在先更新本地功能列表
-    global.__botContext.features = '签到+运势、AI对话、天气查询、AI绘图、投票管理、黑名单管理、违禁词管理、禁言管理、进群欢迎、全局推送';
-    global.__botContext.deleted = '游戏娱乐（狼人杀/谁是卧底/心灵感应/故事接龙/命运抉择）、抽奖、积分查询、每日金句独立指令、快递查询、DIY创建指令功能均已删除，不要告诉用户这些功能存在';
+    const headers = { 'Authorization': `Bot ${BOT_KEY}` };
+    
+    // 1. 获取机器人自己的信息
+    let myInfo = {};
+    try {
+      const res = await fetch(`${BASE_URL}/bot-api/me`, { headers });
+      if (res.ok) myInfo = await res.json();
+    } catch (e) {}
+    
+    // 2. 获取机器人所在的群列表
+    let myConvs = [];
+    try {
+      const res = await fetch(`${BASE_URL}/bot-api/conversations`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        myConvs = data.items || data || [];
+      }
+    } catch (e) {}
+    
+    // 3. 格式化信息
+    global.__botContext = {
+      nickname: myInfo.nickname || '君灵bot.js.3.0',
+      bio: myInfo.bio || '君衔开发的群管理bot',
+      botId: myInfo.bot_id || 421,
+      userId: myInfo.id || 3039,
+      ccwName: myInfo.ccw_name || '君灵bot',
+      followerCount: myInfo.ccw_follower_count || 0,
+      likeCount: myInfo.ccw_like_count || 0,
+      viewCount: myInfo.ccw_view_count || 0,
+      commentCount: myInfo.ccw_comment_count || 0,
+      creationCount: myInfo.ccw_creation_count || 0,
+      convCount: myConvs.length || 0,
+      convList: myConvs.slice(0, 10).map(c => `${c.name || '群' + c.id}(ID:${c.id}, ${c.member_count || '?'}人)`).join('、'),
+      features: '签到+运势、AI对话、天气查询、AI绘图、投票管理、黑名单管理、违禁词管理、禁言管理、进群欢迎、全局推送、后台管理(仅群10334)',
+      deleted: '游戏娱乐（狼人杀/谁是卧底/心灵感应/故事接龙/命运抉择）、抽奖、积分查询、每日金句独立指令、快递查询、DIY创建指令功能均已删除，不要告诉用户这些功能存在',
+      updateTime: new Date().toLocaleString('zh-CN')
+    };
+    
+    if (!global.__recentLogs) global.__recentLogs = [];
+    global.__recentLogs.push(new Date().toLocaleTimeString() + ' [刷新] 上下文已更新');
+    if (global.__recentLogs.length > 100) global.__recentLogs.shift();
   } catch (e) {
-    // 忽略错误
+    if (!global.__recentLogs) global.__recentLogs = [];
+    global.__recentLogs.push(new Date().toLocaleTimeString() + ' [错误] 上下文刷新失败: ' + e.message);
   }
-}, 5000);
+}
+
+// 启动时先刷一次
+refreshBotContext();
+// 之后每5秒刷一次
+setInterval(refreshBotContext, 5000);
 
 connect();
 
