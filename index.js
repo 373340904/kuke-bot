@@ -5108,28 +5108,43 @@ C. 选项三内容
       if (content.startsWith('/后台') && String(cid) === '10334' && uid === 3038) {
         const subCmd = content.replace('/后台', '').trim();
         
-        // 启动时间，用来算运行时长
+        // 启动时间
         const startTime = global.__startTime || Date.now();
         const runTime = Math.floor((Date.now() - startTime) / 1000);
         const runHours = Math.floor(runTime / 3600);
         const runMins = Math.floor((runTime % 3600) / 60);
         const runSecs = runTime % 60;
         
-        // 内存使用
+        // 内存
         const memUsage = process.memoryUsage();
         const memMB = Math.floor(memUsage.heapUsed / 1024 / 1024);
         const memTotalMB = Math.floor(memUsage.heapTotal / 1024 / 1024);
         
-        // 消息统计
+        // 统计
         const msgCount = global.__msgCount || 0;
         const errCount = global.__errCount || 0;
+        const aiCount = global.__aiCount || 0;
         
         if (subCmd === '日志' || subCmd === 'log') {
           const recentLogs = global.__recentLogs || [];
-          let logText = recentLogs.slice(-20).join('\n');
-          if (!logText) logText = '暂无最近日志';
+          let logText = recentLogs.slice(-30).join('\n');
+          if (!logText) logText = '暂无日志';
           
-          sendMsg(cid, '# 📋 云端服务器日志\n\n## 最近20条日志\n```\n' + logText + '\n```\n\n## 错误统计\n- 总错误数: ' + errCount + '\n- 处理消息总数: ' + msgCount + '\n\n> 更新时间: ' + new Date().toLocaleString('zh-CN'));
+          sendMsg(cid, `<markdown># 📋 云端服务器日志
+
+## 最近30条日志
+\`\`\`
+${logText}
+\`\`\`
+
+## 统计
+| 项目 | 数值 |
+|------|------|
+| 处理消息总数 | ${msgCount} 条 |
+| AI调用次数 | ${aiCount} 次 |
+| 错误总数 | ${errCount} 次 |
+
+> 更新时间：${new Date().toLocaleString('zh-CN')}</markdown>`);
           return;
         }
         
@@ -5137,12 +5152,68 @@ C. 选项三内容
           const wsStatus = globalWs && globalWs.readyState === 1 ? '✅ 正常' : '❌ 异常';
           const wsState = globalWs ? ['连接中', '已连接', '关闭中', '已关闭'][globalWs.readyState] : '未初始化';
           
-          sendMsg(cid, '# 🔍 系统详细自检报告\n\n## ✅ 基础服务\n| 项目 | 状态 | 详情 |\n|------|------|------|\n| WebSocket连接 | ' + wsStatus + ' | ' + wsState + ' |\n| 进程运行 | ✅ 正常 | PID: ' + process.pid + ' |\n| Node版本 | ✅ 正常 | v' + process.version + ' |\n| 平台 | ✅ 正常 | ' + process.platform + ' |\n\n## 💾 资源使用\n| 项目 | 数值 |\n|------|------|\n| 堆内存已用 | ' + memMB + ' MB |\n| 堆内存总量 | ' + memTotalMB + ' MB |\n| 运行时长 | ' + runHours + '小时' + runMins + '分' + runSecs + '秒 |\n| 处理消息数 | ' + msgCount + ' 条 |\n| 错误总数 | ' + errCount + ' 次 |\n\n## 🌐 API接口\n| 接口 | 状态 |\n|------|------|\n| KuKeChat API | ✅ 正常 |\n| 智谱AI (glm-4-flash) | ✅ 正常 |\n| 狼小嗷API | ⚠️ 限速模式 |\n\n## ⚠️ 警告项\n- 狼小嗷今日文本额度用完，限速中\n- GitHub push偶尔需要重试\n\n## ❌ 错误项\n- 无严重错误\n\n> 自检完成: ' + new Date().toLocaleString('zh-CN'));
+          sendMsg(cid, `<markdown># 🔍 系统详细自检报告
+
+## ✅ 基础服务
+| 项目 | 状态 | 详情 |
+|------|------|------|
+| WebSocket连接 | ${wsStatus} | ${wsState} |
+| 进程运行 | ✅ 正常 | PID: ${process.pid} |
+| Node版本 | ✅ 正常 | v${process.version} |
+| 操作系统 | ✅ 正常 | ${process.platform} |
+
+## 💾 资源使用
+| 项目 | 数值 |
+|------|------|
+| 堆内存已用 | ${memMB} MB |
+| 堆内存总量 | ${memTotalMB} MB |
+| 运行时长 | ${runHours}小时 ${runMins}分 ${runSecs}秒 |
+| 处理消息数 | ${msgCount} 条 |
+| AI调用次数 | ${aiCount} 次 |
+| 错误总数 | ${errCount} 次 |
+
+## 🌐 API接口
+| 接口 | 状态 |
+|------|------|
+| KuKeChat API | ✅ 正常 |
+| 智谱AI (glm-4-flash) | ✅ 正常 |
+| 狼小嗷API | ⚠️ 限速模式 |
+
+## ⚠️ 警告项
+- 狼小嗷今日文本额度用完，限速中
+- GitHub push偶尔需要重试
+
+## ❌ 错误项
+- 无严重错误
+
+> 自检完成：${new Date().toLocaleString('zh-CN')}</markdown>`);
           return;
         }
         
         if (subCmd === '面板' || subCmd === 'panel') {
-          sendMsg(cid, '# 🖥️ 机器人运行面板\n\n## 基本信息\n| 项目 | 数值 |\n|------|------|\n| 机器人ID | 421 |\n| 用户ID | 3039 |\n| 机器人昵称 | 君灵bot.js.3.0 |\n| 运行状态 | ' + (globalWs && globalWs.readyState === 1 ? '🟢 在线' : '🔴 离线') + ' |\n| 运行时长 | ' + runHours + 'h ' + runMins + 'm ' + runSecs + 's |\n| 当前模型 | ' + (loadSetData().chatModel || 'glm-4-flash') + ' |\n| 部署平台 | Railway |\n| 区域 | 新加坡 |\n\n## 统计数据\n| 项目 | 数值 |\n|------|------|\n| 处理消息总数 | ' + msgCount + ' 条 |\n| 错误总数 | ' + errCount + ' 次 |\n| 内存占用 | ' + memMB + ' MB |\n\n> 面板更新: ' + new Date().toLocaleString('zh-CN'));
+          sendMsg(cid, `<markdown># 🖥️ 机器人运行面板
+
+## 基本信息
+| 项目 | 数值 |
+|------|------|
+| 机器人ID | 421 |
+| 用户ID | 3039 |
+| 机器人昵称 | 君灵bot.js.3.0 |
+| 运行状态 | ${globalWs && globalWs.readyState === 1 ? '🟢 在线' : '🔴 离线'} |
+| 运行时长 | ${runHours}h ${runMins}m ${runSecs}s |
+| 当前模型 | ${loadSetData().chatModel || 'glm-4-flash'} |
+| 部署平台 | Railway |
+| 区域 | 新加坡 |
+
+## 统计数据
+| 项目 | 数值 |
+|------|------|
+| 处理消息总数 | ${msgCount} 条 |
+| AI调用次数 | ${aiCount} 次 |
+| 错误总数 | ${errCount} 次 |
+| 内存占用 | ${memMB} MB |
+
+> 面板更新：${new Date().toLocaleString('zh-CN')}</markdown>`);
           return;
         }
         
@@ -5151,20 +5222,44 @@ C. 选项三内容
           let featureText = '';
           allFeatures.forEach(f => {
             const enabled = isFeatureEnabled(cid, f);
-            featureText += '| ' + f + ' | ' + (enabled ? '✅ 开启' : '❌ 关闭') + ' |\n';
+            featureText += `| ${f} | ${enabled ? '✅ 开启' : '❌ 关闭'} |\n`;
           });
           
-          sendMsg(cid, '# 📊 群功能信息\n\n## 当前群功能开关\n| 功能 | 状态 |\n|------|------|\n' + featureText + '\n## 管理指令\n- `/开启 [功能名]` - 开启功能\n- `/关闭 [功能名]` - 关闭功能\n- `/增加违禁词 [词]` - 添加违禁词\n- `/添加黑名单 [用户ID]` - 添加黑名单\n\n> 群ID: ' + cid);
+          sendMsg(cid, `<markdown># 📊 群功能信息
+
+## 当前群功能开关
+| 功能 | 状态 |
+|------|------|
+${featureText}
+## 管理指令
+- \`/开启 [功能名]\` - 开启功能
+- \`/关闭 [功能名]\` - 关闭功能
+- \`/增加违禁词 [词]\` - 添加违禁词
+- \`/添加黑名单 [用户ID]\` - 添加黑名单
+
+> 群ID：${cid}</markdown>`);
           return;
         }
         
         if (subCmd === '恢复' || subCmd === 'restart') {
-          sendMsg(cid, '# 🔄 正在重启...\n> 进程将在2秒后退出\n> Railway会自动重新拉起，预计1-2分钟恢复');
+          sendMsg(cid, `<markdown># 🔄 正在重启...
+
+> 进程将在2秒后退出
+> Railway会自动重新拉起，预计1-2分钟恢复</markdown>`);
           setTimeout(() => { process.exit(0); }, 2000);
           return;
         }
         
-        sendMsg(cid, '# 🛠️ 后台管理（仅创始人）\n\n## 可用指令\n- `/后台 日志` - 查看云端服务器实时日志\n- `/后台 自检` - 详细系统状态检测\n- `/后台 面板` - 机器人运行状态面板\n- `/后台 信息` - 群功能开关管理\n- `/后台 恢复` - 重启机器人重新部署\n\n> 仅群10334 + ID3038可用');
+        sendMsg(cid, `<markdown># 🛠️ 后台管理（仅创始人）
+
+## 可用指令
+- \`/后台 日志\` - 查看云端服务器实时日志
+- \`/后台 自检\` - 详细系统状态检测
+- \`/后台 面板\` - 机器人运行状态面板
+- \`/后台 信息\` - 群功能开关管理
+- \`/后台 恢复\` - 重启机器人重新部署
+
+> 仅群10334 + ID3038可用</markdown>`);
         return;
       }
       
@@ -6566,6 +6661,11 @@ ${werewolfLink}<link action="callback" action_id="help_list">📝 列表查看</
 }
 
 // 启动
+global.__startTime = Date.now();
+global.__recentLogs = [];
+global.__msgCount = 0;
+global.__errCount = 0;
+global.__aiCount = 0;
 connect();
 
 // HTTP 服务器（用于 Render 健康检查，防止休眠）
