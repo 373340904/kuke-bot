@@ -3546,11 +3546,17 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
               const userData = getUserDataForAI(uid, cid);
               const userHistory = getChatHistory(uid);
               
+              const botCtx = global.__botContext || {};
               const systemPrompt = `你是君灵AI，运行在KukeChat平台的智能机器人助手。
 你由君衔（用户ID：3038）创建和维护。
 用生动详细的中文回答问题，不要太简短，该展开就展开。
 不要说"作为AI"之类的话。
 回答要用Markdown格式，可以用标题、列表、加粗等格式。
+
+【你当前的实时状态】
+- 你的昵称：${botCtx.nickname || '君灵bot.js.3.0'}
+- 当前可用功能：${botCtx.features || '签到运势、AI对话、天气、绘图、投票、黑名单、违禁词、禁言、欢迎、推送'}
+- 已删除功能（绝对不要提到这些功能存在）：${botCtx.deleted || '游戏、抽奖、积分、快递、创建指令'}
 
 【用户数据】
 ${userData}
@@ -3560,7 +3566,7 @@ ${userData}
 用户ID: ${uid}
 用户名: ${uname}
 
-> 你可以查询群信息和回答用户问题，不需要任何关键词检测，直接回答即可。`;
+> 重要：你只能说上面列出的可用功能，不要编造任何已删除的功能。用户问你有什么功能时，只列上面有的。`;
               
               // 构建messages
               const messages = [
@@ -6672,6 +6678,24 @@ global.__recentLogs = [];
 global.__msgCount = 0;
 global.__errCount = 0;
 global.__aiCount = 0;
+global.__botContext = {
+  nickname: '君灵bot.js.3.0',
+  bio: '君衔开发的群管理bot',
+  features: '签到+运势、AI对话、天气查询、AI绘图、投票管理、黑名单管理、违禁词管理、禁言管理、进群欢迎、全局推送',
+  deleted: '游戏娱乐（狼人杀/谁是卧底/心灵感应等）、抽奖、积分、每日金句、快递查询、创建指令功能均已删除，不要提到这些功能'
+};
+
+// 每5秒更新一次机器人实时上下文
+setInterval(async () => {
+  try {
+    // 这里可以加未来的实时API调用，现在先更新本地功能列表
+    global.__botContext.features = '签到+运势、AI对话、天气查询、AI绘图、投票管理、黑名单管理、违禁词管理、禁言管理、进群欢迎、全局推送';
+    global.__botContext.deleted = '游戏娱乐（狼人杀/谁是卧底/心灵感应/故事接龙/命运抉择）、抽奖、积分查询、每日金句独立指令、快递查询、DIY创建指令功能均已删除，不要告诉用户这些功能存在';
+  } catch (e) {
+    // 忽略错误
+  }
+}, 5000);
+
 connect();
 
 // HTTP 服务器（用于 Render 健康检查，防止休眠）
