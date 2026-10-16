@@ -5133,9 +5133,7 @@ C. 选项三内容
           sendMsg(cid, `<markdown># 📋 云端服务器日志
 
 ## 最近30条日志
-\`\`\`
 ${logText}
-\`\`\`
 
 ## 统计
 | 项目 | 数值 |
@@ -5149,44 +5147,52 @@ ${logText}
         }
         
         if (subCmd === '自检' || subCmd === 'selfcheck') {
-          const wsStatus = globalWs && globalWs.readyState === 1 ? '✅ 正常' : '❌ 异常';
-          const wsState = globalWs ? ['连接中', '已连接', '关闭中', '已关闭'][globalWs.readyState] : '未初始化';
+          sendMsg(cid, '<markdown>🔍 正在收集系统数据并调用智谱AI分析，请稍等...</markdown>');
           
-          sendMsg(cid, `<markdown># 🔍 系统详细自检报告
-
-## ✅ 基础服务
-| 项目 | 状态 | 详情 |
-|------|------|------|
-| WebSocket连接 | ${wsStatus} | ${wsState} |
-| 进程运行 | ✅ 正常 | PID: ${process.pid} |
-| Node版本 | ✅ 正常 | v${process.version} |
-| 操作系统 | ✅ 正常 | ${process.platform} |
-
-## 💾 资源使用
-| 项目 | 数值 |
-|------|------|
-| 堆内存已用 | ${memMB} MB |
-| 堆内存总量 | ${memTotalMB} MB |
-| 运行时长 | ${runHours}小时 ${runMins}分 ${runSecs}秒 |
-| 处理消息数 | ${msgCount} 条 |
-| AI调用次数 | ${aiCount} 次 |
-| 错误总数 | ${errCount} 次 |
-
-## 🌐 API接口
-| 接口 | 状态 |
-|------|------|
-| KuKeChat API | ✅ 正常 |
-| 智谱AI (glm-4-flash) | ✅ 正常 |
-| 狼小嗷API | ⚠️ 限速模式 |
-
-## ⚠️ 警告项
-- 狼小嗷今日文本额度用完，限速中
-- GitHub push偶尔需要重试
-
-## ❌ 错误项
-- 无严重错误
-
-> 自检完成：${new Date().toLocaleString('zh-CN')}</markdown>`);
+          // 收集真实系统数据
+          const wsStatus = globalWs && globalWs.readyState === 1 ? '正常' : '异常';
+          const wsState = globalWs ? ['连接中', '已连接', '关闭中', '已关闭'][globalWs.readyState] : '未初始化';
+          const sysInfo = `系统数据：
+- WebSocket连接：${wsStatus}（${wsState}）
+- 进程PID：${process.pid}
+- Node版本：${process.version}
+- 操作系统：${process.platform}
+- 堆内存已用：${memMB} MB
+- 堆内存总量：${memTotalMB} MB
+- 运行时长：${runHours}小时${runMins}分${runSecs}秒
+- 处理消息总数：${msgCount} 条
+- AI调用次数：${aiCount} 次
+- 错误总数：${errCount} 次
+- 当前时间：${new Date().toLocaleString('zh-CN')}
+`;
+          
+          // 直接调用智谱AI
+          (async () => {
+            try {
+              const aiRes = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${ZHIPU_API_KEY}`
+                },
+                body: JSON.stringify({
+                  model: 'glm-4-flash',
+                  messages: [
+                    { role: 'system', content: '你是机器人运维助手，根据系统数据生成简洁的运行状态报告，用markdown格式，分成功/警告/错误三类，最后给运行建议' },
+                    { role: 'user', content: sysInfo + '\n\n请生成自检报告' }
+                  ],
+                  max_tokens: 1500
+                })
+              });
+              const aiData = await aiRes.json();
+              const aiReply = aiData.choices[0].message.content;
+              sendMsg(cid, `<markdown># 🔍 系统自检报告（智谱AI分析）\n\n${aiReply}</markdown>`);
+              global.__aiCount = (global.__aiCount || 0) + 1;
+            } catch (e) {
+              sendMsg(cid, `<markdown>❌ AI分析失败：${e.message}\n\nWebSocket：${wsStatus}\n内存：${memMB}MB\n运行：${runHours}h${runMins}m</markdown>`);
+              global.__errCount = (global.__errCount || 0) + 1;
+            }
+          })();
           return;
         }
         
