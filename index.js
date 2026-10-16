@@ -5250,9 +5250,9 @@ ${featureText}
         if (subCmd === '恢复' || subCmd === 'restart') {
           sendMsg(cid, `<markdown># 🔄 正在重启...
 
-> 进程将在2秒后退出
-> Railway会自动重新拉起，预计1-2分钟恢复</markdown>`);
-          setTimeout(() => { process.exit(0); }, 2000);
+> 进程将在2秒后模拟崩溃退出
+> Railway检测到异常后会自动重新拉起，预计1-2分钟恢复</markdown>`);
+          setTimeout(() => { process.exit(1); }, 2000);
           return;
         }
         
