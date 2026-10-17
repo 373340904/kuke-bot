@@ -1633,10 +1633,9 @@ function getVoteCounts(vote) {
 function buildVoteButtonMessage(vote) {
   const counts = getVoteCounts(vote);
   const total = counts.reduce((a, b) => a + b, 0);
-  let msg = `<markdown># 📊 ${vote.title}\n\n`;
-  msg += `> ID：${vote.voteId}\n`;
-  if (vote.creator) msg += `> 发起人：${vote.creator}\n`;
-  msg += `\n`;
+  let msg = `<markdown># 🗳️ ${vote.isGlobal ? '全局投票' : '群投票'}\n\n`;
+  msg += `## ${vote.title}\n\n`;
+  if (vote.creator) msg += `发起者：${vote.creator} | 投票ID：${vote.voteId} | 🟢 进行中\n\n`;
   // 如果有sections，按sections渲染（显示小标题）
   if (vote.sections && vote.sections.length > 0) {
     for (const sec of vote.sections) {
@@ -1645,19 +1644,15 @@ function buildVoteButtonMessage(vote) {
       } else {
         const i = sec.index;
         const opt = vote.options[i];
-        const count = counts[i];
-        const pct = total > 0 ? Math.round(count / total * 100) : 0;
         const componentId = `${vote.voteId}_${i}`;
-        msg += `<button action="callback" action_id="${componentId}" id="${componentId}">\`${i + 1}\`. ${opt} · \`${count}\`票(\`${pct}\`%)</button>\n`;
+        msg += `${i + 1}. ${opt}\n👉 <button action="callback" action_id="${componentId}" id="${componentId}">投「${opt}」</button>\n\n`;
       }
     }
   } else {
     // 没有sections，按原来的方式渲染
     vote.options.forEach((opt, i) => {
-      const count = counts[i];
-      const pct = total > 0 ? Math.round(count / total * 100) : 0;
       const componentId = `${vote.voteId}_${i}`;
-      msg += `<button action="callback" action_id="${componentId}" id="${componentId}">\`${i + 1}\`. ${opt} · \`${count}\`票(\`${pct}\`%)</button>\n`;
+      msg += `${i + 1}. ${opt}\n👉 <button action="callback" action_id="${componentId}" id="${componentId}">投「${opt}」</button>\n\n`;
     });
   }
   msg += `</markdown>`;
