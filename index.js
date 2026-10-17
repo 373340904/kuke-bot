@@ -5401,6 +5401,12 @@ ${featureText}
           } else if (parts[0] === '单群') {
             startIdx = 1;
           }
+          // 检测第二个参数是多选/单选
+          let isMulti = false;
+          if (parts[startIdx] === '多选' || parts[startIdx] === '单选') {
+            isMulti = (parts[startIdx] === '多选');
+            startIdx++;
+          }
           const title = parts[startIdx];
           // 解析选项和小标题（小标题格式：小标题：XXX）
           const options = [];
