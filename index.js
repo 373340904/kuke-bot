@@ -6516,13 +6516,17 @@ ${werewolfLink}<link action="callback" action_id="help_list">📝 列表查看</
 \`/违禁词表格\`：查看本群违禁词列表
 > 所有人可查看</markdown>`;
         } else if (actionId === 'help_vote') {
-          detail = `<markdown>## 投票管理
-\`/投票[单群，标题，选项1，选项2...]\`：本群发起投票
-\`/投票[全局，标题，选项1，选项2...]\`：发到所有群（仅ID 3038）
+          detail = `<markdown># 🗳️ 投票管理
+
+## 发起投票
+\`/投票 [全局/单群，多选/单选，标题，选项。。。]\`
+
+## 其他指令
 \`/投票结果[投票ID]\`：查看指定投票结果（不带ID看本群最新）
 \`/投票列表\`：查看本群所有投票
 \`/结束投票[投票ID]\`：结束指定投票（不带ID结束本群最新）
-> 仅群主、${adminLabel}、ID 3038</markdown>`;
+
+> 仅群主、${adminLabel}、ID 3038可用</markdown>`;
         } else if (actionId === 'help_forbidden') {
           detail = `<markdown>## 违禁词管理
 \`/增加违禁词[词]\`：添加违禁词，说2次自动拉黑
