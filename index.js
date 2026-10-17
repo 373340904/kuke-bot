@@ -625,9 +625,9 @@ async function scanSpecialBlacklist() {
     console.log(`[特殊黑名单] 扫描失败: ${e.message}`);
   }
 }
-// 启动定时扫描（每5秒）
-setInterval(scanSpecialBlacklist, 2000);
-console.log('✅ 特殊黑名单定时检测已启动（每2秒扫描一次）');
+// 启动定时扫描（每60秒一次，避免请求过多被判定DDoS）
+setInterval(scanSpecialBlacklist, 60000);
+console.log('✅ 特殊黑名单定时检测已启动（每60秒扫描一次）');
 
 
 // 今日金句库
@@ -6753,8 +6753,8 @@ async function refreshBotContext() {
 
 // 启动时先刷一次
 refreshBotContext();
-// 之后每5秒刷一次
-setInterval(refreshBotContext, 5000);
+// 之后每60秒刷一次（避免请求过多被判定DDoS）
+setInterval(refreshBotContext, 60000);
 
 connect();
 
