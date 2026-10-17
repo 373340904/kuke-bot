@@ -4007,7 +4007,7 @@ ${userData}
         }
         return;
       }
-      else if (content.startsWith('/特殊黑名单') || content.startsWith('/special-blacklist')) {
+      else if (content.startsWith('/特殊黑名单') || content.startsWith('/移除特殊黑名单') || content.startsWith('/special-blacklist')) {
         // 权限检查：仅3038和群主
         const senderRole = msg.sender?.role || msg.sender?.user_role || msg.sender?.permission;
         const isOwner = senderRole === 'owner' || msg.sender?.is_owner === true;
