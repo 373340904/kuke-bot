@@ -1662,9 +1662,16 @@ function buildVoteButtonMessage(vote) {
 function buildVoteResultCard(vote) {
   const counts = getVoteCounts(vote);
   const total = counts.reduce((a, b) => a + b, 0);
-  let reply = `<markdown># 🏁 ${vote.title} - 投票结果\n\n`;
-  if (vote.creator) reply += `> 发起人：${vote.creator}\n`;
-  reply += `\n`;
+  let reply = `<markdown># 投票已结束，以下是投票结果：
+
+🔒 ${vote.isGlobal ? '全局' : '本群'}投票已结束！
+
+## 📊 ${vote.isGlobal ? '全局' : '本群'}投票 · 结果
+### ${vote.title} 🔒 已结束
+
+投票ID：${vote.voteId} | 去重投票人数：${total} | 累计票数：${total}
+
+`;
   // 如果有sections，按sections渲染
   if (vote.sections && vote.sections.length > 0) {
     for (const sec of vote.sections) {
@@ -1676,7 +1683,7 @@ function buildVoteResultCard(vote) {
         const count = counts[i];
         const pct = total > 0 ? Math.round(count / total * 100) : 0;
         const bar = '█'.repeat(Math.round(pct / 5)) + '░'.repeat(20 - Math.round(pct / 5));
-        reply += `**${i + 1}. ${opt}**\n${bar} ${count}票 (${pct}%)\n\n`;
+        reply += `${i + 1}. ${opt} — ${count} 票（${pct}%）\n${bar}\n\n`;
       }
     }
   } else {
@@ -1685,7 +1692,7 @@ function buildVoteResultCard(vote) {
       const count = counts[i];
       const pct = total > 0 ? Math.round(count / total * 100) : 0;
       const bar = '█'.repeat(Math.round(pct / 5)) + '░'.repeat(20 - Math.round(pct / 5));
-      reply += `**${i + 1}. ${opt}**\n${bar} ${count}票 (${pct}%)\n\n`;
+      reply += `${i + 1}. ${opt} — ${count} 票（${pct}%）\n${bar}\n\n`;
     });
   }
   reply += `</markdown>`;
