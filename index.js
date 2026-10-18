@@ -694,7 +694,7 @@ function generateFortune() {
 }
 
 // 生成签到卡片（Markdown格式）
-function buildCheckinCard(userName, today, rank, fortuneLevel, fortuneDesc, star, luckyNum, color, yi, title, userId) {
+function buildCheckinCard(userName, today, rank, fortuneLevel, fortuneDesc, star, luckyNum, color, yi, title, userId, dailyQuote) {
   const cardTitle = title || '✅签到完成！';
   let reply = `<markdown># ${cardTitle}\n\n`;
   reply += `**用户：**${userName}\n`;
@@ -707,10 +707,10 @@ function buildCheckinCard(userName, today, rank, fortuneLevel, fortuneDesc, star
   reply += `- **幸运数字：**\`${luckyNum}\`\n`;
   reply += `- **幸运色：**${color}\n`;
   reply += `- **宜：**${yi}\n\n`;
-  // 签到获得积分
-  if (userId) {
-    const newPoints = addPoints(userId, 10, '每日签到');
-    reply += `> 🎁 签到奖励：+10积分（当前：${newPoints}分，每50分可抽一次奖）\n\n`;
+  // 每日金句直接放在签到卡片里
+  if (dailyQuote) {
+    reply += `## 💬 每日金句\n\n`;
+    reply += `> **${dailyQuote.text}**\n> \n> —— ${dailyQuote.author}\n\n`;
   }
   reply += `❤️今日签到已完成，明日再来吧~</markdown>`;
   return reply;
@@ -6441,7 +6441,6 @@ ${String(data.conversation_id) === '10334' ? '<link action="callback" action_id=
 <link action="callback" action_id="help_query">🔍 基础查询</link>
 <link action="callback" action_id="help_checkin">📅 签到运势</link>
 <link action="callback" action_id="help_life">🌤️ 生活工具</link>
-<link action="callback" action_id="help_points">🎁 积分抽奖</link>
 ${werewolfLink}<link action="callback" action_id="help_list">📝 列表查看</link>
 > 💡 小提示：@机器人可以直接和AI聊天！</markdown>`;
         } else if (actionId === 'help_query') {
@@ -6465,16 +6464,16 @@ ${werewolfLink}<link action="callback" action_id="help_list">📝 列表查看</
 
 | 指令 | 说明 |
 |------|------|
-| \`/签到\` | 每日签到，获得专属运势报告 |
+| \`/签到\` | 每日签到，获得专属运势报告+每日金句 |
 
 ## 🎯 签到内容
-- ⭐ 幸运星评级（1-5星）
+- ⭐ 幸运星评级
 - 🔢 幸运数字
 - 🎨 幸运颜色
 - ✅ 今日宜做事项
-- 🎁 签到积分奖励
+- 💬 每日金句
 
-> 💡 每人每天限签一次，签到可得积分，积分可用来抽奖！
+> 💡 每人每天限签一次
 > ✅ 所有人可用</markdown>`;
         } else if (actionId === 'help_life') {
           detail = `<markdown># 🌤️ 生活工具
@@ -6492,33 +6491,6 @@ ${werewolfLink}<link action="callback" action_id="help_list">📝 列表查看</
 赛博朋克、水彩、油画、动漫、写实、像素风、国风、抽象等
 
 > ✅ 所有人可用</markdown>`;
-        } else if (actionId === 'help_points') {
-          detail = `<markdown># 🎁 积分抽奖
-
-## 📌 指令列表
-
-| 指令 | 说明 | 消耗/条件 |
-|------|------|-----------|
-| \`/积分\` | 查看我的积分详情、抽奖次数、金句体验数 | 免费 |
-| \`/抽奖\` | 幸运大抽奖，赢取各种奖品 | 50积分/次 |
-| \`/每日金句\` | 每日一句精选金句 | 需50积分以上，消耗10积分 |
-
-## 🎰 奖池概率
-| 奖品 | 概率 |
-|------|------|
-| 🪙 10共创币 | 10% |
-| ✨ +15积分 | 30% |
-| 🔄 再来一次 | 25% |
-| 📜 金句体验+1 | 30% |
-| 💎 +100积分 | 5% |
-
-## 💡 怎么赚积分？
-- 每日签到
-- 参与群内游戏
-- 发起投票
-- 其他娱乐活动
-
-> 👑 创始人ID3038无限抽奖，不限次数！</markdown>`;
         } else if (actionId === 'help_list') {
           detail = `<markdown>## 列表查看
 \`/黑名单\`：查看本群黑名单列表
