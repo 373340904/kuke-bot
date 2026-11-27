@@ -909,8 +909,8 @@ function saveSetData(data, cid) {
 }
 function getDefaultSetData() {
   return {
-    chatModel: 'deepseek-chat',
-    visionModel: 'glm-4v',
+    chatModel: 'glm-4-flash',
+    visionModel: 'glm-4v-flash',
     features: {
       ai_chat: true, checkin: true, weather: true, express: true, vote: true,
       music: true, draw: true, werewolf: true, telepathy: true,
@@ -1185,9 +1185,10 @@ async function tryExecuteIntent(question, msg, uid, uname) {
     const intentList = INTENT_MAP.filter(item => executeActions.includes(item.action))
       .map(item => `${item.action}: ${item.intent}（${item.keywords.join('、')}）`).join('\n');
     const aiPrompt = `用户说："${question}"\n\n判断用户是否想执行以下操作（注意：是"执行"操作，不是"查询"）：\n${intentList}\n\n判断规则：\n- "帮我签到"、"我要签到"、"签个到" → checkin\n- "帮我抽奖"、"我要抽奖"、"抽个奖" → lottery\n- "每日金句"、"来个金句"、"金句" → dailyquote\n- "清空对话"、"清空记录" → clearchat\n- 只是问"签到了吗"、"有多少积分"、"黑名单有谁"等查询类 → none\n- 普通聊天 → none\n\n只返回action或none，不要其他内容。`;
-    const currentModel = loadSetData().chatModel || 'pollinations-openai';
+    const currentModel = loadSetData().chatModel || 'glm-4-flash';
     const modelInfo = CHAT_MODELS.find(m => m.id === currentModel);
-    const apiType = modelInfo?.api || 'junling';
+    let apiType = modelInfo?.api || 'zhipu';
+    if (apiType === 'openai' && !OPENAI_API_KEY) apiType = 'zhipu';
     
     let intentApiUrl, intentApiKey, intentModel;
     if (apiType === 'openai') {
@@ -1380,14 +1381,16 @@ async function callAI(prompt, systemPrompt) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 30000);
   try {
-    const currentModel = loadSetData().chatModel || 'pollinations-openai';
+    const currentModel = loadSetData().chatModel || 'glm-4-flash';
     const modelInfo = CHAT_MODELS.find(m => m.id === currentModel);
     const sys = systemPrompt || '你是君灵AI，一只乐于助人的AI助手，用简洁生动的语言回答。';
-    const apiType = modelInfo?.api || 'junling';
-    
+    // openai 类型但未配置 OpenAI Key 时，直接按智谱处理，避免打到无效源
+    let apiType = modelInfo?.api || 'zhipu';
+    if (apiType === 'openai' && !OPENAI_API_KEY) apiType = 'zhipu';
+
     let aiRes;
     let resultText = '';
-    
+
     if (apiType === 'junling') {
       // 君灵AI（狼小嗷，OpenAI兼容格式）
       if (!JUNLING_API_KEY) throw new Error('JUNLING_API_KEY 未配置');
@@ -1410,6 +1413,21 @@ async function callAI(prompt, systemPrompt) {
       aiRes = await fetch(`https://text.pollinations.ai/${encodeURIComponent(prompt)}?model=${pollModel}&system=${encodeURIComponent(sys)}`, {
         signal: controller.signal
       });
+    } else if (apiType === 'openai') {
+      if (!OPENAI_API_KEY) throw new Error('OPENAI_API_KEY 未配置');
+      aiRes = await fetch(`${OPENAI_API_BASE}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENAI_API_KEY}` },
+        body: JSON.stringify({
+          model: currentModel,
+          messages: [
+            { role: 'system', content: sys },
+            { role: 'user', content: prompt }
+          ],
+          temperature: 0.8
+        }),
+        signal: controller.signal
+      });
     } else {
       // 默认智谱AI
       if (!ZHIPU_API_KEY) throw new Error('ZHIPU_API_KEY 未配置');
@@ -1417,7 +1435,7 @@ async function callAI(prompt, systemPrompt) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${ZHIPU_API_KEY}` },
         body: JSON.stringify({
-          model: currentModel,
+          model: (modelInfo?.api === 'zhipu') ? currentModel : 'glm-4-flash',
           messages: [
             { role: 'system', content: sys },
             { role: 'user', content: prompt }
@@ -1444,11 +1462,12 @@ async function callAI(prompt, systemPrompt) {
     return resultText;
   } catch (e) {
     clearTimeout(timeout);
-    // 君灵AI失败时自动降级到智谱
-    const currentModel = loadSetData().chatModel || 'pollinations-openai';
+    // 非智谱系源（君灵/OpenAI/Pollinations）失败时，自动降级到智谱 GLM-4-Flash
+    const currentModel = loadSetData().chatModel || 'glm-4-flash';
     const modelInfo = CHAT_MODELS.find(m => m.id === currentModel);
-    if (modelInfo?.api === 'junling' && ZHIPU_API_KEY) {
-      logWarn('AI', `君灵AI调用失败，降级到智谱GLM-4-Flash: ${e.message}`);
+    const needFallback = modelInfo?.api !== 'zhipu' && !!ZHIPU_API_KEY;
+    if (needFallback) {
+      logWarn('AI', `主模型(${modelInfo?.api || currentModel})调用失败，降级到智谱GLM-4-Flash: ${e.message}`);
       try {
         const fallbackRes = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
           method: 'POST',
@@ -2970,7 +2989,7 @@ async function executeDIY(msg, name, paramMap) {
       sendMsg(cid, '🤔 正在思考...');
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 60000);
-      const currentModel = loadSetData().chatModel || 'pollinations-openai';
+      const currentModel = loadSetData().chatModel || 'glm-4-flash';
       const modelInfo = CHAT_MODELS.find(m => m.id === currentModel);
       const systemContent = (cmd.content || '你是一个友好的群聊助手，用简洁自然的语言回答用户的问题。') + '\n\n【重要信息】你当前使用的AI大模型是：' + (modelInfo?.name || currentModel) + '。当用户问你是什么模型/什么AI/什么引擎时，你要如实告诉用户你当前使用的模型名称。';
       
@@ -2985,23 +3004,27 @@ async function executeDIY(msg, name, paramMap) {
         // 智谱AI（默认）
 const __curModel = loadSetData().chatModel || 'glm-4-flash';
             const __modelInfo = CHAT_MODELS.find(m => m.id === __curModel);
-            const __diyApiType = __modelInfo?.api || 'junling';
-            let __apiUrl, __apiKey;
+            let __diyApiType = __modelInfo?.api || 'zhipu';
+            if (__diyApiType === 'openai' && !OPENAI_API_KEY) __diyApiType = 'zhipu';
+            let __apiUrl, __apiKey, __reqModel;
             if (__diyApiType === 'openai') {
               __apiUrl = `${OPENAI_API_BASE}/chat/completions`;
               __apiKey = OPENAI_API_KEY;
+              __reqModel = currentModel;
             } else if (__diyApiType === 'junling') {
               __apiUrl = `${JUNLING_API_BASE}/chat/completions`;
               __apiKey = JUNLING_API_KEY;
+              __reqModel = currentModel;
             } else {
               __apiUrl = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
               __apiKey = ZHIPU_API_KEY;
+              __reqModel = (__modelInfo?.api === 'zhipu') ? currentModel : 'glm-4-flash';
             }
         aiRes = await fetch(__apiUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${__apiKey}` },
           body: JSON.stringify({
-            model: currentModel,
+            model: __reqModel,
             messages: [
               { role: 'system', content: systemContent },
               { role: 'user', content: userInput }
@@ -3333,23 +3356,27 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
 
             const __curModel2 = loadSetData().chatModel || 'glm-4-flash';
             const __modelInfo2 = CHAT_MODELS.find(m => m.id === __curModel2);
-            const __diyApiType2 = __modelInfo2?.api || 'junling';
-            let apiUrl, __apiKey2;
+            let __diyApiType2 = __modelInfo2?.api || 'zhipu';
+            if (__diyApiType2 === 'openai' && !OPENAI_API_KEY) __diyApiType2 = 'zhipu';
+            let apiUrl, __apiKey2, __reqModel2;
             if (__diyApiType2 === 'openai') {
               apiUrl = `${OPENAI_API_BASE}/chat/completions`;
               __apiKey2 = OPENAI_API_KEY;
+              __reqModel2 = __curModel2;
             } else if (__diyApiType2 === 'junling') {
               apiUrl = `${JUNLING_API_BASE}/chat/completions`;
               __apiKey2 = JUNLING_API_KEY;
+              __reqModel2 = __curModel2;
             } else {
               apiUrl = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
               __apiKey2 = ZHIPU_API_KEY;
+              __reqModel2 = (__modelInfo2?.api === 'zhipu') ? __curModel2 : 'glm-4-flash';
             }
             const res = await fetch(apiUrl, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${__apiKey2}` },
               body: JSON.stringify({
-                model: loadSetData().chatModel || 'glm-4-flash',
+                model: __reqModel2,
                 messages: [
                   { role: 'system', content: aiPrompt },
                   { role: 'user', content: `指令名：${state.name}\n用户需求：${userNeed}` }
@@ -3596,16 +3623,16 @@ ${userData}
                 { role: 'user', content: question || '你好' }
               ];
               
-              // 选择模型（默认君灵AI）
+              // 选择模型（默认智谱GLM-4-Flash）
               let __curModel = loadSetData().chatModel || 'glm-4-flash';
               const __modelInfo = CHAT_MODELS.find(m => m.id === __curModel);
-              let __apiType = __modelInfo?.api || 'junling';
+              let __apiType = __modelInfo?.api || 'zhipu';
               
-              // OpenAI key空就自动切回君灵AI
+              // OpenAI key 未配置时，自动切到智谱（不再切到已下线的君灵/狼小嗷）
               if (__apiType === 'openai' && !OPENAI_API_KEY) {
-                console.log('⚠️ OpenAI key未配置，自动切回君灵AI');
-                __curModel = 'deepseek-chat';
-                __apiType = 'junling';
+                console.log('⚠️ OpenAI key未配置，自动切到智谱GLM-4-Flash');
+                __curModel = 'glm-4-flash';
+                __apiType = 'zhipu';
               }
               
               let __aiApiUrl, __aiApiKey, __aiModel;
@@ -3613,15 +3640,16 @@ ${userData}
                 __aiApiUrl = `${JUNLING_API_BASE}/chat/completions`;
                 __aiApiKey = JUNLING_API_KEY;
                 __aiModel = __curModel;
-              } else if (__apiType === 'zhipu') {
-                __aiApiUrl = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
-                __aiApiKey = ZHIPU_API_KEY;
+              } else if (__apiType === 'pollinations') {
+                const __pollModel = __curModel === 'pollinations-mistral' ? 'mistral' : 'openai';
+                __aiApiUrl = `https://text.pollinations.ai/${encodeURIComponent(question || '你好')}?model=${__pollModel}&system=${encodeURIComponent(systemPrompt)}`;
+                __aiApiKey = '';
                 __aiModel = __curModel;
               } else {
-                // 默认用君灵AI
-                __aiApiUrl = `${JUNLING_API_BASE}/chat/completions`;
-                __aiApiKey = JUNLING_API_KEY;
-                __aiModel = 'deepseek-chat';
+                // 默认智谱AI
+                __aiApiUrl = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
+                __aiApiKey = ZHIPU_API_KEY;
+                __aiModel = (__modelInfo?.api === 'zhipu') ? __curModel : 'glm-4-flash';
               }
               
               // 调用AI API
@@ -3648,8 +3676,17 @@ ${userData}
               const resText = await res.text();
               clearTimeout(timeout);
               
-              const data = JSON.parse(resText);
-              let answer = data?.choices?.[0]?.message?.content;
+              let answer;
+              if (__apiType === 'pollinations') {
+                answer = (resText || '').trim();
+              } else {
+                try {
+                  const data = JSON.parse(resText);
+                  answer = data?.choices?.[0]?.message?.content;
+                } catch (parseErr) {
+                  answer = null;
+                }
+              }
               
               if (!answer) {
                 answer = '❌ AI返回错误: ' + resText.substring(0, 100);
@@ -7167,7 +7204,7 @@ async function handleHelp(msg) {
 async function handleAbout(msg) {
   try {
     const __setData = loadSetData();
-    const __curModel = __setData.chatModel || 'deepseek-chat';
+    const __curModel = __setData.chatModel || 'glm-4-flash';
     const __modelInfo = CHAT_MODELS.find(m => m.id === __curModel);
     const __modelName = __modelInfo?.name || __curModel;
     const __modelCompany = __modelInfo?.company || '未知';

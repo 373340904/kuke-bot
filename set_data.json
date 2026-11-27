@@ -1,7 +1,7 @@
 {
   "global": {
-    "chatModel": "gpt-4o",
-    "visionModel": "gpt-4o-mini",
+    "chatModel": "glm-4-flash",
+    "visionModel": "glm-4v-flash",
     "features": {
       "ai_chat": true,
       "checkin": true,
