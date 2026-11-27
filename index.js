@@ -78,6 +78,8 @@ const FREE_FALLBACK_BASE = 'https://api.apisfreellm.com/v1';
 const FREE_FALLBACK_MODEL = 'free-ai';
 // ========================================================
 
+// 后台网页公网地址（换 Railway 域名后可用环境变量 PUBLIC_URL 覆盖）
+const PUBLIC_URL = (process.env.PUBLIC_URL || 'https://kuke-bot-production.up.railway.app').replace(/\/$/, '');
 const BASE_URL = 'https://chat-api.kuke.ink/api/v1';
 const WS_URL = `wss://chat-api.kuke.ink/bot/ws?key=${encodeURIComponent(BOT_KEY)}`;
 
@@ -4307,35 +4309,13 @@ ${userData}
       else if (content === '/set' || content === '/设置') {
         const isCreator = String(msg.sender_id) === '3038';
         if (!isCreator) { sendMsg(msg.conversation_id, `❌ 只有创始人君衔（ID 3038）可以使用设置（你的ID：${msg.sender_id}）`); return; }
-        // 记录用户当前set步骤，用于步骤锁定
-        setUserStep(String(msg.sender_id), 1, null);
-        // 只有3038能用，所以永远是全局设置
-        const setScope = 'global';
         try {
-          // 获取所有群列表：先用本地记录的群，再用API补充
-          let allGroupsForSet = loadGroups().map(g => String(g));
-          try {
-            const groupsRes = await fetchWithTimeout(`${BASE_URL}/bot-api/conversations`, { headers: { 'Authorization': `Bot ${BOT_KEY}` } }, 5000);
-            if (groupsRes.ok) {
-              const groupsData = await groupsRes.json();
-              console.log('[设置] API群列表返回:', JSON.stringify(groupsData).substring(0, 300));
-              const convList = groupsData.data || groupsData.conversations || groupsData.list || groupsData.items || groupsData || [];
-              const apiGroups = Array.isArray(convList) ? convList.map(g => String(g.id || g.conversation_id || g)).filter(id => id && id !== 'null' && id !== 'undefined' && !isNaN(Number(id))) : [];
-              allGroupsForSet = [...new Set([...allGroupsForSet, ...apiGroups])];
-            } else {
-              console.log('[设置] API群列表状态:', groupsRes.status);
-            }
-          } catch (e) { console.log('[设置] API获取群列表失败，用本地群列表:', e.message); }
-          console.log('[设置] 最终群列表:', allGroupsForSet);
-          const card = buildSetCard(1, cid, setScope, allGroupsForSet);
-          const setResult = await sendMsgReturnId(msg.conversation_id, card);
-          if (setResult && setResult.id) {
-            setUserStep(String(msg.sender_id), 1, setResult.id);
-            console.log('[设置] 初始步骤锁定: user=', msg.sender_id, 'msgId=', setResult.id);
-          }
+          const adminUrl = `${PUBLIC_URL}/admin`;
+          const card = `<markdown>## ⚙️ 管理控制台（网页版）\n\n> 对话模型、识图模型、功能开关、AI 人设、群 AI 状态都在网页后台统一管理。\n\n🌐 <link href="${adminUrl}">点击打开网页控制台</link>\n\n**登录说明：**\n- 初始密码：\`junling2026\`（可在 Railway 环境变量 \`ADMIN_PASSWORD\` 修改）\n- 「7 天内自动登录」默认不勾选，关闭浏览器后需重新登录\n- 仅创始人 ID 3038 可访问\n\n> 若链接打不开，请确认服务已部署，且公网地址与后台 \`PUBLIC_URL\` 一致。</markdown>`;
+          await sendMsg(msg.conversation_id, card);
         } catch (e) {
           console.error('[设置错误]', e.message, e.stack);
-          sendMsg(msg.conversation_id, `❌ 生成设置卡片失败：${e.message}`);
+          sendMsg(msg.conversation_id, `❌ 打开控制台失败：${e.message}`);
         }
       }
       else if (content.startsWith('/set-state')) {
@@ -5387,7 +5367,7 @@ ${featureText}
 - \`/后台 信息\` - 群功能开关管理
 - \`/后台 恢复\` - 重启机器人重新部署
 
-> 仅群10334 + ID3038可用</markdown>`);
+## 🌐 网页控制台\n<link href="${PUBLIC_URL}/admin">点击打开网页后台</link>\n> 模型、功能开关、人设、群 AI 状态在网页后台统一管理\n\n> 仅群10334 + ID3038可用</markdown>`);
         return;
       }
       
@@ -6840,28 +6820,198 @@ setInterval(refreshBotContext, 60000);
 
 connect();
 
-// HTTP 服务器（用于 Render 健康检查，防止休眠）
+// HTTP 服务器（健康检查 + 网页后台控制台）
 const http = require('http');
+const crypto = require('crypto');
 const PORT = process.env.PORT || 3000;
-const server = http.createServer((req, res) => {
-  if (req.url === '/' || req.url === '/index.html') {
-    fs.readFile(path.join(__dirname, 'index.html'), (err, data) => {
-      if (err) {
-        res.writeHead(500);
-        res.end('Error loading page');
-      } else {
-        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        res.end(data);
-      }
+
+// ===== 后台控制台鉴权 =====
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'junling2026';
+const adminSessions = new Map(); // token -> 过期时间(ms)
+const REMEMBER_TTL = 7 * 24 * 3600 * 1000; // 勾选“记住登录”7 天
+const SESSION_TTL = 2 * 3600 * 1000;       // 不勾选则 2 小时会话有效
+
+function parseCookies(req) {
+  const out = {};
+  (req.headers.cookie || '').split(';').forEach(p => {
+    const i = p.indexOf('=');
+    if (i > -1) out[p.slice(0, i).trim()] = decodeURIComponent(p.slice(i + 1).trim());
+  });
+  return out;
+}
+function currentAdminToken(req) {
+  const token = parseCookies(req).admin_token;
+  if (!token) return null;
+  const exp = adminSessions.get(token);
+  if (!exp || exp < Date.now()) { adminSessions.delete(token); return null; }
+  return token;
+}
+function readJsonBody(req) {
+  return new Promise((resolve) => {
+    let raw = '';
+    req.on('data', c => { raw += c; if (raw.length > 1e6) req.destroy(); });
+    req.on('end', () => { try { resolve(raw ? JSON.parse(raw) : {}); } catch { resolve(null); } });
+    req.on('error', () => resolve(null));
+  });
+}
+function sendJson(res, code, obj, headers) {
+  res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', ...(headers || {}) });
+  res.end(JSON.stringify(obj));
+}
+
+// 汇总后台所需状态（绝不返回任何密钥）
+function buildAdminState() {
+  const cfg = loadSetData();
+  const groupAI = cfg.groupAI || {};
+  const groups = loadGroups().map(gid => ({
+    gid: String(gid),
+    state: groupAI[String(gid)] === 'off' ? 'off' : 'open'
+  }));
+  const mem = process.memoryUsage();
+  const startTime = global.__startTime || Date.now();
+  return {
+    config: {
+      chatModel: cfg.chatModel,
+      visionModel: cfg.visionModel,
+      features: cfg.features || {},
+      personality: cfg.personality || {},
+      groupAI
+    },
+    chatModels: CHAT_MODELS.map(m => ({ id: m.id, name: m.name, company: m.company, desc: m.desc, api: m.api })),
+    visionModels: VISION_MODELS.map(m => ({ id: m.id, name: m.name, company: m.company, desc: m.desc, api: m.api })),
+    featureCategories: FEATURE_CATEGORIES,
+    groups,
+    health: {
+      uptime: Math.floor((Date.now() - startTime) / 1000),
+      heapUsedMB: Math.floor(mem.heapUsed / 1024 / 1024),
+      heapTotalMB: Math.floor(mem.heapTotal / 1024 / 1024),
+      msgCount: global.__msgCount || 0,
+      errCount: global.__errCount || 0,
+      aiCount: global.__aiCount || 0,
+      bot: global.__botContext || {}
+    }
+  };
+}
+
+const server = http.createServer(async (req, res) => {
+  const urlPath = decodeURIComponent((req.url || '/').split('?')[0]);
+
+  // 后台页面
+  if (req.method === 'GET' && (urlPath === '/admin' || urlPath === '/admin/')) {
+    fs.readFile(path.join(__dirname, 'admin.html'), (err, data) => {
+      if (err) { res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end('admin.html 缺失'); return; }
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(data);
     });
-  } else {
-    res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('KukeChat Bot is running\n');
+    return;
   }
+
+  // 登录状态查询
+  if (req.method === 'GET' && urlPath === '/admin/api/me') {
+    return sendJson(res, 200, { authed: !!currentAdminToken(req) });
+  }
+
+  // 登录
+  if (req.method === 'POST' && urlPath === '/admin/api/login') {
+    const body = await readJsonBody(req);
+    if (!body || String(body.password) !== ADMIN_PASSWORD) {
+      return sendJson(res, 401, { ok: false, error: '密码错误' });
+    }
+    const token = crypto.randomBytes(24).toString('hex');
+    const remember = !!body.remember;
+    adminSessions.set(token, Date.now() + (remember ? REMEMBER_TTL : SESSION_TTL));
+    const maxAge = remember ? `Max-Age=${REMEMBER_TTL / 1000};` : '';
+    res.setHeader('Set-Cookie', `admin_token=${token}; ${maxAge} Path=/; HttpOnly; SameSite=Lax`);
+    return sendJson(res, 200, { ok: true });
+  }
+
+  // 登出
+  if (req.method === 'POST' && urlPath === '/admin/api/logout') {
+    const token = parseCookies(req).admin_token;
+    if (token) adminSessions.delete(token);
+    res.setHeader('Set-Cookie', 'admin_token=; Path=/; HttpOnly; Max-Age=0');
+    return sendJson(res, 200, { ok: true });
+  }
+
+  // 以下接口必须登录
+  if (urlPath.startsWith('/admin/api/')) {
+    if (!currentAdminToken(req)) return sendJson(res, 401, { authed: false, error: '未登录或会话已过期' });
+
+    if (req.method === 'GET' && urlPath === '/admin/api/state') {
+      return sendJson(res, 200, { ok: true, state: buildAdminState() });
+    }
+    // 切换模型
+    if (req.method === 'POST' && urlPath === '/admin/api/model') {
+      const body = await readJsonBody(req);
+      if (!body) return sendJson(res, 400, { ok: false, error: '请求格式错误' });
+      const cfg = loadSetData();
+      if (body.kind === 'chat') {
+        const m = CHAT_MODELS.find(x => x.id === body.model);
+        if (!m) return sendJson(res, 400, { ok: false, error: '对话模型不存在' });
+        cfg.chatModel = m.id;
+      } else if (body.kind === 'vision') {
+        const m = VISION_MODELS.find(x => x.id === body.model);
+        if (!m) return sendJson(res, 400, { ok: false, error: '识图模型不存在' });
+        cfg.visionModel = m.id;
+      } else {
+        return sendJson(res, 400, { ok: false, error: '类型无效' });
+      }
+      saveSetData(cfg);
+      return sendJson(res, 200, { ok: true, state: buildAdminState() });
+    }
+    // 功能开关
+    if (req.method === 'POST' && urlPath === '/admin/api/feature') {
+      const body = await readJsonBody(req);
+      const cfg = loadSetData();
+      if (!cfg.features) cfg.features = {};
+      cfg.features[body.id] = !!body.enabled;
+      saveSetData(cfg);
+      return sendJson(res, 200, { ok: true, state: buildAdminState() });
+    }
+    // 人设
+    if (req.method === 'POST' && urlPath === '/admin/api/personality') {
+      const body = await readJsonBody(req);
+      const cfg = loadSetData();
+      cfg.personality = cfg.personality || {};
+      if (body.tone) cfg.personality.tone = body.tone;
+      if (body.length) cfg.personality.length = body.length;
+      if (typeof body.markdown === 'boolean') cfg.personality.markdown = body.markdown;
+      if (typeof body.temperature === 'number') cfg.personality.temperature = Math.min(2, Math.max(0, body.temperature));
+      saveSetData(cfg);
+      return sendJson(res, 200, { ok: true, state: buildAdminState() });
+    }
+    // 群 AI 状态
+    if (req.method === 'POST' && urlPath === '/admin/api/group') {
+      const body = await readJsonBody(req);
+      const cfg = loadSetData();
+      cfg.groupAI = cfg.groupAI || {};
+      cfg.groupAI[String(body.gid)] = body.state === 'off' ? 'off' : 'open';
+      saveSetData(cfg);
+      return sendJson(res, 200, { ok: true, state: buildAdminState() });
+    }
+    // 恢复默认
+    if (req.method === 'POST' && urlPath === '/admin/api/reset') {
+      saveSetData(getDefaultSetData());
+      return sendJson(res, 200, { ok: true, state: buildAdminState() });
+    }
+    return sendJson(res, 404, { ok: false, error: '接口不存在' });
+  }
+
+  // 健康检查 / 首页
+  if (req.method === 'GET' && (urlPath === '/' || urlPath === '/index.html')) {
+    fs.readFile(path.join(__dirname, 'index.html'), (err, data) => {
+      if (err) { res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end('Error loading page'); }
+      else { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(data); }
+    });
+    return;
+  }
+  res.writeHead(200, { 'Content-Type': 'text/plain' });
+  res.end('KukeChat Bot is running\n');
 });
+
 server.listen(PORT, () => {
   console.log(`HTTP server listening on port ${PORT}`);
-  console.log(`网页版: http://localhost:${PORT}`);
+  console.log(`网页后台: /admin`);
 });
 
 // 狼人杀超时检测：每10秒检查一次，10分钟无操作强制结束

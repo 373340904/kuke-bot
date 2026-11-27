@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>君灵bot · 后台控制台</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --bg1: #0f1220; --bg2: #16213e;
+  --card: rgba(255,255,255,0.06);
+  --card-border: rgba(255,255,255,0.10);
+  --text: #eee; --sub: #9aa0b4;
+  --primary: #e94560; --ok: #4ade80; --warn: #fbbf24; --info: #60a5fa;
+}
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: linear-gradient(135deg, var(--bg1) 0%, var(--bg2) 100%);
+  color: var(--text); min-height: 100vh;
+}
+/* ===== 登录页 ===== */
+#login-view { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.login-card {
+  width: 100%; max-width: 380px; background: var(--card); border: 1px solid var(--card-border);
+  border-radius: 20px; padding: 38px 32px; backdrop-filter: blur(14px);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+}
+.login-card h1 { font-size: 24px; margin-bottom: 6px; color: var(--primary); }
+.login-card .sub { color: var(--sub); font-size: 13px; margin-bottom: 26px; }
+.field { margin-bottom: 18px; }
+.field label { display: block; font-size: 13px; color: var(--sub); margin-bottom: 8px; }
+.field input[type=password] {
+  width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--card-border);
+  background: rgba(0,0,0,0.25); color: var(--text); font-size: 15px; outline: none;
+}
+.field input[type=password]:focus { border-color: var(--primary); }
+.remember-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--sub); margin-bottom: 20px; }
+.btn {
+  border: none; border-radius: 12px; padding: 12px 18px; font-size: 14px; cursor: pointer;
+  background: var(--primary); color: #fff; transition: opacity .15s, transform .1s;
+}
+.btn:hover { opacity: .9; }
+.btn:active { transform: scale(.98); }
+.btn.ghost { background: rgba(255,255,255,0.08); color: var(--text); }
+.btn.ok { background: var(--ok); color: #06281a; }
+.btn.danger { background: rgba(233,69,96,0.15); color: var(--primary); border: 1px solid rgba(233,69,96,0.35); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.login-err { color: var(--primary); font-size: 13px; min-height: 18px; margin-bottom: 12px; }
+/* ===== 布局 ===== */
+#app-view { display: none; min-height: 100vh; }
+.sidebar {
+  position: fixed; left: 0; top: 0; bottom: 0; width: 220px; padding: 22px 14px;
+  background: rgba(0,0,0,0.25); border-right: 1px solid var(--card-border); backdrop-filter: blur(14px);
+}
+.brand { font-size: 18px; font-weight: 700; color: var(--primary); margin-bottom: 4px; }
+.brand-sub { font-size: 12px; color: var(--sub); margin-bottom: 26px; }
+.nav-item {
+  display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-radius: 12px;
+  color: var(--sub); cursor: pointer; font-size: 14px; margin-bottom: 4px; transition: background .15s, color .15s;
+}
+.nav-item:hover { background: rgba(255,255,255,0.06); color: var(--text); }
+.nav-item.active { background: rgba(233,69,96,0.16); color: var(--text); }
+.main { margin-left: 220px; padding: 26px 30px; max-width: 1100px; }
+.topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 22px; }
+.topbar h2 { font-size: 20px; }
+.pill { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--sub); }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 10px var(--ok); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px,1fr)); gap: 16px; }
+.card {
+  background: var(--card); border: 1px solid var(--card-border); border-radius: 18px;
+  padding: 20px; backdrop-filter: blur(12px);
+}
+.card h3 { font-size: 15px; margin-bottom: 14px; }
+.stat-num { font-size: 26px; font-weight: 700; }
+.stat-label { font-size: 12px; color: var(--sub); margin-top: 4px; }
+.row { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.06); }
+.row:last-child { border-bottom: none; }
+.row .meta { font-size: 12px; color: var(--sub); margin-top: 3px; }
+.tag { font-size: 11px; padding: 2px 8px; border-radius: 8px; margin-left: 6px; }
+.tag.zhipu { background: rgba(74,222,128,0.15); color: var(--ok); }
+.tag.junling { background: rgba(154,160,180,0.18); color: var(--sub); }
+.tag.pollinations { background: rgba(251,191,36,0.15); color: var(--warn); }
+.tag.openai { background: rgba(96,165,250,0.15); color: var(--info); }
+.model-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px,1fr)); gap: 12px; }
+.model-card {
+  padding: 14px; border-radius: 14px; border: 1px solid var(--card-border); background: rgba(0,0,0,0.18); cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.model-card.active { border-color: var(--primary); background: rgba(233,69,96,0.12); }
+.model-card.disabled { opacity: .45; cursor: not-allowed; }
+.model-card .m-name { font-size: 14px; font-weight: 600; }
+.model-card .m-desc { font-size: 12px; color: var(--sub); margin-top: 5px; line-height: 1.5; }
+/* 开关 */
+.switch { position: relative; width: 46px; height: 26px; border-radius: 26px; background: rgba(255,255,255,0.15); cursor: pointer; transition: background .2s; flex-shrink: 0; }
+.switch.on { background: var(--ok); }
+.switch::after { content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: left .2s; }
+.switch.on::after { left: 23px; }
+.chip-group { display: flex; flex-wrap: wrap; gap: 10px; }
+.chip { padding: 9px 16px; border-radius: 12px; border: 1px solid var(--card-border); background: rgba(0,0,0,0.18); cursor: pointer; font-size: 13px; }
+.chip.active { border-color: var(--primary); background: rgba(233,69,96,0.14); }
+input[type=range] { width: 100%; accent-color: var(--primary); }
+.section { display: none; }
+.section.active { display: block; }
+.toast {
+  position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%); background: rgba(20,24,40,0.95);
+  border: 1px solid var(--card-border); padding: 12px 20px; border-radius: 12px; font-size: 14px; opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 99;
+}
+.toast.show { opacity: 1; }
+@media (max-width: 760px) {
+  .sidebar { position: static; width: 100%; display: flex; flex-wrap: wrap; gap: 4px; border-right: none; border-bottom: 1px solid var(--card-border); }
+  .brand, .brand-sub { width: 100%; }
+  .main { margin-left: 0; padding: 18px; }
+  .nav-item { flex: 1; justify-content: center; }
+}
+</style>
+</head>
+<body>
+
+<!-- 登录视图 -->
+<div id="login-view">
+  <div class="login-card">
+    <h1>🤖 君灵bot 后台</h1>
+    <div class="sub">仅限创始人访问，请输入管理密码</div>
+    <div class="login-err" id="login-err"></div>
+    <div class="field">
+      <label>管理密码</label>
+      <input type="password" id="pwd" placeholder="请输入密码" autocomplete="current-password">
+    </div>
+    <label class="remember-row">
+      <input type="checkbox" id="remember"> 7 天内自动登录（默认不记住）
+    </label>
+    <button class="btn" id="login-btn" style="width:100%">登 录</button>
+  </div>
+</div>
+
+<!-- 控制台视图 -->
+<div id="app-view">
+  <aside class="sidebar">
+    <div class="brand">🤖 君灵bot</div>
+    <div class="brand-sub">管理控制台 v2.0</div>
+    <div class="nav-item active" data-tab="overview">📊 概览</div>
+    <div class="nav-item" data-tab="model">🤖 模型</div>
+    <div class="nav-item" data-tab="feature">🔌 功能开关</div>
+    <div class="nav-item" data-tab="personality">🎭 人设</div>
+    <div class="nav-item" data-tab="group">👥 群管理</div>
+    <div class="nav-item" data-tab="maintain">🔧 维护</div>
+  </aside>
+  <main class="main">
+    <div class="topbar">
+      <h2 id="page-title">概览</h2>
+      <div style="display:flex;align-items:center;gap:14px">
+        <span class="pill"><span class="dot"></span><span id="bot-status">运行中</span></span>
+        <button class="btn ghost" id="logout-btn">退出登录</button>
+      </div>
+    </div>
+
+    <section class="section active" id="sec-overview"></section>
+    <section class="section" id="sec-model"></section>
+    <section class="section" id="sec-feature"></section>
+    <section class="section" id="sec-personality"></section>
+    <section class="section" id="sec-group"></section>
+    <section class="section" id="sec-maintain"></section>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let S = null;
+const $ = id => document.getElementById(id);
+
+async function api(path, opts) {
+  const r = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+  if (r.status === 401) { showLogin(); throw new Error('未登录'); }
+  return r.json();
+}
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 2200);
+}
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function fmtUptime(sec) {
+  const h = Math.floor(sec/3600), m = Math.floor((sec%3600)/60), s = sec%60;
+  return `${h}时${m}分${s}秒`;
+}
+const API_TAG = { zhipu: ['zhipu','智谱·可用'], junling: ['junling','已下线'], pollinations: ['pollinations','免费限速'], openai: ['openai','需Key'] };
+
+// ===== 登录 / 登出 =====
+function showLogin() {
+  $('login-view').style.display = 'flex';
+  $('app-view').style.display = 'none';
+}
+function showApp() {
+  $('login-view').style.display = 'none';
+  $('app-view').style.display = 'block';
+}
+$('login-btn').onclick = async () => {
+  const pwd = $('pwd').value;
+  $('login-err').textContent = '';
+  if (!pwd) { $('login-err').textContent = '请输入密码'; return; }
+  try {
+    const d = await api('/admin/api/login', { method: 'POST', body: JSON.stringify({ password: pwd, remember: $('remember').checked }) });
+    if (d.ok) { await loadState(); showApp(); }
+    else { $('login-err').textContent = d.error || '登录失败'; }
+  } catch (e) { $('login-err').textContent = '网络错误：' + e.message; }
+};
+$('pwd').addEventListener('keydown', e => { if (e.key === 'Enter') $('login-btn').click(); });
+$('logout-btn').onclick = async () => {
+  await api('/admin/api/logout', { method: 'POST' });
+  showLogin();
+};
+
+// ===== 导航 =====
+document.querySelectorAll('.nav-item').forEach(el => {
+  el.onclick = () => {
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    el.classList.add('active');
+    const tab = el.dataset.tab;
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    $('sec-' + tab).classList.add('active');
+    $('page-title').textContent = el.textContent.trim().replace(/^\S+\s/, '');
+  };
+});
+
+// ===== 数据加载 =====
+async function loadState() {
+  const d = await api('/admin/api/state');
+  if (d.ok) { S = d.state; renderAll(); }
+}
+
+function renderAll() { renderOverview(); renderModel(); renderFeature(); renderPersonality(); renderGroup(); renderMaintain(); }
+
+// 概览
+function renderOverview() {
+  const h = S.health, c = S.config, bot = h.bot || {};
+  const featOn = Object.values(c.features).filter(v => v !== false).length;
+  const featAll = Object.keys(c.features).length;
+  const chatName = (S.chatModels.find(m => m.id === c.chatModel) || {}).name || c.chatModel;
+  const visName = (S.visionModels.find(m => m.id === c.visionModel) || {}).name || c.visionModel;
+  $('sec-overview').innerHTML = `
+    <div class="grid">
+      <div class="card"><div class="stat-num">${fmtUptime(h.uptime)}</div><div class="stat-label">运行时长</div></div>
+      <div class="card"><div class="stat-num">${h.heapUsedMB} / ${h.heapTotalMB} MB</div><div class="stat-label">堆内存</div></div>
+      <div class="card"><div class="stat-num">${h.msgCount}</div><div class="stat-label">处理消息</div></div>
+      <div class="card"><div class="stat-num">${h.aiCount}</div><div class="stat-label">AI 回复</div></div>
+      <div class="card"><div class="stat-num" style="color:${h.errCount > 0 ? 'var(--warn)' : 'var(--ok)'}">${h.errCount}</div><div class="stat-label">错误数</div></div>
+      <div class="card"><div class="stat-num">${S.groups.length}</div><div class="stat-label">所在群</div></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3>🤖 机器人档案</h3>
+      <div class="row"><div>昵称</div><div>${esc(bot.nickname || '君灵bot')}</div></div>
+      <div class="row"><div>个性签名</div><div>${esc(bot.bio || '—')}</div></div>
+      <div class="row"><div>对话模型</div><div>${esc(chatName)}</div></div>
+      <div class="row"><div>识图模型</div><div>${esc(visName)}</div></div>
+      <div class="row"><div>功能开启</div><div>${featOn} / ${featAll}</div></div>
+    </div>`;
+}
+
+// 模型
+function modelCard(m, current, kind) {
+  const tag = API_TAG[m.api] || ['', m.api];
+  const disabled = m.api === 'junling';
+  const active = current === m.id;
+  return `<div class="model-card ${active ? 'active' : ''} ${disabled ? 'disabled' : ''}" data-kind="${kind}" data-model="${esc(m.id)}">
+    <div class="m-name">${esc(m.name)}<span class="tag ${tag[0]}">${tag[1]}</span></div>
+    <div class="m-desc">${esc(m.desc || '')}<br>厂商：${esc(m.company || '—')}</div>
+  </div>`;
+}
+function renderModel() {
+  const c = S.config;
+  $('sec-model').innerHTML = `
+    <div class="card">
+      <h3>🤖 对话模型</h3>
+      <div class="model-grid">${S.chatModels.map(m => modelCard(m, c.chatModel, 'chat')).join('')}</div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3>🖼️ 识图模型</h3>
+      <div class="model-grid">${S.visionModels.map(m => modelCard(m, c.visionModel, 'vision')).join('')}</div>
+    </div>
+    <p style="color:var(--sub);font-size:12px;margin-top:12px">灰色“已下线”模型不可点击；选中不可用模型时，机器人会自动兜底到智谱。</p>`;
+  $('sec-model').querySelectorAll('.model-card:not(.disabled)').forEach(el => {
+    el.onclick = async () => {
+      const d = await api('/admin/api/model', { method: 'POST', body: JSON.stringify({ kind: el.dataset.kind, model: el.dataset.model }) });
+      if (d.ok) { S = d.state; renderModel(); renderOverview(); toast('模型已切换'); }
+      else toast(d.error || '切换失败');
+    };
+  });
+}
+
+// 功能开关
+function renderFeature() {
+  const c = S.config;
+  $('sec-feature').innerHTML = S.featureCategories.map(cat => `
+    <div class="card" style="margin-bottom:16px">
+      <h3>${esc(cat.name)}</h3>
+      ${cat.features.map(f => {
+        const on = c.features[f.id] !== false;
+        return `<div class="row">
+          <div><div>${esc(f.name)}</div><div class="meta">${esc(f.desc || '')}</div></div>
+          <div class="switch ${on ? 'on' : ''}" data-feature="${esc(f.id)}"></div>
+        </div>`;
+      }).join('')}
+    </div>`).join('');
+  $('sec-feature').querySelectorAll('.switch').forEach(sw => {
+    sw.onclick = async () => {
+      const id = sw.dataset.feature;
+      const now = c.features[id] !== false;
+      const d = await api('/admin/api/feature', { method: 'POST', body: JSON.stringify({ id, enabled: !now }) });
+      if (d.ok) { S = d.state; renderFeature(); renderOverview(); toast(`已${!now ? '开启' : '关闭'}：${id}`); }
+      else toast(d.error || '操作失败');
+    };
+  });
+}
+
+// 人设
+const TONES = [['normal','正常'],['friendly','友好'],['professional','专业'],['humorous','幽默']];
+const LENS = [['short','简短'],['medium','中等'],['long','详细']];
+function renderPersonality() {
+  const p = S.config.personality;
+  const chip = (arr, val, key) => arr.map(([v,label]) => `<div class="chip ${val === v ? 'active' : ''}" data-key="${key}" data-val="${v}">${label}</div>`).join('');
+  $('sec-personality').innerHTML = `
+    <div class="card">
+      <h3>🎭 回复语气</h3>
+      <div class="chip-group">${chip(TONES, p.tone, 'tone')}</div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3>📏 回复长度</h3>
+      <div class="chip-group">${chip(LENS, p.length, 'length')}</div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <div class="row"><div><div>Markdown 排版</div><div class="meta">回复自动使用 Markdown 格式</div></div><div class="switch ${p.markdown ? 'on' : ''}" data-key="markdown"></div></div>
+      <div class="row"><div><div>创造性温度</div><div class="meta">${Number(p.temperature || 0.7).toFixed(1)}</div></div>
+        <input type="range" id="temp-range" min="0" max="2" step="0.1" value="${Number(p.temperature || 0.7)}" style="max-width:220px"></div>
+    </div>`;
+  $('sec-personality').querySelectorAll('.chip').forEach(ch => {
+    ch.onclick = async () => {
+      const body = { [ch.dataset.key]: ch.dataset.val };
+      const d = await api('/admin/api/personality', { method: 'POST', body: JSON.stringify(body) });
+      if (d.ok) { S = d.state; renderPersonality(); toast('人设已更新'); }
+    };
+  });
+  const mdSw = $('sec-personality').querySelector('.switch[data-key=markdown]');
+  mdSw.onclick = async () => {
+    const d = await api('/admin/api/personality', { method: 'POST', body: JSON.stringify({ markdown: !S.config.personality.markdown }) });
+    if (d.ok) { S = d.state; renderPersonality(); }
+  };
+  $('temp-range').onchange = async (e) => {
+    const d = await api('/admin/api/personality', { method: 'POST', body: JSON.stringify({ temperature: Number(e.target.value) }) });
+    if (d.ok) { S = d.state; renderPersonality(); }
+  };
+}
+
+// 群管理
+function renderGroup() {
+  if (!S.groups.length) {
+    $('sec-group').innerHTML = `<div class="card">暂无群数据</div>`; return;
+  }
+  $('sec-group').innerHTML = `<div class="card">
+    <h3>👥 群 AI 状态（共 ${S.groups.length} 个）</h3>
+    ${S.groups.map(g => `<div class="row">
+      <div><div>群 ${esc(g.gid)}</div><div class="meta">${g.state === 'off' ? '已关闭 AI' : '已开启 AI'}</div></div>
+      <div class="switch ${g.state === 'open' ? 'on' : ''}" data-gid="${esc(g.gid)}"></div>
+    </div>`).join('')}
+  </div>`;
+  $('sec-group').querySelectorAll('.switch').forEach(sw => {
+    sw.onclick = async () => {
+      const gid = sw.dataset.gid;
+      const cur = S.groups.find(x => x.gid === gid);
+      const next = cur.state === 'open' ? 'off' : 'open';
+      const d = await api('/admin/api/group', { method: 'POST', body: JSON.stringify({ gid, state: next }) });
+      if (d.ok) { S = d.state; renderGroup(); renderOverview(); toast(`群 ${gid} AI 已${next === 'open' ? '开启' : '关闭'}`); }
+    };
+  });
+}
+
+// 维护
+function renderMaintain() {
+  $('sec-maintain').innerHTML = `
+    <div class="card">
+      <h3>🔧 数据与维护</h3>
+      <div class="row"><div><div>恢复默认设置</div><div class="meta">清空当前模型、功能、人设配置，回到出厂默认</div></div>
+        <button class="btn danger" id="reset-btn">🔄 恢复默认</button></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <h3>ℹ️ 关于</h3>
+      <div class="row"><div>后台版本</div><div>v2.0</div></div>
+      <div class="row"><div>创始人</div><div>君衔（ID 3038）</div></div>
+      <div class="row"><div>配置生效</div><div>点击即时保存到 set_data.json</div></div>
+    </div>`;
+  $('reset-btn').onclick = async () => {
+    if (!confirm('确定要恢复全部默认设置吗？当前配置会被覆盖。')) return;
+    const d = await api('/admin/api/reset', { method: 'POST' });
+    if (d.ok) { S = d.state; renderAll(); toast('已恢复默认设置'); }
+  };
+}
+
+// 启动：先查登录态
+(async () => {
+  try {
+    const me = await api('/admin/api/me');
+    if (me.authed) { await loadState(); showApp(); } else { showLogin(); }
+  } catch (e) { showLogin(); }
+})();
+</script>
+</body>
+</html>
