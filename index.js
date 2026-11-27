@@ -1031,108 +1031,6 @@ const FEATURE_CATEGORIES = [
   ]}
 ];
 
-// 构建设置卡片
-function buildSetCard(page, cid, scope, allGroups = []) {
-  const setData = loadSetData(cid);
-  const scopeLabel = scope === 'global' ? '🌐 全局设置（所有群生效）' : '👥 本群设置（仅本群生效）';
-  const navBtn = (dir) => {
-    if (dir === 'prev') return ''; // 去掉上一步按钮
-    const target = page + 1;
-    if (target > 6) return '';
-    return `<button action="callback" action_id="set_nav_next_${page}" id="set_nav_next_${page}">下一步 ➡️</button>`;
-  };
-
-  if (page === 1) {
-    let card = `<markdown>## ⚙️ 设置 - 1/6\n\n> 💡 所有设置点击即时生效，可随时返回修改\n\n### 🤖 对话模型\n\n**当前：** ${CHAT_MODELS.find(m => m.id === setData.chatModel)?.name || setData.chatModel}\n\n`;
-    CHAT_MODELS.forEach((m, i) => {
-      const active = setData.chatModel === m.id ? '✅' : '';
-      const keyTag = m.hasKey ? '' : '🔑';
-      const safeId = m.id.replace(/[^a-zA-Z0-9]/g, '_');
-      card += `<button action="callback" action_id="set_chat_model_${safeId}" id="set_chat_model_${safeId}">${active}${m.name}${keyTag}</button>`;
-      if ((i + 1) % 2 === 0) card += '\n';
-    });
-    card += `\n\n${navBtn('next')}\n> 🔑=需输入key，/set-key{模型,key}</markdown>`;
-    return card;
-  }
-
-  if (page === 2) {
-    let card = `<markdown>## ⚙️ 设置 - 2/6\n\n### 🖼️ 识图模型\n\n**当前：** ${VISION_MODELS.find(m => m.id === setData.visionModel)?.name || setData.visionModel}\n\n`;
-    VISION_MODELS.forEach((m, i) => {
-      const active = setData.visionModel === m.id ? '✅' : '';
-      const keyTag = m.hasKey ? '' : '🔑';
-      card += `<button action="callback" action_id="set_vision_model_${m.id}" id="set_vision_model_${m.id}">${active}${m.name}${keyTag}</button>`;
-      if ((i + 1) % 2 === 0) card += '\n';
-    });
-    card += `\n\n${navBtn('next')}</markdown>`;
-    return card;
-  }
-
-  if (page === 3) {
-    let card = `<markdown>## ⚙️ 设置 - 3/6\n\n### 🔌 功能开关\n\n`;
-    let idx = 0;
-    for (const cat of FEATURE_CATEGORIES) {
-      card += `**${cat.name}**\n`;
-      for (const f of cat.features) {
-        const on = setData.features[f.id] !== false;
-        const status = on ? '🟢' : '🔴';
-        card += `<button action="callback" action_id="set_feature_${f.id}" id="set_feature_${f.id}">${status}${f.name}</button>`;
-        idx++;
-        if (idx % 2 === 0) card += '\n';
-      }
-      if (idx % 2 !== 0) card += '\n';
-      card += '\n';
-    }
-    card += `${navBtn('next')}\n> 关闭后所有群都不能用该功能</markdown>`;
-    return card;
-  }
-
-  if (page === 4) {
-    // 群AI状态管理：用传入的所有群列表，普通文本格式
-    let card = `<markdown>## ⚙️ 设置 - 4/6\n\n### 👥 群AI状态管理\n\n`;
-    // 合并传入的群列表和已设置的群
-    const setGroupIds = Object.keys(setData.groupAI || {});
-    const allIds = [...new Set([...(allGroups || []), ...setGroupIds])];
-    
-    if (allIds.length === 0) {
-      card += '> 暂无群数据\n\n';
-    } else {
-      let openCount = 0, offCount = 0;
-      const groupTexts = allIds.map(gid => {
-        const state = setData.groupAI?.[String(gid)] === 'off' ? '关' : '开';
-        if (state === '开') openCount++; else offCount++;
-        return `${gid}（${state}）`;
-      });
-      card += `**共${allIds.length}个群：** ${openCount}个开启，${offCount}个关闭\n\n`;
-      card += groupTexts.join('，') + '\n\n';
-    }
-    card += `**设置指令：**\n\`/set-state{群号,AIstate:open}\` 开启\n\`/set-state{群号,AIstate:off}\` 关闭\n\n`;
-    card += `${navBtn('next')}\n> 禁用后群内使用AI会提示 The AI in this group has been disabled!</markdown>`;
-    return card;
-  }
-
-  if (page === 5) {
-    const p = setData.personality;
-    const toneBtn = (val, label) => `<button action="callback" action_id="set_personality_tone_${val}" id="set_personality_tone_${val}">${p.tone === val ? '✅' : ''}${label}</button>`;
-    const lenBtn = (val, label) => `<button action="callback" action_id="set_personality_length_${val}" id="set_personality_length_${val}">${p.length === val ? '✅' : ''}${label}</button>`;
-    let card = `<markdown>## ⚙️ 设置 - 5/6\n\n### 🎭 AI个性\n\n**语气：**\n${toneBtn('normal', '正常')}${toneBtn('friendly', '友好')}\n${toneBtn('professional', '专业')}${toneBtn('humorous', '幽默')}\n\n`;
-    card += `**长度：**\n${lenBtn('short', '简短')}${lenBtn('medium', '中等')}${lenBtn('long', '详细')}\n\n`;
-    card += `**Markdown：**\n<button action="callback" action_id="set_personality_markdown_toggle" id="set_personality_markdown_toggle">${p.markdown ? '🟢开启' : '🔴关闭'}</button>\n\n`;
-    card += `${navBtn('next')}</markdown>`;
-    return card;
-  }
-
-  if (page === 6) {
-    // 数据与维护
-    let card = `<markdown>## ⚙️ 设置 - 6/6\n\n### 📊 数据与维护\n\n`;
-    card += `**当前配置：**\n- 对话模型：${CHAT_MODELS.find(m => m.id === setData.chatModel)?.name || setData.chatModel}\n- 识图模型：${VISION_MODELS.find(m => m.id === setData.visionModel)?.name || setData.visionModel}\n- 已开启功能：${Object.values(setData.features).filter(v => v !== false).length}/${Object.keys(setData.features).length}\n- 已管理群：${Object.keys(setData.groupAI || {}).length}个\n\n`;
-    card += `**维护操作：**\n<button action="callback" action_id="set_action_reset" id="set_action_reset">🔄 恢复默认设置</button>\n<button action="callback" action_id="set_action_export" id="set_action_export">📤 导出配置</button>\n\n`;
-    card += `**关于：**\n> 君灵bot 设置系统 v1.0\n> 创始人：君衔（ID 3038）\n> 所有设置即时生效\n\n`;
-    card += `\n> 设置完成，感谢使用！</markdown>`;
-    return card;
-  }
-
-  return '<markdown>## ⚙️ 设置中心\n\n页面不存在</markdown>';
-}
 
 // 对话大模型列表
 
@@ -1144,24 +1042,6 @@ function buildSetCard(page, cid, scope, allGroups = []) {
 
 
 // AI调用辅助函数（供创意游戏使用）
-// ========== /set 步骤锁定系统 ==========
-const userSetSteps = new Map(); // userId -> { step, messageId, time }
-function setUserStep(userId, step, messageId) {
-  userSetSteps.set(userId, { step, messageId, time: Date.now() });
-}
-function getUserStep(userId) {
-  return userSetSteps.get(userId);
-}
-function checkSetStepLock(userId, messageId) {
-  const userStep = userSetSteps.get(userId);
-  if (!userStep) return null; // 没有记录，允许操作
-  // 如果点击的消息ID不是最新的，说明在点旧卡片
-  if (userStep.messageId && messageId && String(userStep.messageId) !== String(messageId)) {
-    return '您已在下一个步骤里！请在最新的卡片上操作。';
-  }
-  return null; // 允许操作
-}
-// ========== 步骤锁定系统结束 ==========
 
 // ========== 意图识别+自动执行系统 ==========
 // 指令意图映射表：以后加新指令，只需要在这里添加关键词即可
@@ -6206,182 +6086,6 @@ ${featureText}
         setBtn(data, actionId, '▶️ 已开始', 'success', true);
         sendMsg(data.conversation_id, `<markdown>## 🧠 心灵感应开始！\n\n**主题：** ${game.theme}\n**参与者：** ${playerCount}人\n\n📢 请出题者 <at id="${game.creator}" /> **私聊机器人**发送3个答案（每行一个）\n\n> 参与者准备好猜答案了吗？</markdown>`);
       }
-      // 设置系统按钮 - 统一权限检查和步骤锁定
-      else if (actionId.startsWith('set_')) {
-        // 权限检查：只有群主和3038可以操作
-        const btnUserId = String(data.user_id);
-        const btnIsCreator = btnUserId === '3038';
-        // 获取群主ID（尝试从conversation信息获取，简化处理：如果不是3038，检查是否是群主）
-        let btnIsOwner = false;
-        try {
-          const convRes = await fetch(`${BASE_URL}/bot-api/conversations/${data.conversation_id}`, { headers: { 'Authorization': `Bot ${BOT_KEY}` } });
-          if (convRes.ok) {
-            const convData = await convRes.json();
-            const c = convData.data || convData.conversation || convData;
-            btnIsOwner = String(c.owner_id || c.owner || c.creator_id || '') === btnUserId;
-          }
-        } catch (e) {}
-        if (!btnIsCreator && !btnIsOwner) {
-          setBtn(data, actionId, '🚫 无权限', 'danger', true);
-          // 不发消息，避免用户多次点击刷屏
-          return;
-        }
-        // 设置范围：3038全局，群主本群
-        const btnSetScope = btnIsCreator ? null : String(data.conversation_id);
-        // 步骤锁定检查
-        const btnMsgId = data.message_id || data.messageId || data.msg_id || data.id || (data.message && data.message.id);
-        const lockMsg = checkSetStepLock(btnUserId, btnMsgId);
-        console.log('[设置] 步骤锁定检查: user=', btnUserId, 'btnMsgId=', btnMsgId, 'lockMsg=', lockMsg);
-        if (lockMsg) {
-          setBtn(data, actionId, '🚫 已过期', 'danger', true);
-          sendMsg(data.conversation_id, `🚫 ${lockMsg}`);
-          return;
-        }
-
-      // 设置系统导航按钮
-      if (actionId.startsWith('set_nav_')) {
-        console.log('[设置导航] 点击:', actionId, 'conversation:', data.conversation_id);
-        const parts = actionId.split('_');
-        const page = parseInt(parts[3]);
-        const targetPage = page + 1; // 只有下一步
-        console.log('[设置导航] page=', page, 'target=', targetPage);
-        try {
-          // 先获取旧消息ID（用于撤回）
-          const oldMsgId = data.message_id || data.messageId || data.msg_id || data.id || (data.message && data.message.id);
-          console.log('[设置导航] 旧消息ID:', oldMsgId, 'data keys:', Object.keys(data));
-          
-          // 发送新卡片（用sendMsgReturnId获取消息ID，用于步骤锁定）
-          const setScopeNav = btnIsCreator ? 'global' : 'group';
-          // 获取所有群列表：先用本地记录的群，再用API补充
-          let allGroupsForSetNav = loadGroups().map(g => String(g));
-          try {
-            const groupsResNav = await fetchWithTimeout(`${BASE_URL}/bot-api/conversations`, { headers: { 'Authorization': `Bot ${BOT_KEY}` } }, 5000);
-            if (groupsResNav.ok) {
-              const groupsDataNav = await groupsResNav.json();
-              const convListNav = groupsDataNav.data || groupsDataNav.conversations || groupsDataNav.list || groupsDataNav.items || groupsDataNav || [];
-              const apiGroupsNav = Array.isArray(convListNav) ? convListNav.map(g => String(g.id || g.conversation_id || g)).filter(id => id && id !== 'null' && id !== 'undefined' && !isNaN(Number(id))) : [];
-              allGroupsForSetNav = [...new Set([...allGroupsForSetNav, ...apiGroupsNav])];
-            }
-          } catch (e) { console.log('[设置导航] API获取群列表失败，用本地群列表:', e.message); }
-          const card = buildSetCard(targetPage, String(data.conversation_id), setScopeNav, allGroupsForSetNav);
-          const navResult = await sendMsgReturnId(data.conversation_id, card);
-          const newMsgId = navResult && navResult.id;
-          console.log('[设置导航] 已发送第', targetPage, '页, 新消息ID:', newMsgId, 'navResult keys:', navResult ? Object.keys(navResult) : 'null');
-          
-          // 更新用户步骤记录（记录新消息ID，用于步骤锁定）
-          if (newMsgId) {
-            setUserStep(btnUserId, targetPage, newMsgId);
-            console.log('[设置导航] 步骤锁定已更新: user=', btnUserId, 'step=', targetPage, 'msgId=', newMsgId);
-          } else {
-            console.log('[设置导航] ⚠️ 未获取到新消息ID，步骤锁定可能失效');
-          }
-          
-          // 撤回旧卡片
-          if (oldMsgId) {
-            try {
-              const recallRes = await fetch(`${BASE_URL}/bot-api/conversations/${data.conversation_id}/messages/${oldMsgId}/recall`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bot ${BOT_KEY}` }
-              });
-              const recallText = await recallRes.text();
-              console.log('[设置导航] 撤回旧卡片结果:', recallRes.status, recallText.substring(0, 200));
-              if (!recallRes.ok) {
-                console.log('[设置导航] 撤回失败，旧卡片按钮将通过步骤锁定禁用');
-              }
-            } catch (recallErr) {
-              console.log('[设置导航] 撤回旧卡片异常:', recallErr.message);
-            }
-          } else {
-            console.log('[设置导航] 未找到旧消息ID，跳过撤回（步骤锁定仍生效）');
-          }
-        } catch (e) {
-          console.error('[设置导航错误]', e.message, e.stack);
-          sendMsg(data.conversation_id, `❌ 导航失败：${e.message}`);
-        }
-      }
-      // 设置对话模型
-      else if (actionId.startsWith('set_chat_model_')) {
-        const safeModelId = actionId.replace('set_chat_model_', '');
-        const model = CHAT_MODELS.find(m => m.id.replace(/[^a-zA-Z0-9]/g, '_') === safeModelId);
-        if (!model) { setBtn(data, actionId, '❌ 模型不存在', 'danger', true); return; }
-        const modelId = model.id;
-        const setData = loadSetData(btnSetScope);
-        setData.chatModel = modelId;
-        saveSetData(setData, btnSetScope);
-        setBtn(data, actionId, `✅ ${model.name}`, 'success', true);
-        console.log('[设置] 对话模型已切换为:', modelId, '范围:', btnSetScope || '全局');
-        const apiType = model.api || 'zhipu';
-        const hasKey = model.hasKey || (loadSetData().apiKeys && loadSetData().apiKeys[model.id]);
-        let apiNote = '';
-        if (!hasKey) {
-          apiNote = '\n\n> 🔑 此模型需要API key。用 \`/set-key{' + model.id + ',你的key}\` 设置后即可使用。';
-        }
-        sendMsg(data.conversation_id, `<markdown>## 🤖 对话模型已切换\n\n**模型名称：** ${model.name}\n**开发商：** ${model.company}\n**上下文：** ${model.context}\n\n**简介：** ${model.desc}\n\n**优点：** ${model.pros}\n**缺点：** ${model.cons}\n\n> 已切换为 ${model.name}，后续AI对话使用此模型${apiNote}</markdown>`);
-      }
-      // 设置识图模型
-      else if (actionId.startsWith('set_vision_model_')) {
-        const modelId = actionId.replace('set_vision_model_', '');
-        const model = VISION_MODELS.find(m => m.id === modelId);
-        if (!model) { setBtn(data, actionId, '❌ 模型不存在', 'danger', true); return; }
-        const setData = loadSetData(btnSetScope);
-        setData.visionModel = modelId;
-        saveSetData(setData, btnSetScope);
-        setBtn(data, actionId, `✅ ${model.name}`, 'success', true);
-        sendMsg(data.conversation_id, `<markdown>## 🖼️ 识图模型已切换\n\n**模型名称：** ${model.name}\n**开发商：** ${model.company}\n**上下文：** ${model.context}\n\n**简介：** ${model.desc}\n\n**优点：** ${model.pros}\n**缺点：** ${model.cons}\n\n> 已切换为 ${model.name}，后续图片识别使用此模型</markdown>`);
-      }
-      // 功能开关
-      else if (actionId.startsWith('set_feature_')) {
-        const featureId = actionId.replace('set_feature_', '');
-        const setData = loadSetData(btnSetScope);
-        const current = setData.features[featureId] !== false;
-        setData.features[featureId] = !current;
-        saveSetData(setData, btnSetScope);
-        const newStatus = !current ? '🟢 开' : '🔴 关';
-        setBtn(data, actionId, `${featureId}：${newStatus}`, !current ? 'success' : 'danger', false);
-        sendMsg(data.conversation_id, `✅ 功能 ${featureId} 已${!current ? '开启' : '关闭'}`);
-      }
-      // 个性设置-语气
-      else if (actionId.startsWith('set_personality_tone_')) {
-        const val = actionId.replace('set_personality_tone_', '');
-        const setData = loadSetData();
-        setData.personality.tone = val;
-        saveSetData(setData);
-        setBtn(data, actionId, '✅ 已设置', 'success', true);
-        sendMsg(data.conversation_id, `✅ AI语气已设置为：${val}`);
-      }
-      // 个性设置-长度
-      else if (actionId.startsWith('set_personality_length_')) {
-        const val = actionId.replace('set_personality_length_', '');
-        const setData = loadSetData();
-        setData.personality.length = val;
-        saveSetData(setData);
-        setBtn(data, actionId, '✅ 已设置', 'success', true);
-        sendMsg(data.conversation_id, `✅ AI回复长度已设置为：${val}`);
-      }
-      // 个性设置-Markdown开关
-      else if (actionId === 'set_personality_markdown_toggle') {
-        const setData = loadSetData(btnSetScope);
-        setData.personality.markdown = !setData.personality.markdown;
-        saveSetData(setData, btnSetScope);
-        setBtn(data, actionId, setData.personality.markdown ? '🟢 已开启' : '🔴 已关闭', setData.personality.markdown ? 'success' : 'danger', false);
-        sendMsg(data.conversation_id, `✅ Markdown排版已${setData.personality.markdown ? '开启' : '关闭'}`);
-      }
-
-      // 维护操作
-      else if (actionId.startsWith('set_action_')) {
-        const action = actionId.replace('set_action_', '');
-        if (action === 'reset') {
-          const setData = getDefaultSetData();
-          saveSetData(setData);
-          setBtn(data, actionId, '✅ 已恢复默认', 'success', true);
-          sendMsg(data.conversation_id, '✅ 所有设置已恢复默认值');
-        } else if (action === 'export') {
-          const setData = loadSetData();
-          setBtn(data, actionId, '📤 导出中...', 'default', true);
-          sendMsg(data.conversation_id, `<markdown>## 📤 配置导出\n\n**对话模型：** ${setData.chatModel}\n**识图模型：** ${setData.visionModel}\n**已开启功能：** ${Object.values(setData.features).filter(v => v !== false).length}个\n\n> 完整配置已记录，可在 set_data.json 查看</markdown>`);
-        }
-      }
-      } // 结束set_统一权限检查块
       // 命运抉择投票按钮（单人模式）
       else if (actionId.startsWith('fate_')) {
         const parts = actionId.split('_');
@@ -6504,6 +6208,10 @@ ${String(data.conversation_id) === '10334' ? '<link action="callback" action_id=
 | \`/后台 面板\` | 查看机器人状态面板 |
 | \`/后台 信息\` | 查看群功能开关信息 |
 | \`/后台 恢复\` | 重启机器人，重新部署服务器 |
+
+## 🌐 网页控制台
+<link href="${PUBLIC_URL}/admin">点击打开网页后台</link>
+> 模型、功能开关、人设、群 AI 状态在网页后台统一管理
 
 > ⚠️ 仅群10334 + ID3038可用</markdown>`;
         } else if (actionId === 'help_common') {
@@ -6628,21 +6336,21 @@ ${werewolfLink}<link action="callback" action_id="help_list">📝 列表查看</
 > 仅群主或${adminLabel}可用</markdown>`;
         } else if (actionId === 'help_set') {
           detail = `<markdown>## ⚙️ 设置系统（仅ID3038）
-\`/set\`：打开设置中心（6步设置）
-**设置内容：**
-1. 🤖 对话模型：17个模型可选（君灵AI、智谱、OpenAI、免费模型）
-2. 🖼️ 识图模型：5个模型可选（OpenAI GPT-4o、智谱GLM-4V系列）
-3. 🔌 功能开关：21个功能全局开关
-4. 👥 群AI状态：管理各个群的AI开关
-5. 🎭 个性设置：AI语气、回复长度、Markdown开关
-6. 📊 数据与维护：恢复默认、导出配置
+\`/set\`：打开网页控制台入口
 
-**快捷设置指令：**
+🌐 <link href="${PUBLIC_URL}/admin">点击打开网页后台</link>
+
+**网页后台可管理：**
+- 🤖 对话模型 / 🖼️ 识图模型
+- 🔌 功能开关
+- 👥 群 AI 状态
+- 🎭 AI 语气、回复长度、Markdown、温度
+
+**快捷指令（群内）：**
 \`/set-state{群号,AIstate:open}\`：开启指定群的AI
 \`/set-state{群号,AIstate:off}\`：关闭指定群的AI
-\`/set-key{模型名,你的key}\`：设置模型API Key（私发）
 
-> 只有创始人君衔（ID 3038）可以使用设置系统</markdown>`;
+> 只有创始人君衔（ID 3038）可访问；登录密码见 \`/set\` 提示</markdown>`;
         } else if (actionId === 'help_diy' && String(data.conversation_id) !== '4307') {
           detail = `<markdown>## 自制指令（DIY）
 \`/DIY[指令名]\`：创建本群自制指令，通过按钮引导设置
@@ -7436,7 +7144,7 @@ async function handleAbout(msg) {
 | **用户ID** | \`3039\` |
 
 > 由君衔创建并维护，24小时全时段在线
-> 💡 当前AI模型可通过 \`/set\` 切换（仅群主和3038可用）</markdown>`;
+> 💡 模型、功能、人设请在网页后台调整，发送 \`/set\` 打开入口（仅创始人 3038）</markdown>`;
     sendMsg(msg.conversation_id, aboutText);
   } catch (e) {
     sendMsg(msg.conversation_id, `❌ 显示关于失败：${e.message}`);
