@@ -4191,7 +4191,7 @@ ${userData}
         if (!isCreator) { sendMsg(msg.conversation_id, `❌ 只有创始人君衔（ID 3038）可以使用设置（你的ID：${msg.sender_id}）`); return; }
         try {
           const adminUrl = `${PUBLIC_URL}/admin`;
-          const card = `<markdown>## ⚙️ 管理控制台（网页版）\n\n> 对话模型、识图模型、功能开关、AI 人设、群 AI 状态都在网页后台统一管理。\n\n🌐 <link href="${adminUrl}">点击打开网页控制台</link>\n\n**登录说明：**\n- 初始密码：\`junling2026\`（可在 Railway 环境变量 \`ADMIN_PASSWORD\` 修改）\n- 「7 天内自动登录」默认不勾选，关闭浏览器后需重新登录\n- 仅创始人 ID 3038 可访问\n\n> 若链接打不开，请确认服务已部署，且公网地址与后台 \`PUBLIC_URL\` 一致。</markdown>`;
+          const card = `<markdown>## ⚙️ 管理控制台（网页版）\n\n> 对话模型、识图模型、功能开关、AI 人设、群 AI 状态都在网页后台统一管理。\n\n🌐 <link href="${adminUrl}">点击打开网页控制台</link>\n\n**登录说明：**\n- 登录密码不在群内公布；由创始人在 Railway 环境变量 \`ADMIN_PASSWORD\` 配置\n- 「7 天内自动登录」默认不勾选，关闭浏览器后需重新登录\n- 仅创始人 ID 3038 可访问\n\n> 若链接打不开，请确认服务已部署并暴露公网端口，且公网地址与后台 \`PUBLIC_URL\` 一致。</markdown>`;
           await sendMsg(msg.conversation_id, card);
         } catch (e) {
           console.error('[设置错误]', e.message, e.stack);
@@ -6350,7 +6350,7 @@ ${werewolfLink}<link action="callback" action_id="help_list">📝 列表查看</
 \`/set-state{群号,AIstate:open}\`：开启指定群的AI
 \`/set-state{群号,AIstate:off}\`：关闭指定群的AI
 
-> 只有创始人君衔（ID 3038）可访问；登录密码见 \`/set\` 提示</markdown>`;
+> 只有创始人君衔（ID 3038）可访问；登录密码在 Railway 环境变量 \`ADMIN_PASSWORD\` 配置，不在群内公布</markdown>`;
         } else if (actionId === 'help_diy' && String(data.conversation_id) !== '4307') {
           detail = `<markdown>## 自制指令（DIY）
 \`/DIY[指令名]\`：创建本群自制指令，通过按钮引导设置
@@ -6708,8 +6708,10 @@ const server = http.createServer(async (req, res) => {
   // 健康检查 / 首页
   if (req.method === 'GET' && (urlPath === '/' || urlPath === '/index.html')) {
     fs.readFile(path.join(__dirname, 'index.html'), (err, data) => {
-      if (err) { res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end('Error loading page'); }
-      else { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(data); }
+      if (err) {
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end('<meta charset="utf-8"><body style="background:#0f1220;color:#eee;font-family:sans-serif;text-align:center;padding-top:15vh"><h2>🤖 君灵bot 运行中</h2><p><a style="color:#60a5fa" href="/admin">进入后台控制台</a></p></body>');
+      } else { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(data); }
     });
     return;
   }
@@ -6717,8 +6719,9 @@ const server = http.createServer(async (req, res) => {
   res.end('KukeChat Bot is running\n');
 });
 
-server.listen(PORT, () => {
-  console.log(`HTTP server listening on port ${PORT}`);
+server.on('error', (err) => console.error('[HTTP] 端口监听失败:', err && err.message));
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`HTTP server listening on 0.0.0.0:${PORT}`);
   console.log(`网页后台: /admin`);
 });
 
