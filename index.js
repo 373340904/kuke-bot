@@ -1189,6 +1189,7 @@ async function tryExecuteIntent(question, msg, uid, uname) {
     const modelInfo = CHAT_MODELS.find(m => m.id === currentModel);
     let apiType = modelInfo?.api || 'zhipu';
     if (apiType === 'openai' && !OPENAI_API_KEY) apiType = 'zhipu';
+    if (apiType === 'junling') apiType = 'zhipu';
     
     let intentApiUrl, intentApiKey, intentModel;
     if (apiType === 'openai') {
@@ -1387,6 +1388,7 @@ async function callAI(prompt, systemPrompt) {
     // openai 类型但未配置 OpenAI Key 时，直接按智谱处理，避免打到无效源
     let apiType = modelInfo?.api || 'zhipu';
     if (apiType === 'openai' && !OPENAI_API_KEY) apiType = 'zhipu';
+    if (apiType === 'junling') apiType = 'zhipu';
 
     let aiRes;
     let resultText = '';
@@ -3006,6 +3008,7 @@ const __curModel = loadSetData().chatModel || 'glm-4-flash';
             const __modelInfo = CHAT_MODELS.find(m => m.id === __curModel);
             let __diyApiType = __modelInfo?.api || 'zhipu';
             if (__diyApiType === 'openai' && !OPENAI_API_KEY) __diyApiType = 'zhipu';
+            if (__diyApiType === 'junling') __diyApiType = 'zhipu';
             let __apiUrl, __apiKey, __reqModel;
             if (__diyApiType === 'openai') {
               __apiUrl = `${OPENAI_API_BASE}/chat/completions`;
@@ -3358,6 +3361,7 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
             const __modelInfo2 = CHAT_MODELS.find(m => m.id === __curModel2);
             let __diyApiType2 = __modelInfo2?.api || 'zhipu';
             if (__diyApiType2 === 'openai' && !OPENAI_API_KEY) __diyApiType2 = 'zhipu';
+            if (__diyApiType2 === 'junling') __diyApiType2 = 'zhipu';
             let apiUrl, __apiKey2, __reqModel2;
             if (__diyApiType2 === 'openai') {
               apiUrl = `${OPENAI_API_BASE}/chat/completions`;
@@ -3628,7 +3632,12 @@ ${userData}
               const __modelInfo = CHAT_MODELS.find(m => m.id === __curModel);
               let __apiType = __modelInfo?.api || 'zhipu';
               
-              // OpenAI key 未配置时，自动切到智谱（不再切到已下线的君灵/狼小嗷）
+              // 狼小嗷(junling)后端已整体下线；OpenAI key 未配置时也归并到智谱，不再打无效源
+              if (__apiType === 'junling') {
+                console.log('⚠️ 狼小嗷已下线，自动切到智谱GLM-4-Flash');
+                __curModel = 'glm-4-flash';
+                __apiType = 'zhipu';
+              }
               if (__apiType === 'openai' && !OPENAI_API_KEY) {
                 console.log('⚠️ OpenAI key未配置，自动切到智谱GLM-4-Flash');
                 __curModel = 'glm-4-flash';
@@ -3636,11 +3645,7 @@ ${userData}
               }
               
               let __aiApiUrl, __aiApiKey, __aiModel;
-              if (__apiType === 'junling') {
-                __aiApiUrl = `${JUNLING_API_BASE}/chat/completions`;
-                __aiApiKey = JUNLING_API_KEY;
-                __aiModel = __curModel;
-              } else if (__apiType === 'pollinations') {
+              if (__apiType === 'pollinations') {
                 const __pollModel = __curModel === 'pollinations-mistral' ? 'mistral' : 'openai';
                 __aiApiUrl = `https://text.pollinations.ai/${encodeURIComponent(question || '你好')}?model=${__pollModel}&system=${encodeURIComponent(systemPrompt)}`;
                 __aiApiKey = '';
@@ -3688,6 +3693,24 @@ ${userData}
                 }
               }
               
+              // 主源非200或返回空时，兜底重试智谱 GLM-4-Flash
+              if (!answer && __apiType !== 'zhipu') {
+                console.log('⚠️ 主源未返回有效内容，兜底重试智谱GLM-4-Flash');
+                try {
+                  const fbRes = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${ZHIPU_API_KEY}` },
+                    body: JSON.stringify({ model: 'glm-4-flash', messages, max_tokens: 2000, temperature: 0.7 })
+                  });
+                  if (fbRes.ok) {
+                    const fbData = await fbRes.json();
+                    answer = fbData?.choices?.[0]?.message?.content || '';
+                  }
+                } catch (fbErr) {
+                  console.error('智谱兜底失败:', fbErr.message);
+                }
+              }
+              
               if (!answer) {
                 answer = '❌ AI返回错误: ' + resText.substring(0, 100);
               }
@@ -3716,6 +3739,43 @@ ${userData}
               
             } catch (err) {
               console.error('AI对话失败:', err);
+              // 异常路径兜底重试智谱 GLM-4-Flash
+              try {
+                const fbRes = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${ZHIPU_API_KEY}` },
+                  body: JSON.stringify({
+                    model: 'glm-4-flash',
+                    messages: [
+                      { role: 'system', content: systemPrompt || '你是君灵AI助手。' },
+                      { role: 'user', content: question || '你好' }
+                    ],
+                    max_tokens: 2000,
+                    temperature: 0.7
+                  })
+                });
+                if (fbRes.ok) {
+                  const fbData = await fbRes.json();
+                  const fbAnswer = fbData?.choices?.[0]?.message?.content || '';
+                  if (fbAnswer) {
+                    addChatHistory(uid, 'user', question);
+                    addChatHistory(uid, 'assistant', fbAnswer);
+                    if (thinkingMsgId) {
+                      try {
+                        await fetch(`${BASE_URL}/bot-api/conversations/${msg.conversation_id}/messages/${thinkingMsgId}/recall`, {
+                          method: 'DELETE',
+                          headers: { 'Authorization': `Bearer ${BOT_KEY}` }
+                        });
+                      } catch (e) {}
+                    }
+                    const mdAns = fbAnswer.startsWith('<markdown>') ? fbAnswer : `<markdown>${fbAnswer}</markdown>`;
+                    await sendMsg(msg.conversation_id, mdAns);
+                    return;
+                  }
+                }
+              } catch (fbErr) {
+                console.error('智谱兜底失败:', fbErr.message);
+              }
               const errMsg = err.name === 'AbortError' ? 'AI响应超时，请重试' : err.message;
               sendMsg(msg.conversation_id, `<markdown>❌ AI回复失败: ${errMsg}</markdown>`);
             }
