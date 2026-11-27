@@ -30,6 +30,38 @@ function logInfo(module, msg) { console.log(`[INFO][${module}] ${msg}`); }
 function logWarn(module, msg) { console.log(`[WARN][${module}] ${msg}`); }
 function logError(module, msg) { console.error(`[ERROR][${module}] ${msg}`); }
 
+// 统一多级兜底：先智谱 glm-4-flash，失败再用第三方免Key free-ai；返回回复文本，全部失败返回 ''
+async function callLLMFallback(messages, temperature) {
+  const temp = temperature || 0.7;
+  // 第一级：智谱
+  try {
+    const r = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${ZHIPU_API_KEY}` },
+      body: JSON.stringify({ model: 'glm-4-flash', messages, temperature: temp, max_tokens: 2000 })
+    });
+    if (r.ok) {
+      const d = await r.json();
+      const t = d?.choices?.[0]?.message?.content;
+      if (t) return t;
+    }
+  } catch (e) { logError('AI兜底', `智谱兜底失败: ${e.message}`); }
+  // 第二级：第三方免Key公开源
+  try {
+    const r2 = await fetch(`${FREE_FALLBACK_BASE}/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer free' },
+      body: JSON.stringify({ model: FREE_FALLBACK_MODEL, messages, temperature: temp, max_tokens: 2000 })
+    });
+    if (r2.ok) {
+      const d2 = await r2.json();
+      const t2 = d2?.choices?.[0]?.message?.content;
+      if (t2) return t2;
+    }
+  } catch (e2) { logError('AI兜底', `第三方兜底失败: ${e2.message}`); }
+  return '';
+}
+
 // ====== 配置区：把下面的引号里换成你自己的 Bot Key ======
 const BOT_KEY = 'kcb_live_421_nNLtaS1IDYmNmGbFk7HVwYj4H7gGDhyfKAbp9T0zyunYSro';
 // 君灵AI（狼小嗷免费AI集合站，OpenAI兼容格式）
@@ -41,6 +73,9 @@ const OPENAI_API_KEY = ''; // OpenAI官方key未配置
 const OPENAI_API_BASE = 'https://api.openai.com/v1';
 // 智谱AI免费Key（glm-4-flash模型完全免费，主要用于识图），申请地址：https://open.bigmodel.cn/usercenter/apikeys
 const ZHIPU_API_KEY = 'd9cd0300341d4ac1aed9260c715c1a8a.2aChFKD7pTs3j7Y4'; // 在这里填你的智谱AI API Key
+// 第三方免Key公开兜底源（仅在智谱也失败时最后使用；提示词会经过第三方，勿发送密码/密钥等敏感信息）
+const FREE_FALLBACK_BASE = 'https://api.apisfreellm.com/v1';
+const FREE_FALLBACK_MODEL = 'free-ai';
 // ========================================================
 
 const BASE_URL = 'https://chat-api.kuke.ink/api/v1';
@@ -1464,33 +1499,13 @@ async function callAI(prompt, systemPrompt) {
     return resultText;
   } catch (e) {
     clearTimeout(timeout);
-    // 非智谱系源（君灵/OpenAI/Pollinations）失败时，自动降级到智谱 GLM-4-Flash
-    const currentModel = loadSetData().chatModel || 'glm-4-flash';
-    const modelInfo = CHAT_MODELS.find(m => m.id === currentModel);
-    const needFallback = modelInfo?.api !== 'zhipu' && !!ZHIPU_API_KEY;
-    if (needFallback) {
-      logWarn('AI', `主模型(${modelInfo?.api || currentModel})调用失败，降级到智谱GLM-4-Flash: ${e.message}`);
-      try {
-        const fallbackRes = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${ZHIPU_API_KEY}` },
-          body: JSON.stringify({
-            model: 'glm-4-flash',
-            messages: [
-              { role: 'system', content: systemPrompt || '你是君灵AI助手。' },
-              { role: 'user', content: prompt }
-            ],
-            temperature: 0.8
-          })
-        });
-        if (fallbackRes.ok) {
-          const fbData = await fallbackRes.json();
-          return fbData.choices?.[0]?.message?.content || '';
-        }
-      } catch (fbErr) {
-        logError('AI', `降级智谱也失败: ${fbErr.message}`);
-      }
-    }
+    // 主模型失败：先重试智谱，仍失败再走第三方免Key兜底
+    logWarn('AI', `主模型调用失败，进入多级兜底: ${e.message}`);
+    const fbText = await callLLMFallback([
+      { role: 'system', content: systemPrompt || '你是君灵AI助手。' },
+      { role: 'user', content: prompt }
+    ], 0.8);
+    if (fbText) return fbText;
     throw e;
   }
 }
@@ -3573,17 +3588,19 @@ group(群信息) members(成员列表) online(在线列表) msgs(最新消息) b
         
         if (question || imageUrl) {
           (async () => {
+            let thinkingMsgId = null;
+            let systemPrompt = '你是君灵AI助手。';
             try {
               // 先发送"正在思考"提示
               const thinkingMsg = await sendMsgReturnId(msg.conversation_id, imageUrl ? "🖼️ 正在思考图片..." : "🤔 正在思考...");
-              const thinkingMsgId = thinkingMsg?.id || null;
+              thinkingMsgId = thinkingMsg?.id || null;
               
               // 构建system prompt（包含用户数据和群信息）
               const userData = getUserDataForAI(uid, cid);
               const userHistory = getChatHistory(uid);
               
               const botCtx = global.__botContext || {};
-              const systemPrompt = `你是君灵AI，运行在KukeChat平台的智能机器人助手。
+              systemPrompt = `你是君灵AI，运行在KukeChat平台的智能机器人助手。
 你由君衔（用户ID：3038）创建和维护。
 用生动详细的中文回答问题，不要太简短，该展开就展开。
 不要说"作为AI"之类的话。
@@ -3693,21 +3710,14 @@ ${userData}
                 }
               }
               
-              // 主源非200或返回空时，兜底重试智谱 GLM-4-Flash
-              if (!answer && __apiType !== 'zhipu') {
-                console.log('⚠️ 主源未返回有效内容，兜底重试智谱GLM-4-Flash');
+              // 主源未返回有效内容时，多级兜底（智谱重试 → 第三方免Key）
+              if (!answer) {
+                console.log('⚠️ 主源未返回有效内容，进入多级兜底');
                 try {
-                  const fbRes = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${ZHIPU_API_KEY}` },
-                    body: JSON.stringify({ model: 'glm-4-flash', messages, max_tokens: 2000, temperature: 0.7 })
-                  });
-                  if (fbRes.ok) {
-                    const fbData = await fbRes.json();
-                    answer = fbData?.choices?.[0]?.message?.content || '';
-                  }
+                  const fbText = await callLLMFallback(messages, 0.7);
+                  if (fbText) answer = fbText;
                 } catch (fbErr) {
-                  console.error('智谱兜底失败:', fbErr.message);
+                  console.error('多级兜底失败:', fbErr.message);
                 }
               }
               
@@ -3739,42 +3749,30 @@ ${userData}
               
             } catch (err) {
               console.error('AI对话失败:', err);
-              // 异常路径兜底重试智谱 GLM-4-Flash
+              // 异常路径多级兜底（智谱重试 → 第三方免Key）
+              let fbAnswer = '';
               try {
-                const fbRes = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${ZHIPU_API_KEY}` },
-                  body: JSON.stringify({
-                    model: 'glm-4-flash',
-                    messages: [
-                      { role: 'system', content: systemPrompt || '你是君灵AI助手。' },
-                      { role: 'user', content: question || '你好' }
-                    ],
-                    max_tokens: 2000,
-                    temperature: 0.7
-                  })
-                });
-                if (fbRes.ok) {
-                  const fbData = await fbRes.json();
-                  const fbAnswer = fbData?.choices?.[0]?.message?.content || '';
-                  if (fbAnswer) {
-                    addChatHistory(uid, 'user', question);
-                    addChatHistory(uid, 'assistant', fbAnswer);
-                    if (thinkingMsgId) {
-                      try {
-                        await fetch(`${BASE_URL}/bot-api/conversations/${msg.conversation_id}/messages/${thinkingMsgId}/recall`, {
-                          method: 'DELETE',
-                          headers: { 'Authorization': `Bearer ${BOT_KEY}` }
-                        });
-                      } catch (e) {}
-                    }
-                    const mdAns = fbAnswer.startsWith('<markdown>') ? fbAnswer : `<markdown>${fbAnswer}</markdown>`;
-                    await sendMsg(msg.conversation_id, mdAns);
-                    return;
-                  }
-                }
+                fbAnswer = await callLLMFallback([
+                  { role: 'system', content: systemPrompt || '你是君灵AI助手。' },
+                  { role: 'user', content: question || '你好' }
+                ], 0.7) || '';
               } catch (fbErr) {
-                console.error('智谱兜底失败:', fbErr.message);
+                console.error('多级兜底失败:', fbErr.message);
+              }
+              if (fbAnswer) {
+                addChatHistory(uid, 'user', question);
+                addChatHistory(uid, 'assistant', fbAnswer);
+                if (thinkingMsgId) {
+                  try {
+                    await fetch(`${BASE_URL}/bot-api/conversations/${msg.conversation_id}/messages/${thinkingMsgId}/recall`, {
+                      method: 'DELETE',
+                      headers: { 'Authorization': `Bearer ${BOT_KEY}` }
+                    });
+                  } catch (e) {}
+                }
+                const mdAns = fbAnswer.startsWith('<markdown>') ? fbAnswer : `<markdown>${fbAnswer}</markdown>`;
+                await sendMsg(msg.conversation_id, mdAns);
+                return;
               }
               const errMsg = err.name === 'AbortError' ? 'AI响应超时，请重试' : err.message;
               sendMsg(msg.conversation_id, `<markdown>❌ AI回复失败: ${errMsg}</markdown>`);
